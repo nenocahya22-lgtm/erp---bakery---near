@@ -14,6 +14,7 @@ import {
 import { calculateAllProducts } from './lib/calculations';
 import { BahanBaku, ProductHpp, DetailResep, CalculationResult } from './types';
 
+import OwnerLogin from './components/OwnerLogin';
 import DashboardTab from './components/DashboardTab';
 import MaterialsTab from './components/MaterialsTab';
 import RecipesTab from './components/RecipesTab';
@@ -58,6 +59,19 @@ import {
 } from 'lucide-react';
 
 export default function App() {
+  // Owner authentication gate
+  const [isOwnerAuthenticated, setIsOwnerAuthenticated] = useState(() => localStorage.getItem('owner_authenticated') === 'true');
+
+  const handleOwnerLogin = () => {
+    setIsOwnerAuthenticated(true);
+  };
+
+  const handleOwnerLogout = () => {
+    localStorage.removeItem('owner_authenticated');
+    localStorage.removeItem('owner_authenticated_at');
+    setIsOwnerAuthenticated(false);
+  };
+
   // Set offline/localStorage mode by default — no Firebase auth needed
   const [user] = useState<{displayName: string; email: string; uid: string}>({
     displayName: 'Owner',
@@ -159,6 +173,7 @@ export default function App() {
     showToast('Sistem Near Bakery & Co berhasil diformat steril! Semua data contoh telah dibersihkan.', 'success');
   };
 
+  // Mobile sidebar state
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Notifications toast state
@@ -513,12 +528,17 @@ export default function App() {
   // Compute calculated results array of all products
   const calculatedProducts: CalculationResult[] = calculateAllProducts(bahanBaku, productHpp, detailResep);
 
+  // If not authenticated, show login screen
+  if (!isOwnerAuthenticated) {
+    return <OwnerLogin onLoginSuccess={handleOwnerLogin} />;
+  }
+
   return (
     <div id="application-layout" className="min-h-screen bg-slate-100 flex flex-col md:flex-row font-sans text-gray-800">
       
-      {/* LEFT SIDEBAR AREA (DESKTOP) & COLLAPSIBLE DRAWER (MOBILE) */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-slate-900 text-slate-300 border-r border-slate-800 flex flex-col transform transition-transform md:translate-x-0 md:static md:h-screen shrink-0 ${
-        isSidebarOpen ? 'translate-x-0' : '-translate-x-full hidden md:flex'
+      {/* LEFT SIDEBAR AREA — Fixed, no slide animation */}
+      <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-slate-900 text-slate-300 border-r border-slate-800 flex flex-col md:static md:h-screen shrink-0 ${
+        isSidebarOpen ? 'block' : 'hidden md:flex'
       }`}>
         {/* LOGO BRAND BAR */}
         <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950">
@@ -531,7 +551,7 @@ export default function App() {
               <p className="text-[9px] text-emerald-400 font-bold tracking-widest uppercase">Owner Console</p>
             </div>
           </div>
-          {/* Close button for mobile sidebar drawer */}
+          {/* Close button for mobile sidebar */}
           <button 
             onClick={() => setIsSidebarOpen(false)}
             className="p-1 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg md:hidden cursor-pointer"
@@ -547,19 +567,30 @@ export default function App() {
               OW
             </div>
             <div>
-              <p className="font-bold text-white text-[11px] truncate max-w-[130px]">{user?.displayName || 'Owner Toko'}</p>
+              <p className="font-bold text-white text-[11px] truncate max-w-[100px]">Owner Toko</p>
               <p className="text-[9px] text-gray-500 font-mono font-bold">owner@bakery.id</p>
             </div>
           </div>
           
-          {/* GOOGLE SHEETS CONNECT BUTTON */}
-          <button
-            onClick={initiateGoogleConnect}
-            title="Hubungkan Google Sheets"
-            className="p-1.5 hover:bg-slate-800 text-gray-500 hover:text-white rounded-lg transition-colors cursor-pointer flex items-center"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-          </button>
+          <div className="flex items-center gap-1">
+            {/* GOOGLE SHEETS CONNECT BUTTON */}
+            <button
+              onClick={initiateGoogleConnect}
+              title="Hubungkan Google Sheets"
+              className="p-1.5 hover:bg-slate-800 text-gray-500 hover:text-white rounded-lg transition-colors cursor-pointer flex items-center"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+            </button>
+
+            {/* LOGOUT BUTTON */}
+            <button
+              onClick={handleOwnerLogout}
+              title="Logout / Keluar"
+              className="p-1.5 hover:bg-slate-800 text-gray-500 hover:text-red-400 rounded-lg transition-colors cursor-pointer flex items-center"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* SIDEBAR DYNAMIC NAVIGATION MENUS */}
@@ -871,17 +902,6 @@ export default function App() {
         {/* WORKSPACE DETAILED WRAPPER VIEW SCROLLABLE */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 scrollbar-thin">
           
-          {/* Connection status warning alert when sheet ID is absent */}
-          {!spreadsheetId && (
-            <div className="bg-amber-50 border border-amber-200/60 rounded-2xl p-6 text-center space-y-3">
-              <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto stroke-1 animate-bounce-slow" />
-              <h3 className="text-sm font-bold text-amber-900 uppercase tracking-wide">Google Sheet Belum Terhubung</h3>
-              <p className="text-xs text-amber-800 max-w-md mx-auto leading-relaxed">
-                Koneksikan spreadsheet Anda terlebih dahulu dengan menempelkan URL file Google Sheet kustom Anda di kolom atas untuk memulai simulasi data resep!
-              </p>
-            </div>
-          )}
-
           {/* RENDER CURRENT TAB VIEW WITH FULL STRUCTURAL COMPATIBILITY */}
           <div className="pb-16">
             {activeTab === 'dashboard' && (
