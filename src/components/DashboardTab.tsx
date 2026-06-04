@@ -1,6 +1,6 @@
 import React from 'react';
 import { CalculationResult, BahanBaku } from '../types';
-import { TrendingUp, FolderTree, Package, DollarSign, AlertCircle, Sparkles, AlertTriangle, Lightbulb, RefreshCw, Copy, Check, FileDown, Rocket } from 'lucide-react';
+import { TrendingUp, FolderTree, Package, DollarSign, AlertCircle, Sparkles, AlertTriangle, Lightbulb, RefreshCw, Copy, Check, FileDown, Rocket, ArrowRight } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 
 interface DashboardTabProps {
@@ -467,6 +467,53 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, onWipeAllD
             <p className="text-[10.5px] text-slate-400 leading-relaxed">
               <strong>Saran Penggunaan Bisnis:</strong> Asisten pemasaran menganalisis anomali pada margin menu rill Anda (seperti margin di bawah target/warning). Cukup klik tombol di atas untuk melihat draf WhatsApp blast diskon porsi rill, copy promosi, dan ide diskon happy hour yang sesuai dengan persediaan stok resep pusat Anda!
             </p>
+          </div>
+        )}
+      </div>
+
+      {/* ==================== LOW-MARGIN ALERT GUARD ==================== */}
+      <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5 text-red-500" />
+          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Low-Margin Alert Guard</h3>
+        </div>
+        <p className="text-xs text-gray-500">Produk dengan margin di bawah 15% — rekomendasi harga jual baru untuk mencapai margin 20%.</p>
+
+        {calculatedProducts.filter(p => p.marginPersen < 15 && p.hargaJual > 0).length === 0 ? (
+          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-center">
+            <span className="text-xs font-bold text-emerald-800">✅ Semua produk memiliki margin sehat di atas 15%</span>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {calculatedProducts.filter(p => p.marginPersen < 15 && p.hargaJual > 0).map(p => {
+              const targetMargin = 20;
+              const requiredPrice = Math.round(p.hppPerPorsi / (1 - targetMargin / 100));
+              return (
+                <div key={p.namaProduk} className={`p-4 rounded-xl border text-sm ${
+                  p.marginPersen < 5 ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
+                }`}>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="font-bold text-gray-900">{p.namaProduk}</span>
+                      <span className={`ml-2 px-2 py-0.5 rounded text-[10px] font-bold ${
+                        p.marginPersen < 5 ? 'bg-red-200 text-red-800' : 'bg-amber-200 text-amber-800'
+                      }`}>
+                        Margin: {p.marginPersen.toFixed(1)}%
+                      </span>
+                    </div>
+                    <span className="font-mono text-xs">{formatCurrency(p.hppPerPorsi)} / {formatCurrency(p.hargaJualPerPorsi)}</span>
+                  </div>
+                  <div className="mt-2 flex items-center gap-2 text-xs">
+                    <span className="text-gray-500">Harga jual sekarang:</span>
+                    <span className="font-mono font-bold text-red-600">{formatCurrency(p.hargaJualPerPorsi)}</span>
+                    <ArrowRight className="w-3 h-3 text-emerald-600" />
+                    <span className="text-gray-500">Rekomendasi:</span>
+                    <span className="font-mono font-bold text-emerald-700">{formatCurrency(requiredPrice)}</span>
+                    <span className="text-[10px] text-gray-400">(margin 20%)</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

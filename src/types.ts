@@ -74,6 +74,23 @@ export interface WasteLog {
   dateLogged: string;
 }
 
+export interface WriteOffLog {
+  id: string;
+  namaProduk: string;
+  qtyUnsold: number;
+  lossValue: number;
+  reason: string;
+  dateLogged: string;
+}
+
+export interface PriceRecord {
+  id: string;
+  bahanNama: string;
+  hargaBeli: number;
+  date: string;
+  note: string;
+}
+
 export interface RDExperiment {
   id: string;
   projectName: string;

@@ -12,7 +12,7 @@ import {
   saveProjectDataToSheets,
 } from './lib/sheets';
 import { calculateAllProducts } from './lib/calculations';
-import { BahanBaku, ProductHpp, DetailResep, CalculationResult } from './types';
+import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog } from './types';
 
 import OwnerLogin from './components/OwnerLogin';
 import DashboardTab from './components/DashboardTab';
@@ -40,6 +40,8 @@ import FefoTab from './components/FefoTab';
 import SupplierTab from './components/SupplierTab';
 import PrediksiTab from './components/PrediksiTab';
 import BudgetTab from './components/BudgetTab';
+import ProductionPlannerTab from './components/ProductionPlannerTab';
+import PriceHistoryTab from './components/PriceHistoryTab';
 
 import {
   AlertTriangle,
@@ -125,6 +127,8 @@ export default function App() {
     | 'erp_budget'
     | 'erp_iot'
     | 'erp_compliance'
+    | 'erp_production_planner'
+    | 'erp_price_history'
   >('dashboard');
 
   // --- Lifted States with persistent syncing back to localStorage ---
@@ -138,6 +142,11 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [writeOffLogs, setWriteOffLogs] = useState<WriteOffLog[]>(() => {
+    const saved = localStorage.getItem('writeoff_logs_data');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   // State sync effects
   useEffect(() => {
     localStorage.setItem('rd_experiments_data', JSON.stringify(rdExperiments));
@@ -146,6 +155,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('waste_logs_data', JSON.stringify(wasteLogs));
   }, [wasteLogs]);
+
+  useEffect(() => {
+    localStorage.setItem('writeoff_logs_data', JSON.stringify(writeOffLogs));
+  }, [writeOffLogs]);
 
   // Handlers for state updates
   const handleAddRD = (exp: RDExperiment) => {
@@ -168,15 +181,27 @@ export default function App() {
     showToast('Pencatatan Waste dihapus.', 'info');
   };
 
+  const handleAddWriteOff = (log: WriteOffLog) => {
+    setWriteOffLogs((prev) => [log, ...prev]);
+    showToast(`Write-off "${log.namaProduk}" dicatat!`, 'success');
+  };
+
+  const handleDeleteWriteOff = (id: string) => {
+    setWriteOffLogs((prev) => prev.filter((w) => w.id !== id));
+    showToast('Write-off dihapus.', 'info');
+  };
+
   const handleWipeAllData = () => {
     setBahanBaku([]);
     setProductHpp([]);
     setDetailResep([]);
     setRdExperiments([]);
     setWasteLogs([]);
+    setWriteOffLogs([]);
     
     localStorage.removeItem('rd_experiments_data');
     localStorage.removeItem('waste_logs_data');
+    localStorage.removeItem('writeoff_logs_data');
     localStorage.removeItem('stock_levels_data');
     localStorage.removeItem('toppings_data');
     localStorage.removeItem('pos_orders_data');
@@ -624,6 +649,7 @@ export default function App() {
           <div className="space-y-1">
             <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">Produksi & Stok</span>
             <SidebarBtn tab="erp_bom" active={activeTab} icon={<Layers className="w-4 h-4" />} label="BOM & Yield" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_production_planner" active={activeTab} icon={<ShoppingCart className="w-4 h-4" />} label="Prod. Planner" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_mps" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="Jadwal MPS" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_stock" active={activeTab} icon={<Package className="w-4 h-4" />} label="Stok Gudang" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_fefo" active={activeTab} icon={<ShieldAlert className="w-4 h-4" />} label="Batch & FEFO" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
@@ -646,6 +672,7 @@ export default function App() {
             <SidebarBtn tab="erp_cash_flow" active={activeTab} icon={<Coins className="w-4 h-4" />} label="Arus Kas" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_budget" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="Anggaran Budget" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_prediksi" active={activeTab} icon={<Cpu className="w-4 h-4" />} label="Prediksi & Inflasi" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_price_history" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="History Harga" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="hpp" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="Simulasi HPP" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_waste" active={activeTab} icon={<X className="w-4 h-4" />} label="Manajemen Waste" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_rd" active={activeTab} icon={<FlaskConical className="w-4 h-4" />} label="Sandbox R&D" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
@@ -822,7 +849,11 @@ export default function App() {
                 bahanBaku={bahanBaku} 
                 wasteLogs={wasteLogs} 
                 onAddWasteLog={handleAddWasteLog} 
-                onDeleteWasteLog={handleDeleteWasteLog} 
+                onDeleteWasteLog={handleDeleteWasteLog}
+                calculatedProducts={calculatedProducts}
+                writeOffLogs={writeOffLogs}
+                onAddWriteOff={handleAddWriteOff}
+                onDeleteWriteOff={handleDeleteWriteOff}
               />
             )}
             {activeTab === 'erp_rd' && (
@@ -881,6 +912,17 @@ export default function App() {
             )}
             {activeTab === 'erp_compliance' && (
               <ComplianceSafetyTab />
+            )}
+            {activeTab === 'erp_production_planner' && (
+              <ProductionPlannerTab
+                productHpp={productHpp}
+                detailResep={detailResep}
+                calculatedProducts={calculatedProducts}
+                bahanBaku={bahanBaku}
+              />
+            )}
+            {activeTab === 'erp_price_history' && (
+              <PriceHistoryTab bahanBaku={bahanBaku} />
             )}
           </div>
         </main>

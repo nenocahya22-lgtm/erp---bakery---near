@@ -1,217 +1,191 @@
 import React, { useState } from 'react';
-import { BahanBaku, WasteLog } from '../types';
-import { Trash2, Plus, ShieldAlert, Sparkles, Sliders, Calendar, ArrowUpRight } from 'lucide-react';
+import { Trash2, Plus, AlertTriangle, ShoppingCart } from 'lucide-react';
+import { CalculationResult, WriteOffLog } from '../types';
 
 interface WasteControlTabProps {
-  bahanBaku: BahanBaku[];
-  wasteLogs: WasteLog[];
-  onAddWasteLog: (log: WasteLog) => void;
+  bahanBaku: any[];
+  wasteLogs: any[];
+  onAddWasteLog: (log: any) => void;
   onDeleteWasteLog: (id: string) => void;
+  calculatedProducts: CalculationResult[];
+  onAddWriteOff: (log: WriteOffLog) => void;
+  onDeleteWriteOff: (id: string) => void;
+  writeOffLogs: WriteOffLog[];
 }
 
-export default function WasteControlTab({ bahanBaku, wasteLogs, onAddWasteLog, onDeleteWasteLog }: WasteControlTabProps) {
-  // Numeric formatted helper
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
-
-  // Form states for Logging Material Waste
+export default function WasteControlTab({
+  bahanBaku, wasteLogs, onAddWasteLog, onDeleteWasteLog,
+  calculatedProducts, onAddWriteOff, onDeleteWriteOff, writeOffLogs
+}: WasteControlTabProps) {
   const [selectedBahanIdx, setSelectedBahanIdx] = useState('0');
   const [wasteQty, setWasteQty] = useState('500');
   const [wasteLocation, setWasteLocation] = useState<'Gudang Utama' | 'Dapur Pusat' | 'Storefront / Kasir'>('Dapur Pusat');
   const [wasteReason, setWasteReason] = useState('');
+
+  // Write-off states
+  const [woProduct, setWoProduct] = useState('');
+  const [woQty, setWoQty] = useState('1');
+  const [woReason, setWoReason] = useState('');
+
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
   const handleLogWasteSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (bahanBaku.length === 0) return;
     const mat = bahanBaku[parseInt(selectedBahanIdx)];
     if (!mat) return;
-
     const qty = parseFloat(wasteQty) || 0;
     if (qty <= 0) return;
-
-    // Rigid math foundation calculation based on unit cost of material
     const lossValue = Math.round(qty * mat.hargaSatuan);
-
-    const newLog: WasteLog = {
+    onAddWasteLog({
       id: `w-${Date.now()}`,
       bahanNama: mat.nama,
       qtyWasted: qty,
       satuan: mat.satuan,
-      lossValue: lossValue,
+      lossValue,
       location: wasteLocation,
-      reason: wasteReason.trim() || 'Wastage standar operasional dapur',
+      reason: wasteReason.trim() || 'Wastage standar',
       dateLogged: new Date().toISOString().substring(0, 10)
-    };
-
-    onAddWasteLog(newLog);
-    setWasteQty('500');
-    setWasteReason('');
+    });
+    setWasteQty('500'); setWasteReason('');
   };
 
-  const totalWasteLossVal = wasteLogs.reduce((acc, curr) => acc + curr.lossValue, 0);
+  const handleAddWriteOff = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!woProduct) return;
+    const qty = parseInt(woQty) || 1;
+    const prod = calculatedProducts.find(p => p.namaProduk === woProduct);
+    const lossValue = prod ? Math.round(prod.hppPerPorsi * qty * 0.8) : qty * 5000;
+    onAddWriteOff({
+      id: `wo-${Date.now()}`,
+      namaProduk: woProduct,
+      qtyUnsold: qty,
+      lossValue,
+      reason: woReason.trim() || 'Tidak terjual hari ini',
+      dateLogged: new Date().toISOString().substring(0, 10)
+    });
+    setWoProduct(''); setWoQty('1'); setWoReason('');
+  };
+
+  const totalWasteLoss = wasteLogs.reduce((acc: number, curr: any) => acc + curr.lossValue, 0);
+  const totalWriteOffLoss = writeOffLogs.reduce((acc, curr) => acc + curr.lossValue, 0);
 
   return (
-    <div id="waste-control-tab-container" className="space-y-6">
-      
-      {/* HEADER SECTION */}
+    <div className="space-y-6">
       <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Trash2 className="w-6 h-6 text-rose-500" />
-            Sistem Kontrol Bahan Rusak & Kerugian Waste
+            <Trash2 className="w-6 h-6 text-rose-500" /> Manajemen Waste & Write-off
           </h2>
-          <p className="text-xs text-gray-500 mt-1">
-            Catat pemborosan adonan over-proofing, tepung tumpah, susu basi, atau roti gagal bakar untuk memicu koreksi pembukuan laba berkala.
-          </p>
+          <p className="text-xs text-gray-500 mt-1">Catat bahan rusak, adonan gagal, dan roti tidak terjual untuk hitung laba bersih riil.</p>
         </div>
         <div className="text-right text-xs bg-rose-50 text-rose-800 border border-rose-100 font-extrabold px-3 py-1.5 rounded-xl font-mono">
-          Kerugian Terakumulasi: {formatCurrency(totalWasteLossVal)}
+          Total Kerugian: {formatCurrency(totalWasteLoss + totalWriteOffLoss)}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* INPUT FORM PANEL */}
-        <div className="lg:col-span-5 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
-          <div className="pb-2 border-b border-gray-50">
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
-              <Plus className="w-4.5 h-4.5 text-rose-600" />
-              Catat Kerusakan Baru
-            </h3>
-            <p className="text-[11px] text-gray-400 mt-0.5">Timbang sisa produksi atau bahan rusak untuk mendokumentasikan log insiden.</p>
-          </div>
-
-          <form onSubmit={handleLogWasteSubmit} className="space-y-4 text-xs font-semibold">
-            <div>
-              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Pilih Bahan Baku Terbuang</label>
-              <select 
-                value={selectedBahanIdx}
-                onChange={(e) => setSelectedBahanIdx(e.target.value)}
-                className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-xs"
-              >
-                {bahanBaku.length === 0 ? (
-                  <option value="">Database bahan baku kosong</option>
-                ) : (
-                  bahanBaku.map((b, idx) => (
-                    <option key={b.nama} value={idx}>{b.nama} ({b.satuan})</option>
-                  ))
-                )}
+        {/* KIRI: Waste Bahan Baku */}
+        <div className="lg:col-span-6 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-50 pb-2">
+            <Trash2 className="w-4 h-4 text-rose-600" /> Catat Bahan Baku Rusak
+          </h3>
+          <form onSubmit={handleLogWasteSubmit} className="space-y-3 text-xs">
+            <select value={selectedBahanIdx} onChange={(e) => setSelectedBahanIdx(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg p-2.5 bg-white">
+              {bahanBaku.map((b: any, idx: number) => (
+                <option key={b.nama} value={idx}>{b.nama} ({b.satuan})</option>
+              ))}
+            </select>
+            <div className="grid grid-cols-2 gap-3">
+              <input type="number" required value={wasteQty} onChange={(e) => setWasteQty(e.target.value)}
+                className="border border-gray-200 rounded-lg p-2 font-mono" placeholder="Qty" />
+              <select value={wasteLocation} onChange={(e) => setWasteLocation(e.target.value as any)}
+                className="border border-gray-200 rounded-lg p-2">
+                <option>Dapur Pusat</option><option>Gudang Utama</option><option>Storefront / Kasir</option>
               </select>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Kuantitas Terbuang (Volume)</label>
-                <div className="relative">
-                  <input 
-                    type="number" 
-                    required
-                    value={wasteQty}
-                    onChange={(e) => setWasteQty(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-xs font-mono font-bold"
-                  />
-                  <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 text-[10px]">
-                    {bahanBaku[parseInt(selectedBahanIdx)]?.satuan || 'gr'}
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Lokasi Insiden</label>
-                <select 
-                  value={wasteLocation}
-                  onChange={(e) => setWasteLocation(e.target.value as any)}
-                  className="w-full px-3 py-2.5 bg-white border border-gray-250 rounded-lg text-xs"
-                >
-                  <option value="Gudang Utama">Gudang Utama</option>
-                  <option value="Dapur Pusat">Dapur Pusat</option>
-                  <option value="Storefront / Kasir">Storefront / Kasir</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Alasan Detail Kerusakan</label>
-              <input 
-                type="text" 
-                placeholder="Contoh: Ragi mati akibat disimpan dekat uap panas"
-                required
-                value={wasteReason}
-                onChange={(e) => setWasteReason(e.target.value)}
-                className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-xs"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold rounded-xl text-xs transition-all uppercase cursor-pointer"
-            >
-              Simpan Pencatatan Waste
+            <input type="text" placeholder="Alasan kerusakan" required value={wasteReason}
+              onChange={(e) => setWasteReason(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg p-2" />
+            <button type="submit"
+              className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs py-2.5 rounded-lg transition cursor-pointer">
+              Simpan Waste
             </button>
           </form>
-        </div>
 
-        {/* RECENT HISTORIC LOGS LIST */}
-        <div className="lg:col-span-7 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
-          <div className="border-b border-gray-50 pb-2 flex justify-between items-center">
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
-              <ShieldAlert className="w-4.5 h-4.5 text-rose-600 animate-pulse" />
-              Laporan Kasus Log Limbah & Susutan Terbuka
-            </h3>
-            <span className="text-[10px] bg-red-100 text-red-850 px-2.5 py-0.5 rounded-full font-bold">
-              {wasteLogs.length} Kasus Log
-            </span>
-          </div>
-
-          {wasteLogs.length === 0 ? (
-            <div className="p-12 text-center border border-dashed border-gray-150 rounded-xl bg-gray-50/50">
-              <p className="text-xs text-gray-400 font-bold italic">Belum ada insiden waste terdaftar untuk periode ini.</p>
-            </div>
-          ) : (
-            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
-              {wasteLogs.map((log) => (
-                <div key={log.id} className="bg-rose-50/20 p-3.5 rounded-xl border border-rose-100 flex items-start gap-3 relative">
-                  <button 
-                    onClick={() => onDeleteWasteLog(log.id)}
-                    className="absolute top-3.5 right-3.5 p-1 hover:bg-rose-100 text-gray-400 hover:text-rose-650 rounded-lg transition-colors cursor-pointer"
-                    title="Hapus Entry"
-                  >
-                    <Trash2 className="w-4 h-4" />
+          <div className="space-y-2 max-h-[200px] overflow-y-auto">
+            {wasteLogs.map((log: any) => (
+              <div key={log.id} className="bg-rose-50 p-3 rounded-lg border border-rose-100 flex justify-between text-xs">
+                <div><span className="font-bold">{log.bahanNama}</span> — {log.reason}</div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-red-600 font-bold">-{formatCurrency(log.lossValue)}</span>
+                  <button onClick={() => onDeleteWasteLog(log.id)} className="text-gray-400 hover:text-red-600 cursor-pointer">
+                    <Trash2 className="w-3 h-3" />
                   </button>
-
-                  <div className="p-1.5 bg-red-50 text-red-700 border border-red-100 rounded text-[9px] font-black uppercase font-mono">
-                    WASTE
-                  </div>
-
-                  <div className="space-y-1 pr-6 flex-1 text-xs">
-                    <div className="flex justify-between font-bold text-gray-900">
-                      <span>{log.bahanNama}</span>
-                      <span className="font-mono text-red-650 font-black">-{formatCurrency(log.lossValue)}</span>
-                    </div>
-                    <p className="text-gray-500 text-[11px] leading-relaxed italic">"{log.reason}"</p>
-                    <div className="flex justify-between text-[9px] text-gray-400 font-semibold font-mono">
-                      <span>Lokasi: {log.location}</span>
-                      <span>{log.dateLogged} ({log.qtyWasted.toLocaleString('id-ID')} {log.satuan})</span>
-                    </div>
-                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-
-          <div className="p-3.5 bg-slate-50 rounded-lg border border-gray-150 text-[11px] text-gray-500 leading-relaxed">
-            <span className="font-bold text-gray-800">Uji Audit Manajemen:</span> Setiap 1 gr penyusutan diakumulasikan langsung memangkas nominal arus kas bersih pada menu Arus Kas & Kategori Anggaran secara beruntun.
+              </div>
+            ))}
           </div>
         </div>
 
-      </div>
+        {/* KANAN: Write-off Produk Jadi */}
+        <div className="lg:col-span-6 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-50 pb-2">
+            <ShoppingCart className="w-4 h-4 text-amber-600" /> Catat Produk Tidak Terjual
+          </h3>
+          <p className="text-xs text-gray-500">Roti/kue yang tidak laku di etalase hari ini. Penting untuk hitung laba bersih riil.</p>
 
+          <form onSubmit={handleAddWriteOff} className="space-y-3 text-xs">
+            <select required value={woProduct} onChange={(e) => setWoProduct(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg p-2.5 bg-white">
+              <option value="">-- Pilih Produk --</option>
+              {calculatedProducts.map(p => (
+                <option key={p.namaProduk} value={p.namaProduk}>{p.namaProduk}</option>
+              ))}
+            </select>
+            <div className="grid grid-cols-2 gap-3">
+              <input type="number" required min="1" value={woQty} onChange={(e) => setWoQty(e.target.value)}
+                className="border border-gray-200 rounded-lg p-2 font-mono" placeholder="Jumlah tidak laku" />
+              <div className="flex items-center bg-amber-50 rounded-lg px-3 text-[10px] font-bold text-amber-800">
+                Estimasi rugi: {formatCurrency(
+                  (calculatedProducts.find(p => p.namaProduk === woProduct)?.hppPerPorsi || 5000) * (parseInt(woQty) || 1) * 0.8
+                )}
+              </div>
+            </div>
+            <input type="text" placeholder="Alasan (misal: stok terlalu banyak)" value={woReason}
+              onChange={(e) => setWoReason(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg p-2" />
+            <button type="submit"
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-2.5 rounded-lg transition cursor-pointer">
+              Catat Write-off
+            </button>
+          </form>
+
+          <div className="space-y-2 max-h-[200px] overflow-y-auto">
+            {writeOffLogs.map((log) => (
+              <div key={log.id} className="bg-amber-50 p-3 rounded-lg border border-amber-100 flex justify-between text-xs">
+                <div><span className="font-bold">{log.namaProduk}</span> — {log.qtyUnsold} pcs — {log.reason}</div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-amber-700 font-bold">-{formatCurrency(log.lossValue)}</span>
+                  <button onClick={() => onDeleteWriteOff(log.id)} className="text-gray-400 hover:text-red-600 cursor-pointer">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            ))}
+            {writeOffLogs.length === 0 && (
+              <p className="text-xs text-gray-400 text-center py-4">Belum ada write-off hari ini.</p>
+            )}
+          </div>
+
+          <div className="bg-slate-50 p-3 rounded-lg text-xs">
+            <span className="font-bold">Total Write-off: {formatCurrency(totalWriteOffLoss)}</span>
+            <span className="text-gray-500 ml-3">| Waste Bahan: {formatCurrency(totalWasteLoss)}</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
