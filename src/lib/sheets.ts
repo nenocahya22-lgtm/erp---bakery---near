@@ -203,41 +203,14 @@ export async function createAndInitializeTemplates(
     }
   }
 
-  const sampleBahan = [
-    ['Nama Bahan', 'Satuan', 'Harga Beli', 'Isi Kemasan', 'Harga Satuan'],
-    ['Terigu Cakra', 'gr', 15000, 1000, 15],
-    ['Gula Pasir', 'gr', 18000, 1000, 18],
-    ['Mentega Wijsman', 'gr', 96000, 320, 300],
-    ['Telur Ayam', 'pcs', 2000, 1, 2000],
-    ['Yeast Ragi', 'gr', 5000, 11, 454.55],
-    ['Kertas Roti', 'pcs', 300, 1, 300],
-    ['Plastik Bungkus', 'pcs', 150, 1, 150],
-  ];
+  // Hanya buat header kolom — tanpa data sampel
+  const headerBahan = [['Nama Bahan', 'Satuan', 'Harga Beli', 'Isi Kemasan', 'Harga Satuan']];
+  const headerHpp = [['Nama Produk', 'Porsi Jual', 'Overhead', 'Harga Jual']];
+  const headerResep = [['Nama Produk', 'Nama Bahan', 'Banyaknya / Takaran']];
 
-  const sampleHpp = [
-    ['Nama Produk', 'Porsi Jual', 'Overhead', 'Harga Jual'],
-    ['Roti Manis Wijsman', 10, 5000, 45000],
-    ['Bolu Mentega Standar', 1, 8000, 60000],
-  ];
-
-  const sampleResep = [
-    ['Nama Produk', 'Nama Bahan', 'Banyaknya / Takaran'],
-    ['Roti Manis Wijsman', 'Terigu Cakra', 400],
-    ['Roti Manis Wijsman', 'Gula Pasir', 80],
-    ['Roti Manis Wijsman', 'Mentega Wijsman', 60],
-    ['Roti Manis Wijsman', 'Telur Ayam', 2],
-    ['Roti Manis Wijsman', 'Yeast Ragi', 6],
-    ['Roti Manis Wijsman', 'Plastik Bungkus', 10],
-    ['Bolu Mentega Standar', 'Terigu Cakra', 200],
-    ['Bolu Mentega Standar', 'Gula Pasir', 150],
-    ['Bolu Mentega Standar', 'Mentega Wijsman', 150],
-    ['Bolu Mentega Standar', 'Telur Ayam', 4],
-    ['Bolu Mentega Standar', 'Kertas Roti', 1],
-  ];
-
-  await updateSheetValues(accessToken, spreadsheetId, 'Bahan Baku!A1', sampleBahan);
-  await updateSheetValues(accessToken, spreadsheetId, 'HPP Produk!A1', sampleHpp);
-  await updateSheetValues(accessToken, spreadsheetId, 'Resep Detail!A1', sampleResep);
+  await updateSheetValues(accessToken, spreadsheetId, 'Bahan Baku!A1', headerBahan);
+  await updateSheetValues(accessToken, spreadsheetId, 'HPP Produk!A1', headerHpp);
+  await updateSheetValues(accessToken, spreadsheetId, 'Resep Detail!A1', headerResep);
 }
 
 export async function saveProjectDataToSheets(

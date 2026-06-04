@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Trash2, Plus, AlertTriangle, ShoppingCart } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Trash2, Plus, AlertTriangle, ShoppingCart, Camera } from 'lucide-react';
 import { CalculationResult, WriteOffLog } from '../types';
 
 interface WasteControlTabProps {
@@ -21,11 +21,15 @@ export default function WasteControlTab({
   const [wasteQty, setWasteQty] = useState('500');
   const [wasteLocation, setWasteLocation] = useState<'Gudang Utama' | 'Dapur Pusat' | 'Storefront / Kasir'>('Dapur Pusat');
   const [wasteReason, setWasteReason] = useState('');
+  const [wastePhoto, setWastePhoto] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Write-off states
   const [woProduct, setWoProduct] = useState('');
   const [woQty, setWoQty] = useState('1');
   const [woReason, setWoReason] = useState('');
+  const [woPhoto, setWoPhoto] = useState<string | null>(null);
+  const woFileInputRef = useRef<HTMLInputElement>(null);
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
@@ -46,9 +50,10 @@ export default function WasteControlTab({
       lossValue,
       location: wasteLocation,
       reason: wasteReason.trim() || 'Wastage standar',
-      dateLogged: new Date().toISOString().substring(0, 10)
+      dateLogged: new Date().toISOString().substring(0, 10),
+      photo: wastePhoto
     });
-    setWasteQty('500'); setWasteReason('');
+    setWasteQty('500'); setWasteReason(''); setWastePhoto(null);
   };
 
   const handleAddWriteOff = (e: React.FormEvent) => {
@@ -65,7 +70,7 @@ export default function WasteControlTab({
       reason: woReason.trim() || 'Tidak terjual hari ini',
       dateLogged: new Date().toISOString().substring(0, 10)
     });
-    setWoProduct(''); setWoQty('1'); setWoReason('');
+    setWoProduct(''); setWoQty('1'); setWoReason(''); setWoPhoto(null);
   };
 
   const totalWasteLoss = wasteLogs.reduce((acc: number, curr: any) => acc + curr.lossValue, 0);
@@ -106,6 +111,30 @@ export default function WasteControlTab({
                 <option>Dapur Pusat</option><option>Gudang Utama</option><option>Storefront / Kasir</option>
               </select>
             </div>
+            {/* Upload Foto Waste */}
+            <div className="flex items-center gap-2">
+              <input type="file" accept="image/*" capture="environment" ref={fileInputRef}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => setWastePhoto(ev.target?.result as string);
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                className="hidden" />
+              <button type="button" onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition cursor-pointer">
+                <Camera className="w-4 h-4" /> {wastePhoto ? 'Ganti Foto' : '📸 Foto Kerusakan'}
+              </button>
+              {wastePhoto && (
+                <div className="relative">
+                  <img src={wastePhoto} alt="Waste" className="w-10 h-10 rounded-lg object-cover border border-gray-200" />
+                  <button onClick={() => setWastePhoto(null)} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[8px] font-bold cursor-pointer">×</button>
+                </div>
+              )}
+            </div>
+
             <input type="text" placeholder="Alasan kerusakan" required value={wasteReason}
               onChange={(e) => setWasteReason(e.target.value)}
               className="w-full border border-gray-200 rounded-lg p-2" />
@@ -154,6 +183,30 @@ export default function WasteControlTab({
                 )}
               </div>
             </div>
+            {/* Upload Foto Write-off */}
+            <div className="flex items-center gap-2">
+              <input type="file" accept="image/*" capture="environment" ref={woFileInputRef}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => setWoPhoto(ev.target?.result as string);
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                className="hidden" />
+              <button type="button" onClick={() => woFileInputRef.current?.click()}
+                className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition cursor-pointer">
+                <Camera className="w-4 h-4" /> {woPhoto ? 'Ganti Foto' : '📸 Foto Produk'}
+              </button>
+              {woPhoto && (
+                <div className="relative">
+                  <img src={woPhoto} alt="Write off" className="w-10 h-10 rounded-lg object-cover border border-gray-200" />
+                  <button onClick={() => setWoPhoto(null)} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[8px] font-bold cursor-pointer">×</button>
+                </div>
+              )}
+            </div>
+
             <input type="text" placeholder="Alasan (misal: stok terlalu banyak)" value={woReason}
               onChange={(e) => setWoReason(e.target.value)}
               className="w-full border border-gray-200 rounded-lg p-2" />

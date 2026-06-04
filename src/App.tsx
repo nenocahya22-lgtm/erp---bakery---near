@@ -634,7 +634,7 @@ export default function App() {
   return (
     <div id="application-layout" className="min-h-screen bg-slate-100 flex flex-col md:flex-row font-sans text-gray-800">
       
-      {/* FLOATING SIDEBAR TOGGLE BUTTON — appears when sidebar is closed */}
+      {/* FLOATING SIDEBAR TOGGLE — when sidebar is closed */}
       {!isSidebarOpen && (
         <button
           onClick={() => setIsSidebarOpen(true)}
@@ -645,9 +645,9 @@ export default function App() {
         </button>
       )}
 
-      {/* LEFT SIDEBAR AREA — Closable, no slide animation */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-slate-900 text-slate-300 border-r border-slate-800 flex flex-col shrink-0 ${
-        isSidebarOpen ? 'flex' : 'hidden'
+      {/* LEFT SIDEBAR AREA — pushes content, does NOT cover it */}
+      <aside className={`bg-slate-900 text-slate-300 border-r border-slate-800 flex flex-col shrink-0 min-h-screen ${
+        isSidebarOpen ? 'flex w-72' : 'hidden'
       }`}>
         {/* LOGO BRAND BAR */}
         <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950">
