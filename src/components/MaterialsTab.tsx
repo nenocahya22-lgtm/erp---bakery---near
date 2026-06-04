@@ -69,15 +69,22 @@ export default function MaterialsTab({
     setHargaBeli(String(finalPrice));
   };
 
-  const handleMarkupPriceChange = (val: string) => {
-    setHargaBeli(val);
+  // Compute auto markup price for display (readOnly — auto-calculated from markup%)
+  const autoMarkupPrice = (() => {
     const priceReal = parseFloat(hargaBeliReal) || 0;
-    const finalPrice = parseFloat(val) || 0;
+    const pct = parseFloat(markupPercent) || 0;
     if (priceReal > 0) {
-      const pct = ((finalPrice - priceReal) / priceReal) * 100;
-      setMarkupPercent(pct.toFixed(1));
+      return Math.round(priceReal * (1 + pct / 100));
     }
-  };
+    return null;
+  })();
+
+  // Sync the hargaBeli state whenever autoMarkupPrice changes
+  React.useEffect(() => {
+    if (autoMarkupPrice !== null) {
+      setHargaBeli(String(autoMarkupPrice));
+    }
+  }, [autoMarkupPrice]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -382,11 +389,14 @@ export default function MaterialsTab({
                       <input
                         type="number"
                         min="0"
-                        placeholder="Sistem isi otomatis"
-                        value={hargaBeli}
-                        onChange={(e) => handleMarkupPriceChange(e.target.value)}
-                        className="w-full pl-8 text-sm border border-emerald-250 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono text-emerald-950 font-extrabold bg-emerald-100/30"
+                        readOnly
+                        placeholder={autoMarkupPrice !== null ? String(autoMarkupPrice) : 'Isi markup% dulu'}
+                        value={autoMarkupPrice !== null ? autoMarkupPrice : ''}
+                        className="w-full pl-8 text-sm border border-emerald-250 rounded-xl px-3 py-2 bg-emerald-50/50 focus:outline-none font-mono text-emerald-950 font-extrabold cursor-not-allowed"
                       />
+                      {autoMarkupPrice !== null && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-emerald-500 uppercase">Auto</span>
+                      )}
                     </div>
                   </div>
                 </div>

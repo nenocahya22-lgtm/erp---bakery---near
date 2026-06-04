@@ -44,6 +44,10 @@ import ProductionPlannerTab from './components/ProductionPlannerTab';
 import PriceHistoryTab from './components/PriceHistoryTab';
 import SubstitutionSimulatorTab from './components/SubstitutionSimulatorTab';
 import KitchenWorkOrderTab from './components/KitchenWorkOrderTab';
+import BakerPercentageTab from './components/BakerPercentageTab';
+import BepTab from './components/BepTab';
+import DoughTemperatureTab from './components/DoughTemperatureTab';
+import ExpiryAlertTab from './components/ExpiryAlertTab';
 
 import {
   AlertTriangle,
@@ -68,6 +72,12 @@ import {
   Menu,
   Shuffle,
   ClipboardList,
+  Percent,
+  BarChart3,
+  Thermometer,
+  Calendar,
+  PanelRightClose,
+  PanelRightOpen,
 } from 'lucide-react';
 
 export default function App() {
@@ -135,6 +145,10 @@ export default function App() {
     | 'erp_price_history'
     | 'erp_substitution'
     | 'erp_work_order'
+    | 'erp_baker_pct'
+    | 'erp_bep'
+    | 'erp_dough_temp'
+    | 'erp_expiry'
   >('dashboard');
 
   // --- Lifted States with persistent syncing back to localStorage ---
@@ -217,8 +231,8 @@ export default function App() {
     showToast('Sistem Near Bakery & Co berhasil diformat steril! Semua data contoh telah dibersihkan.', 'success');
   };
 
-  // Mobile sidebar state
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // Mobile sidebar state — closable on desktop too
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Notifications toast state
   const [toasts, setToasts] = useState<{ id: string; message: string; type: 'success' | 'error' | 'info' }[]>([]);
@@ -584,9 +598,9 @@ export default function App() {
   return (
     <div id="application-layout" className="min-h-screen bg-slate-100 flex flex-col md:flex-row font-sans text-gray-800">
       
-      {/* LEFT SIDEBAR AREA — Fixed, no slide animation */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-slate-900 text-slate-300 border-r border-slate-800 flex flex-col md:static md:h-screen shrink-0 ${
-        isSidebarOpen ? 'block' : 'hidden md:flex'
+      {/* LEFT SIDEBAR AREA — Closable, no slide animation */}
+      <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-slate-900 text-slate-300 border-r border-slate-800 flex flex-col md:h-screen shrink-0 ${
+        isSidebarOpen ? 'block md:static' : 'hidden'
       }`}>
         {/* LOGO BRAND BAR */}
         <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950">
@@ -599,12 +613,13 @@ export default function App() {
               <p className="text-[9px] text-emerald-400 font-bold tracking-widest uppercase">Owner Console</p>
             </div>
           </div>
-          {/* Close button for mobile sidebar */}
+          {/* Close/Toggle button for sidebar — always visible */}
           <button 
-            onClick={() => setIsSidebarOpen(false)}
-            className="p-1 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg md:hidden cursor-pointer"
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="p-1 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg cursor-pointer"
+            title={isSidebarOpen ? 'Tutup Sidebar' : 'Buka Sidebar'}
           >
-            <X className="w-5 h-5" />
+            {isSidebarOpen ? <PanelRightClose className="w-5 h-5" /> : <PanelRightOpen className="w-5 h-5" />}
           </button>
         </div>
 
@@ -657,6 +672,9 @@ export default function App() {
             <SidebarBtn tab="erp_bom" active={activeTab} icon={<Layers className="w-4 h-4" />} label="BOM & Yield" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_work_order" active={activeTab} icon={<ClipboardList className="w-4 h-4" />} label="Work Order" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_production_planner" active={activeTab} icon={<ShoppingCart className="w-4 h-4" />} label="Prod. Planner" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_baker_pct" active={activeTab} icon={<Percent className="w-4 h-4" />} label="Baker's %" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_dough_temp" active={activeTab} icon={<Thermometer className="w-4 h-4" />} label="Suhu Adonan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_expiry" active={activeTab} icon={<Calendar className="w-4 h-4" />} label="Expiry Alert" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_mps" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="Jadwal MPS" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_stock" active={activeTab} icon={<Package className="w-4 h-4" />} label="Stok Gudang" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_fefo" active={activeTab} icon={<ShieldAlert className="w-4 h-4" />} label="Batch & FEFO" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
@@ -678,6 +696,7 @@ export default function App() {
             <SidebarBtn tab="erp_bi" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="Laporan P&L" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_cash_flow" active={activeTab} icon={<Coins className="w-4 h-4" />} label="Arus Kas" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_budget" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="Anggaran Budget" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_bep" active={activeTab} icon={<BarChart3 className="w-4 h-4" />} label="BEP & Balance" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_prediksi" active={activeTab} icon={<Cpu className="w-4 h-4" />} label="Prediksi & Inflasi" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_substitution" active={activeTab} icon={<Shuffle className="w-4 h-4" />} label="Substitusi Bahan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_price_history" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="History Harga" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
@@ -947,6 +966,21 @@ export default function App() {
                 calculatedProducts={calculatedProducts}
                 bahanBaku={bahanBaku}
               />
+            )}
+            {activeTab === 'erp_baker_pct' && (
+              <BakerPercentageTab
+                bahanBaku={bahanBaku}
+                detailResep={detailResep}
+              />
+            )}
+            {activeTab === 'erp_bep' && (
+              <BepTab calculatedProducts={calculatedProducts} />
+            )}
+            {activeTab === 'erp_dough_temp' && (
+              <DoughTemperatureTab />
+            )}
+            {activeTab === 'erp_expiry' && (
+              <ExpiryAlertTab bahanBaku={bahanBaku} />
             )}
           </div>
         </main>
