@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { CalculationResult, ProductHpp } from '../types';
-import { Percent, TrendingUp, Info, HelpCircle, AlertOctagon, CheckCircle2, ChevronRight, Calculator, Edit3, Trash2 } from 'lucide-react';
+import { CalculationResult } from '../types';
+import { Percent, TrendingUp, Info, HelpCircle, AlertOctagon, CheckCircle2, ChevronRight, Calculator, Edit3, Trash2, DollarSign, Sparkles, ArrowRight } from 'lucide-react';
 
 interface HppTabProps {
   calculatedProducts: CalculationResult[];
@@ -13,14 +13,17 @@ export default function HppTab({ calculatedProducts, onUpdateProductPricing, onD
     calculatedProducts.length > 0 ? calculatedProducts[0].namaProduk : ''
   );
 
-  // Suggested price calculator state for active item
+  // Per-product pricing state
   const [targetMargin, setTargetMargin] = useState<number>(40);
+
+  // Bulk Dynamic Pricing state
+  const [globalTargetMargin, setGlobalTargetMargin] = useState<number>(40);
+  const [showBulkPricing, setShowBulkPricing] = useState(false);
 
   const activeResult = calculatedProducts.find(
     (p) => p.namaProduk.toLowerCase().trim() === selectedProductName.toLowerCase().trim()
   );
 
-  // Auto calculate suggested price based on HPP per Porsi and Desired Margin
   const suggestedPricePerPortion = activeResult
     ? activeResult.hppPerPorsi / (1 - targetMargin / 100)
     : 0;
@@ -63,7 +66,130 @@ export default function HppTab({ calculatedProducts, onUpdateProductPricing, onD
   };
 
   return (
+    // HPP Tab with Dynamic Pricing
     <div id="hpp-container" className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      {/* DYNAMIC PRICING & PROFIT TARGET RECOMMENDER */}
+      <div className="lg:col-span-12">
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
+          <button onClick={() => setShowBulkPricing(!showBulkPricing)}
+            className="w-full flex items-center justify-between cursor-pointer">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white shadow-md">
+                <DollarSign className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Dynamic Pricing & Profit Target</h3>
+                <p className="text-[10px] text-gray-500 mt-0.5">Set target margin global, sistem rekomendasikan harga jual semua produk</p>
+              </div>
+            </div>
+            <ChevronRight className={`w-5 h-5 text-gray-400 transition-transform ${showBulkPricing ? 'rotate-90' : ''}`} />
+          </button>
+
+          {showBulkPricing && (
+            <div className="mt-5 pt-4 border-t border-gray-100 space-y-4">
+              <div className="bg-gradient-to-r from-emerald-50 to-blue-50 p-4 rounded-xl border border-emerald-100">
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                  <div className="flex-1 w-full">
+                    <label className="text-xs font-bold text-gray-700 uppercase flex justify-between mb-2">
+                      <span>Target Laba Kotor Global</span>
+                      <span className="text-emerald-700 font-mono text-sm font-black">{globalTargetMargin}%</span>
+                    </label>
+                    <input type="range" min="10" max="80" value={globalTargetMargin}
+                      onChange={(e) => setGlobalTargetMargin(parseInt(e.target.value))}
+                      className="w-full accent-emerald-600" />
+                    <div className="flex justify-between text-[9px] text-gray-400 mt-0.5">
+                      <span>10% Tipis</span><span>30% Wajar</span><span>50% Tinggi</span><span>80% Premium</span>
+                    </div>
+                  </div>
+                  <button onClick={() => {
+                    const confirmed = window.confirm(
+                      `Terapkan harga rekomendasi margin ${globalTargetMargin}% ke SEMUA produk (${calculatedProducts.length} produk)?`
+                    );
+                    if (confirmed) {
+                      calculatedProducts.forEach(p => {
+                        const recommendedPricePerPorsi = p.hppPerPorsi / (1 - globalTargetMargin / 100);
+                        const recommendedTotal = recommendedPricePerPorsi * p.porsiJual;
+                        onUpdateProductPricing(p.namaProduk, p.overhead, Math.round(recommendedTotal));
+                      });
+                    }
+                  }}
+                    disabled={calculatedProducts.length === 0}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer whitespace-nowrap flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5" /> Terapkan ke Semua
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50">
+                      <th className="px-3 py-2.5 rounded-l-lg">Produk</th>
+                      <th className="px-3 py-2.5 text-right">HPP/Porsi</th>
+                      <th className="px-3 py-2.5 text-right">Harga Jual Skrg</th>
+                      <th className="px-3 py-2.5 text-right">Margin Skrg</th>
+                      <th className="px-3 py-2.5 text-right">Rekom. Harga</th>
+                      <th className="px-3 py-2.5 text-right">Margin Target</th>
+                      <th className="px-3 py-2.5 rounded-r-lg">Dampak</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {calculatedProducts.filter(p => p.hppPerPorsi > 0).map(p => {
+                      const recommendedPerPorsi = p.hppPerPorsi / (1 - globalTargetMargin / 100);
+                      const priceDiff = recommendedPerPorsi - p.hargaJualPerPorsi;
+                      return (
+                        <tr key={p.namaProduk} className="hover:bg-gray-50/50">
+                          <td className="px-3 py-2.5 font-semibold text-gray-800">{p.namaProduk}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-gray-700">{formatCurrency(p.hppPerPorsi)}</td>
+                          <td className="px-3 py-2.5 text-right font-mono font-bold">{formatCurrency(p.hargaJualPerPorsi)}</td>
+                          <td className="px-3 py-2.5 text-right">
+                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              p.marginPersen < 15 ? 'bg-red-100 text-red-700' : p.marginPersen < 30 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                            }`}>
+                              {p.marginPersen.toFixed(1)}%
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-mono font-bold text-emerald-700">{formatCurrency(recommendedPerPorsi)}</td>
+                          <td className="px-3 py-2.5 text-right font-mono font-bold text-emerald-700">{globalTargetMargin}%</td>
+                          <td className="px-3 py-2.5">
+                            {Math.abs(priceDiff) < 50 ? (
+                              <span className="text-gray-400 text-[10px]">✓ OK</span>
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                {priceDiff > 0 ? (
+                                  <>
+                                    <span className="text-emerald-600 font-bold text-[10px]">Naik {formatCurrency(priceDiff)}</span>
+                                    <ArrowRight className="w-2.5 h-2.5 text-emerald-600" />
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="text-red-600 font-bold text-[10px]">Turun {formatCurrency(Math.abs(priceDiff))}</span>
+                                    <ArrowRight className="w-2.5 h-2.5 text-red-600" />
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {calculatedProducts.filter(p => p.hppPerPorsi > 0).length === 0 && (
+                      <tr><td colSpan={7} className="px-3 py-6 text-center text-gray-400">Tidak ada produk dengan HPP valid.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                <Info className="w-3 h-3" />
+                Harga rekomendasi dihitung dari HPP / (1 - target margin). Klik "Terapkan ke Semua" untuk update harga jual semua produk sekaligus.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* LEFT PANEL: Live Table of all Product COGS/HPP and Pricing */}
       <div className="lg:col-span-8 bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
         <div className="p-5 border-b border-gray-100 bg-gray-50/50">

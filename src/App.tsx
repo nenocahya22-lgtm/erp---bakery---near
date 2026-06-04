@@ -42,6 +42,8 @@ import PrediksiTab from './components/PrediksiTab';
 import BudgetTab from './components/BudgetTab';
 import ProductionPlannerTab from './components/ProductionPlannerTab';
 import PriceHistoryTab from './components/PriceHistoryTab';
+import SubstitutionSimulatorTab from './components/SubstitutionSimulatorTab';
+import KitchenWorkOrderTab from './components/KitchenWorkOrderTab';
 
 import {
   AlertTriangle,
@@ -64,6 +66,8 @@ import {
   FlaskConical,
   LogOut,
   Menu,
+  Shuffle,
+  ClipboardList,
 } from 'lucide-react';
 
 export default function App() {
@@ -129,6 +133,8 @@ export default function App() {
     | 'erp_compliance'
     | 'erp_production_planner'
     | 'erp_price_history'
+    | 'erp_substitution'
+    | 'erp_work_order'
   >('dashboard');
 
   // --- Lifted States with persistent syncing back to localStorage ---
@@ -649,6 +655,7 @@ export default function App() {
           <div className="space-y-1">
             <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">Produksi & Stok</span>
             <SidebarBtn tab="erp_bom" active={activeTab} icon={<Layers className="w-4 h-4" />} label="BOM & Yield" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_work_order" active={activeTab} icon={<ClipboardList className="w-4 h-4" />} label="Work Order" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_production_planner" active={activeTab} icon={<ShoppingCart className="w-4 h-4" />} label="Prod. Planner" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_mps" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="Jadwal MPS" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_stock" active={activeTab} icon={<Package className="w-4 h-4" />} label="Stok Gudang" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
@@ -672,6 +679,7 @@ export default function App() {
             <SidebarBtn tab="erp_cash_flow" active={activeTab} icon={<Coins className="w-4 h-4" />} label="Arus Kas" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_budget" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="Anggaran Budget" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_prediksi" active={activeTab} icon={<Cpu className="w-4 h-4" />} label="Prediksi & Inflasi" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_substitution" active={activeTab} icon={<Shuffle className="w-4 h-4" />} label="Substitusi Bahan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_price_history" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="History Harga" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="hpp" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="Simulasi HPP" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_waste" active={activeTab} icon={<X className="w-4 h-4" />} label="Manajemen Waste" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
@@ -923,6 +931,22 @@ export default function App() {
             )}
             {activeTab === 'erp_price_history' && (
               <PriceHistoryTab bahanBaku={bahanBaku} />
+            )}
+            {activeTab === 'erp_substitution' && (
+              <SubstitutionSimulatorTab
+                bahanBaku={bahanBaku}
+                productHpp={productHpp}
+                detailResep={detailResep}
+                calculatedProducts={calculatedProducts}
+              />
+            )}
+            {activeTab === 'erp_work_order' && (
+              <KitchenWorkOrderTab
+                productHpp={productHpp}
+                detailResep={detailResep}
+                calculatedProducts={calculatedProducts}
+                bahanBaku={bahanBaku}
+              />
             )}
           </div>
         </main>
