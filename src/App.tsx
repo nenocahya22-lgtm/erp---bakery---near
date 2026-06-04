@@ -20,20 +20,26 @@ import MaterialsTab from './components/MaterialsTab';
 import RecipesTab from './components/RecipesTab';
 import HppTab from './components/HppTab';
 
-// Advanced ERP Modules import
+// Advanced ERP Modules
 import EnterpriseDashboard from './components/EnterpriseDashboard';
-import ProductionTab from './components/ProductionTab';
-import InventoryTab from './components/InventoryTab';
-import LogisticsTab from './components/LogisticsTab';
-import OmnichannelCrmTab from './components/OmnichannelCrmTab';
-import SmartKitchenTab from './components/SmartKitchenTab';
-import ComplianceSafetyTab from './components/ComplianceSafetyTab';
-
-// R&D/Waste/Finance Core
 import FinanceCashFlowTab from './components/FinanceCashFlowTab';
 import WasteControlTab from './components/WasteControlTab';
 import RdSandboxTab, { RDExperiment } from './components/RdSandboxTab';
-import { WasteLog } from './types';
+import LogisticsTab from './components/LogisticsTab';
+import SmartKitchenTab from './components/SmartKitchenTab';
+import ComplianceSafetyTab from './components/ComplianceSafetyTab';
+
+// New focused modules (2026 restructuring)
+import PosKasirTab from './components/PosKasirTab';
+import PesananOnlineTab from './components/PesananOnlineTab';
+import CrmMarketingTab from './components/CrmMarketingTab';
+import BomTab from './components/BomTab';
+import MpsTab from './components/MpsTab';
+import StokGudangTab from './components/StokGudangTab';
+import FefoTab from './components/FefoTab';
+import SupplierTab from './components/SupplierTab';
+import PrediksiTab from './components/PrediksiTab';
+import BudgetTab from './components/BudgetTab';
 
 import {
   AlertTriangle,
@@ -96,22 +102,29 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [lastAutoSaved, setLastAutoSaved] = useState<Date | null>(null);
 
-  // Tabs layout
+  // Tabs layout — satu modul satu fitur
   const [activeTab, setActiveTab] = useState<
     | 'dashboard'
     | 'materials'
     | 'recipes'
     | 'hpp'
     | 'erp_bi'
-    | 'erp_prod'
-    | 'erp_inv'
-    | 'erp_log'
-    | 'erp_pos'
-    | 'erp_iot'
-    | 'erp_compliance'
     | 'erp_cash_flow'
     | 'erp_waste'
     | 'erp_rd'
+    | 'erp_bom'
+    | 'erp_mps'
+    | 'erp_stock'
+    | 'erp_fefo'
+    | 'erp_supplier'
+    | 'erp_log'
+    | 'erp_pos'
+    | 'erp_online'
+    | 'erp_crm'
+    | 'erp_prediksi'
+    | 'erp_budget'
+    | 'erp_iot'
+    | 'erp_compliance'
   >('dashboard');
 
   // --- Lifted States with persistent syncing back to localStorage ---
@@ -528,6 +541,10 @@ export default function App() {
   // Compute calculated results array of all products
   const calculatedProducts: CalculationResult[] = calculateAllProducts(bahanBaku, productHpp, detailResep);
 
+  // Helpers for waste & rd totals
+  const wasteTotalLoss = wasteLogs.reduce((acc, curr) => acc + curr.lossValue, 0);
+  const rdTotalCost = rdExperiments.reduce((acc, curr) => acc + curr.components.reduce((sum, c) => sum + (c.takaran * c.unitPrice), 0) + curr.estOverhead, 0);
+
   // If not authenticated, show login screen
   if (!isOwnerAuthenticated) {
     return <OwnerLogin onLoginSuccess={handleOwnerLogin} />;
@@ -596,196 +613,50 @@ export default function App() {
         {/* SIDEBAR DYNAMIC NAVIGATION MENUS */}
         <nav className="flex-1 overflow-y-auto p-4 space-y-5 select-none scrollbar-thin">
           
-          {/* CATEGORY 1: METRICS & OUTCOMES */}
+          {/* CATEGORY 1: MASTER DATA */}
           <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">Keuangan & Analytics</span>
-            
-            <button
-              onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                activeTab === 'dashboard' 
-                  ? 'bg-emerald-600 text-white font-extrabold shadow-sm' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-850'
-              }`}
-            >
-              <TrendingUp className="w-4 h-4 shrink-0 text-emerald-400" style={{ color: activeTab === 'dashboard' ? '#FFF' : undefined }} />
-              <span>Ringkasan Eksekutif</span>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('erp_bi'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                activeTab === 'erp_bi' 
-                  ? 'bg-emerald-600 text-white font-extrabold shadow-sm' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-850'
-              }`}
-            >
-              <LineChart className="w-4 h-4 shrink-0 text-emerald-400" style={{ color: activeTab === 'erp_bi' ? '#FFF' : undefined }} />
-              <span>Laporan BI & Real P&L</span>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('erp_cash_flow'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold rounded-xl transition-all border cursor-pointer ${
-                activeTab === 'erp_cash_flow' 
-                  ? 'bg-emerald-600 text-white font-extrabold shadow-sm border-emerald-505 shadow-emerald-900/20' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-850 border-transparent bg-slate-850/10'
-              }`}
-            >
-              <Coins className="w-4 h-4 shrink-0 text-amber-400" style={{ color: activeTab === 'erp_cash_flow' ? '#FFF' : undefined }} />
-              <span className="flex items-center gap-1.5 justify-between w-full">
-                <span>Arus Kas & Anggaran</span>
-                <span className="px-1 py-0.5 text-[8px] bg-emerald-500/20 text-emerald-300 rounded font-bold">CASH</span>
-              </span>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('erp_waste'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold rounded-xl transition-all border cursor-pointer ${
-                activeTab === 'erp_waste' 
-                  ? 'bg-rose-700 text-white font-extrabold shadow-sm border-rose-600' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-850 border-transparent bg-slate-850/10'
-              }`}
-            >
-              <X className="w-4 h-4 shrink-0 text-rose-450" style={{ color: activeTab === 'erp_waste' ? '#FFF' : undefined }} />
-              <span className="flex items-center gap-1.5 justify-between w-full">
-                <span>Manajemen Waste</span>
-                <span className="px-1 py-0.5 text-[8px] bg-rose-500/20 text-rose-300 rounded font-bold">WASTE</span>
-              </span>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('erp_rd'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold rounded-xl transition-all border cursor-pointer ${
-                activeTab === 'erp_rd' 
-                  ? 'bg-indigo-650 text-white font-extrabold shadow-sm border-indigo-600' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-850 border-transparent bg-slate-850/10'
-              }`}
-            >
-              <FlaskConical className="w-4 h-4 shrink-0 text-indigo-450" style={{ color: activeTab === 'erp_rd' ? '#FFF' : undefined }} />
-              <span className="flex items-center gap-1.5 justify-between w-full">
-                <span>Sandbox R&D (Litbang)</span>
-                <span className="px-1 py-0.5 text-[8px] bg-indigo-505/20 text-indigo-300 rounded font-bold">R&D</span>
-              </span>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('hpp'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                activeTab === 'hpp' 
-                  ? 'bg-emerald-600 text-white font-extrabold shadow-sm' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-850'
-              }`}
-            >
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" style={{ color: activeTab === 'hpp' ? '#FFF' : undefined }} />
-              <span>Simulasi HPP & Margin</span>
-            </button>
+            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">Master Data</span>
+            <SidebarBtn tab="materials" active={activeTab} icon={<Package className="w-4 h-4" />} label="Bahan Baku" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="recipes" active={activeTab} icon={<FolderTree className="w-4 h-4" />} label="Formulasi Resep" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
           </div>
 
-          {/* CATEGORY 2: MANUFACTURING & RECIPES */}
+          {/* CATEGORY 2: PRODUKSI & STOK */}
           <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-550 uppercase tracking-widest block mb-2 font-mono">Resep & Produksi</span>
-
-            <button
-              onClick={() => { setActiveTab('materials'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                activeTab === 'materials' 
-                  ? 'bg-emerald-600 text-white font-extrabold shadow-sm' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-850'
-              }`}
-            >
-              <Package className="w-4 h-4 shrink-0 text-emerald-400" style={{ color: activeTab === 'materials' ? '#FFF' : undefined }} />
-              <span>Manajemen Bahan Baku</span>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('recipes'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                activeTab === 'recipes' 
-                  ? 'bg-emerald-600 text-white font-extrabold shadow-sm' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-850'
-              }`}
-            >
-              <FolderTree className="w-4 h-4 shrink-0 text-emerald-400" style={{ color: activeTab === 'recipes' ? '#FFF' : undefined }} />
-              <span>Formulasi Resep Produk</span>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('erp_prod'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                activeTab === 'erp_prod' 
-                  ? 'bg-emerald-600 text-white font-extrabold shadow-sm' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-850'
-              }`}
-            >
-              <Layers className="w-4 h-4 shrink-0 text-emerald-400" style={{ color: activeTab === 'erp_prod' ? '#FFF' : undefined }} />
-              <span>BOM & Penjadwalan MPS</span>
-            </button>
+            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">Produksi & Stok</span>
+            <SidebarBtn tab="erp_bom" active={activeTab} icon={<Layers className="w-4 h-4" />} label="BOM & Yield" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_mps" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="Jadwal MPS" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_stock" active={activeTab} icon={<Package className="w-4 h-4" />} label="Stok Gudang" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_fefo" active={activeTab} icon={<ShieldAlert className="w-4 h-4" />} label="Batch & FEFO" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_supplier" active={activeTab} icon={<Coins className="w-4 h-4" />} label="Supplier & PO" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
           </div>
 
-          {/* CATEGORY 3: BACKOFFICE LOGISTICS & SAFETY */}
+          {/* CATEGORY 3: KASIR & MARKETING */}
           <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-550 uppercase tracking-widest block mb-2 font-mono">Operasional & Kepatuhan</span>
+            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">Kasir & Marketing</span>
+            <SidebarBtn tab="erp_pos" active={activeTab} icon={<ShoppingCart className="w-4 h-4" />} label="POS Kasir" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_online" active={activeTab} icon={<Users className="w-4 h-4" />} label="Pesanan Online" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_crm" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="CRM Marketing" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+          </div>
 
-            <button
-              onClick={() => { setActiveTab('erp_inv'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                activeTab === 'erp_inv' 
-                  ? 'bg-emerald-600 text-white font-extrabold shadow-sm' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-850'
-              }`}
-            >
-              <Package className="w-4 h-4 shrink-0 text-emerald-400" style={{ color: activeTab === 'erp_inv' ? '#FFF' : undefined }} />
-              <span>Stok & Alarm FEFO</span>
-            </button>
+          {/* CATEGORY 4: KEUANGAN */}
+          <div className="space-y-1">
+            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">Keuangan</span>
+            <SidebarBtn tab="dashboard" active={activeTab} icon={<LineChart className="w-4 h-4" />} label="Ringkasan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_bi" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="Laporan P&L" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_cash_flow" active={activeTab} icon={<Coins className="w-4 h-4" />} label="Arus Kas" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_budget" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="Anggaran Budget" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_prediksi" active={activeTab} icon={<Cpu className="w-4 h-4" />} label="Prediksi & Inflasi" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="hpp" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="Simulasi HPP" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_waste" active={activeTab} icon={<X className="w-4 h-4" />} label="Manajemen Waste" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_rd" active={activeTab} icon={<FlaskConical className="w-4 h-4" />} label="Sandbox R&D" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+          </div>
 
-            <button
-              onClick={() => { setActiveTab('erp_log'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                activeTab === 'erp_log' 
-                  ? 'bg-emerald-600 text-white font-extrabold shadow-sm' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-850'
-              }`}
-            >
-              <Truck className="w-4 h-4 shrink-0 text-emerald-400" style={{ color: activeTab === 'erp_log' ? '#FFF' : undefined }} />
-              <span>Logistik & Distribusi WH</span>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('erp_pos'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                activeTab === 'erp_pos' 
-                  ? 'bg-emerald-600 text-white font-extrabold shadow-sm' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-850'
-              }`}
-            >
-              <ShoppingCart className="w-4 h-4 shrink-0 text-emerald-400" style={{ color: activeTab === 'erp_pos' ? '#FFF' : undefined }} />
-              <span>Omnichannel POS & CRM</span>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('erp_compliance'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                activeTab === 'erp_compliance' 
-                  ? 'bg-emerald-600 text-white font-extrabold shadow-sm' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-850'
-              }`}
-            >
-              <ShieldAlert className="w-4 h-4 shrink-0 text-emerald-400" style={{ color: activeTab === 'erp_compliance' ? '#FFF' : undefined }} />
-              <span>Recall Pangan HACCP</span>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('erp_iot'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                activeTab === 'erp_iot' 
-                  ? 'bg-emerald-600 text-white font-extrabold shadow-sm' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-850'
-              }`}
-            >
-              <Cpu className="w-4 h-4 shrink-0 text-emerald-400" style={{ color: activeTab === 'erp_iot' ? '#FFF' : undefined }} />
-              <span>Sensor Ovens & Smart IoT</span>
-            </button>
+          {/* CATEGORY 5: OPERASIONAL */}
+          <div className="space-y-1">
+            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">Operasional</span>
+            <SidebarBtn tab="erp_log" active={activeTab} icon={<Truck className="w-4 h-4" />} label="Logistik" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_compliance" active={activeTab} icon={<ShieldAlert className="w-4 h-4" />} label="Recall Pangan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_iot" active={activeTab} icon={<Cpu className="w-4 h-4" />} label="Smart IoT" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
           </div>
 
         </nav>
@@ -962,21 +833,47 @@ export default function App() {
                 onDeleteRD={handleDeleteRD} 
               />
             )}
-            {activeTab === 'erp_prod' && (
-              <ProductionTab productHpp={productHpp} calculatedProducts={calculatedProducts} />
+            {activeTab === 'erp_bom' && (
+              <BomTab productHpp={productHpp} calculatedProducts={calculatedProducts} />
             )}
-            {activeTab === 'erp_inv' && (
-              <InventoryTab bahanBaku={bahanBaku} />
+            {activeTab === 'erp_mps' && (
+              <MpsTab productHpp={productHpp} />
+            )}
+            {activeTab === 'erp_stock' && (
+              <StokGudangTab />
+            )}
+            {activeTab === 'erp_fefo' && (
+              <FefoTab />
+            )}
+            {activeTab === 'erp_supplier' && (
+              <SupplierTab />
             )}
             {activeTab === 'erp_log' && (
               <LogisticsTab />
             )}
             {activeTab === 'erp_pos' && (
-              <OmnichannelCrmTab
-                bahanBaku={bahanBaku}
-                detailResep={detailResep}
+              <PosKasirTab
                 calculatedProducts={calculatedProducts}
                 onCompletePOSSale={handleCompletePOSSale}
+              />
+            )}
+            {activeTab === 'erp_online' && (
+              <PesananOnlineTab
+                calculatedProducts={calculatedProducts}
+                onCompletePOSSale={handleCompletePOSSale}
+              />
+            )}
+            {activeTab === 'erp_crm' && (
+              <CrmMarketingTab calculatedProducts={calculatedProducts} />
+            )}
+            {activeTab === 'erp_prediksi' && (
+              <PrediksiTab calculatedProducts={calculatedProducts} />
+            )}
+            {activeTab === 'erp_budget' && (
+              <BudgetTab
+                calculatedProducts={calculatedProducts}
+                wasteTotalLoss={wasteTotalLoss}
+                rdTotalCost={rdTotalCost}
               />
             )}
             {activeTab === 'erp_iot' && (
@@ -1064,5 +961,26 @@ export default function App() {
       </div>
 
     </div>
+  );
+}
+
+// ===== SIDEBAR BUTTON COMPONENT =====
+function SidebarBtn({ tab, active, icon, label, onClick, onClose }: {
+  tab: string; active: string; icon: React.ReactNode; label: string;
+  onClick: (t: any) => void; onClose: () => void;
+}) {
+  const isActive = active === tab;
+  return (
+    <button
+      onClick={() => { onClick(tab); onClose(); }}
+      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+        isActive
+          ? 'bg-emerald-600 text-white font-extrabold shadow-sm'
+          : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+      }`}
+    >
+      <span className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-emerald-400'}`}>{icon}</span>
+      <span>{label}</span>
+    </button>
   );
 }
