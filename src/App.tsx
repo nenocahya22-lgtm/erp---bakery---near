@@ -590,6 +590,42 @@ export default function App() {
   const wasteTotalLoss = wasteLogs.reduce((acc, curr) => acc + curr.lossValue, 0);
   const rdTotalCost = rdExperiments.reduce((acc, curr) => acc + curr.components.reduce((sum, c) => sum + (c.takaran * c.unitPrice), 0) + curr.estOverhead, 0);
 
+  // Show welcome notifications on first login
+  useEffect(() => {
+    if (isOwnerAuthenticated) {
+      const today = new Date().toISOString().substring(0, 10);
+      const lastVisit = localStorage.getItem('last_visit_date');
+
+      if (lastVisit !== today) {
+        localStorage.setItem('last_visit_date', today);
+
+        // Show welcome notification after a short delay
+        setTimeout(() => {
+          showToast('👋 Selamat datang di Near Bakery & Co. ERP! Kelola bahan baku, resep, dan produksi roti Anda.', 'info');
+        }, 500);
+
+        setTimeout(() => {
+          const lowStock = bahanBaku.filter(b => b.isiKemasan < 100).length;
+          if (lowStock > 0) {
+            showToast(`⚠️ ${lowStock} bahan baku dengan stok rendah — cek tab Bahan Baku.`, 'info');
+          }
+        }, 2000);
+
+        setTimeout(() => {
+          const totalWaste = wasteLogs.reduce((s, w) => s + w.lossValue, 0);
+          if (totalWaste > 0) {
+            showToast(`📊 Total waste tercatat: ${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(totalWaste)} — cek Manajemen Waste.`, 'info');
+          }
+        }, 3500);
+
+        setTimeout(() => {
+          const todayName = new Date().toLocaleDateString('id-ID', { weekday: 'long' });
+          showToast(`📅 Hari ${todayName} — Jangan lupa cek Jadwal MPS & Work Order untuk produksi hari ini!`, 'info');
+        }, 5000);
+      }
+    }
+  }, [isOwnerAuthenticated]);
+
   // If not authenticated, show login screen
   if (!isOwnerAuthenticated) {
     return <OwnerLogin onLoginSuccess={handleOwnerLogin} />;
@@ -598,9 +634,20 @@ export default function App() {
   return (
     <div id="application-layout" className="min-h-screen bg-slate-100 flex flex-col md:flex-row font-sans text-gray-800">
       
+      {/* FLOATING SIDEBAR TOGGLE BUTTON — appears when sidebar is closed */}
+      {!isSidebarOpen && (
+        <button
+          onClick={() => setIsSidebarOpen(true)}
+          className="fixed top-4 left-4 z-50 w-10 h-10 bg-slate-900 hover:bg-emerald-700 text-white rounded-xl shadow-lg border border-slate-700 flex items-center justify-center transition-all cursor-pointer hover:scale-105"
+          title="Buka Sidebar"
+        >
+          <PanelRightOpen className="w-5 h-5" />
+        </button>
+      )}
+
       {/* LEFT SIDEBAR AREA — Closable, no slide animation */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-slate-900 text-slate-300 border-r border-slate-800 flex flex-col md:h-screen shrink-0 ${
-        isSidebarOpen ? 'block md:static' : 'hidden'
+      <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-slate-900 text-slate-300 border-r border-slate-800 flex flex-col shrink-0 ${
+        isSidebarOpen ? 'flex' : 'hidden'
       }`}>
         {/* LOGO BRAND BAR */}
         <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950">
@@ -817,8 +864,9 @@ export default function App() {
                 )}
               </button>
             ) : (
-              <span className="text-[10px] font-bold text-gray-400 bg-gray-50 border border-dashed border-gray-200 p-2 rounded-xl">
-                Offline Sandbox Demo
+              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 p-2 rounded-xl flex items-center gap-1.5">
+                <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                <span>Mode Offline — Data Local Storage</span>
               </span>
             )}
           </div>

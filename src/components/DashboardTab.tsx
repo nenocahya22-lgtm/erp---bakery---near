@@ -223,71 +223,62 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, onWipeAllD
   return (
     <div id="dashboard-container" className="space-y-6">
       
-      {/* PROFESSIONAL ERP INTEGRITY SIREN / RED ALARM STATUS BLOCK */}
-      <div 
-        id="erp-integrity-monitor" 
-        className={`p-5 rounded-2xl border transition-all ${
-          hasAnomalies 
-            ? 'bg-rose-950/10 border-rose-800/80 shadow-lg shadow-rose-950/5 animate-pulse-slow' 
-            : 'bg-emerald-950/5 border-emerald-800/40 shadow-sm'
-        }`}
-      >
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          
-          <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-md ${
-              hasAnomalies ? 'bg-red-650 text-white animate-bounce' : 'bg-emerald-600 text-white'
-            }`}>
-              <AlertCircle className="w-6 h-6 stroke-2" />
-            </div>
-            
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-black uppercase tracking-wider text-gray-950">
-                  {hasAnomalies 
-                    ? '🚨 SIRENE AKTIF: ALARM MERAH INTEGRITAS DATA!'
-                    : '🛡️ STATUS INTEGRITAS: AMAN & TERHUBUNG'
-                  }
-                </h3>
-                <span className={`w-2 h-2 rounded-full ${hasAnomalies ? 'bg-rose-500 animate-ping' : 'bg-emerald-500'}`} />
-              </div>
-              <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-                {hasAnomalies 
-                  ? 'Sistem mendeteksi adanya data janggal atau interkoneksi database yang terputus. Tindakan koreksi mendesak diperlukan.'
-                  : 'Seluruh resep menu, harga modal bahan baku, dan simpanan margin laba lulus audit otomatis 100% tanpa anomali finansial.'
-                }
-              </p>
-            </div>
+      {/* SYSTEM STATUS / WELCOME BLOCK — no scary alarm for empty data */}
+      <div className={`p-5 rounded-2xl border transition-all ${
+        calculatedProducts.length === 0
+          ? 'bg-blue-50 border-blue-200 shadow-sm'
+          : hasAnomalies
+            ? 'bg-rose-50 border-rose-200 shadow-sm'
+            : 'bg-emerald-50 border-emerald-200 shadow-sm'
+      }`}>
+        <div className="flex items-center gap-3">
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
+            calculatedProducts.length === 0
+              ? 'bg-blue-500 text-white'
+              : hasAnomalies
+                ? 'bg-amber-500 text-white'
+                : 'bg-emerald-600 text-white'
+          }`}>
+            <AlertCircle className="w-6 h-6" />
           </div>
-
-          <div className="text-xs">
-            <span className={`px-3 py-1.5 rounded-lg font-mono font-bold tracking-wider uppercase block ${
-              hasAnomalies ? 'bg-rose-950/45 text-rose-400 border border-rose-800/40' : 'bg-emerald-950/30 text-emerald-600 border border-emerald-800/20'
-            }`}>
-              Ledger: {hasAnomalies ? 'DISCREPANCY DETECTED' : 'SYSTEM HEALTHY'}
-            </span>
+          <div className="flex-1">
+            <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">
+              {calculatedProducts.length === 0
+                ? '👋 Selamat Datang di Near Bakery & Co. ERP!'
+                : hasAnomalies
+                  ? '⚠️ Sistem Mendeteksi Beberapa Catatan'
+                  : '✅ Sistem Sehat & Siap Digunakan'
+              }
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {calculatedProducts.length === 0
+                ? 'Mulai dengan menambahkan Bahan Baku dan Resep Produk. Semua data tersimpan aman di browser Anda (localStorage).'
+                : hasAnomalies
+                  ? `${errorWarnings.length} isu terdeteksi — lihat detail di bawah untuk optimasi.`
+                  : 'Seluruh data valid — tidak ada anomali finansial.'
+              }
+            </p>
           </div>
-
+          {calculatedProducts.length === 0 && (
+            <div className="flex gap-2">
+              <span className="px-2.5 py-1.5 rounded-lg bg-emerald-500 text-white text-[10px] font-bold">Siap Mulai</span>
+            </div>
+          )}
         </div>
 
-        {/* Breakdown of Anomalies if any exist */}
-        {hasAnomalies && (
-          <div className="mt-4 pt-4 border-t border-rose-800/25 space-y-2">
-            <span className="block text-[10px] font-extrabold uppercase text-rose-700 tracking-wider font-mono">Daftar Kejanggalan Finansial Terdeteksi:</span>
-            <ul className="text-xs text-rose-800 space-y-1 rounded-xl bg-rose-950/5 p-3.5 border border-rose-900/10 font-medium">
-              {calculatedProducts.length === 0 && (
-                <li className="flex items-center gap-1.5">• <span className="font-bold underline text-rose-950">Google Sheet Terputus</span>: Tidak ada data produk yang diimpor untuk simulasi HPP denda produksi.</li>
-              )}
+        {/* Show warnings only if products exist but have issues */}
+        {hasAnomalies && calculatedProducts.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-rose-200 space-y-1.5">
+            <span className="block text-[10px] font-bold uppercase text-rose-600">Detail:</span>
+            <ul className="text-xs text-rose-700 space-y-1">
               {errorWarnings.map((w, idx) => (
                 <li key={idx} className="flex items-start gap-1.5">
-                  <span className="shrink-0">•</span> 
-                  <span>{w.message}</span>
+                  <span>•</span> <span>{w.message}</span>
                 </li>
               ))}
             </ul>
           </div>
         )}
-
       </div>
 
 
