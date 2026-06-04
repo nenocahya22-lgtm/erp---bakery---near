@@ -1,0 +1,6 @@
+{
+  "name": "Near Bakery & Co. ERP",
+  "description": "Enterprise Resource Planning for Near Bakery & Co., covering real-time HPP calculations, recipes management, omnichannel sales orders, supplier tracking, waste control, and AI marketing analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
