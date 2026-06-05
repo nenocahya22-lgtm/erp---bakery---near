@@ -46,6 +46,7 @@ import BakerPercentageTab from './components/BakerPercentageTab';
 import BepTab from './components/BepTab';
 import DoughTemperatureTab from './components/DoughTemperatureTab';
 import ImageGeneratorTab from './components/ImageGeneratorTab';
+import ProfitDistribusiTab from './components/ProfitDistribusiTab';
 
 import {
   AlertTriangle,
@@ -76,6 +77,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Image,
+  PieChart,
 } from 'lucide-react';
 
 export default function App() {
@@ -145,6 +147,7 @@ export default function App() {
     | 'erp_dough_temp'
     | 'erp_harga_prediksi'
     | 'erp_image_gen'
+    | 'erp_profit_distribusi'
   >('dashboard');
 
   // --- Lifted States with persistent syncing back to localStorage ---
@@ -702,61 +705,67 @@ export default function App() {
         {/* SIDEBAR DYNAMIC NAVIGATION MENUS */}
         <nav className="flex-1 overflow-y-auto p-4 space-y-5 select-none scrollbar-thin">
           
-          {/* CATEGORY 1: MASTER DATA */}
+          {/* 📁 ① MASTER DATA — Setup awal: daftarkan bahan & resep */}
           <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">Master Data</span>
-            <SidebarBtn tab="materials" active={activeTab} icon={<Package className="w-4 h-4" />} label="Bahan Baku" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="recipes" active={activeTab} icon={<FolderTree className="w-4 h-4" />} label="Formulasi Resep" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">① Master Data</span>
+            <SidebarBtn tab="materials" active={activeTab} icon={<Package className="w-4 h-4" />} label="📦 Bahan Baku" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="recipes" active={activeTab} icon={<FolderTree className="w-4 h-4" />} label="📝 Formulasi Resep" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
           </div>
 
-          {/* CATEGORY 2: PRODUKSI & STOK */}
+          {/* 🏭 ② INVENTORY & PRODUKSI — Stok, jadwal oven, work order */}
           <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">Produksi & Stok</span>
-            <SidebarBtn tab="erp_bom" active={activeTab} icon={<Layers className="w-4 h-4" />} label="BOM & Yield" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_work_order" active={activeTab} icon={<ClipboardList className="w-4 h-4" />} label="Work Order" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_production_planner" active={activeTab} icon={<ShoppingCart className="w-4 h-4" />} label="Prod. Planner" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_baker_pct" active={activeTab} icon={<Percent className="w-4 h-4" />} label="Baker's %" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_dough_temp" active={activeTab} icon={<Thermometer className="w-4 h-4" />} label="Suhu Adonan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_fefo_expiry" active={activeTab} icon={<ShieldAlert className="w-4 h-4" />} label="FEFO & Expiry" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_mps" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="Jadwal MPS" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_stock" active={activeTab} icon={<Package className="w-4 h-4" />} label="Stok Gudang" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_supplier" active={activeTab} icon={<Coins className="w-4 h-4" />} label="Supplier & PO" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">② Inventory & Produksi</span>
+            <SidebarBtn tab="erp_stock" active={activeTab} icon={<Package className="w-4 h-4" />} label="🏭 Stok Gudang" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_fefo_expiry" active={activeTab} icon={<ShieldAlert className="w-4 h-4" />} label="📋 FEFO & Expiry" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_bom" active={activeTab} icon={<Layers className="w-4 h-4" />} label="🔧 BOM & Yield" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_mps" active={activeTab} icon={<Calendar className="w-4 h-4" />} label="📅 Jadwal MPS" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_work_order" active={activeTab} icon={<ClipboardList className="w-4 h-4" />} label="📄 Work Order" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_production_planner" active={activeTab} icon={<ShoppingCart className="w-4 h-4" />} label="📊 Prod. Planner" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_baker_pct" active={activeTab} icon={<Percent className="w-4 h-4" />} label="🍞 Baker's %" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_dough_temp" active={activeTab} icon={<Thermometer className="w-4 h-4" />} label="🌡️ Suhu Adonan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
           </div>
 
-          {/* CATEGORY 3: KASIR & MARKETING */}
+          {/* 🤝 ③ PEMBELIAN & SUPPLIER — Vendor, PO, distribusi */}
           <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">Kasir & Marketing</span>
-            <SidebarBtn tab="erp_pos" active={activeTab} icon={<ShoppingCart className="w-4 h-4" />} label="POS Kasir" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_online" active={activeTab} icon={<Users className="w-4 h-4" />} label="Pesanan Online" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_crm" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="CRM Marketing" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">③ Pembelian & Supplier</span>
+            <SidebarBtn tab="erp_supplier" active={activeTab} icon={<Coins className="w-4 h-4" />} label="🤝 Supplier & PO" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_log" active={activeTab} icon={<Truck className="w-4 h-4" />} label="🚚 Logistik" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
           </div>
 
-          {/* CATEGORY 4: KEUANGAN */}
+          {/* 🛒 ④ KASIR & PENJUALAN — POS, online, marketing */}
           <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">Keuangan</span>
-            <SidebarBtn tab="dashboard" active={activeTab} icon={<LineChart className="w-4 h-4" />} label="Ringkasan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_bi" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="Laporan P&L" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_cash_flow" active={activeTab} icon={<Coins className="w-4 h-4" />} label="Arus Kas" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_budget" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="Anggaran Budget" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_bep" active={activeTab} icon={<BarChart3 className="w-4 h-4" />} label="BEP & Balance" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_harga_prediksi" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="Harga & Prediksi" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="hpp" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="Simulasi HPP" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_waste" active={activeTab} icon={<X className="w-4 h-4" />} label="Manajemen Waste" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_rd" active={activeTab} icon={<FlaskConical className="w-4 h-4" />} label="Sandbox R&D" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">④ Kasir & Penjualan</span>
+            <SidebarBtn tab="erp_pos" active={activeTab} icon={<ShoppingCart className="w-4 h-4" />} label="🛒 POS Kasir" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_online" active={activeTab} icon={<Users className="w-4 h-4" />} label="📱 Pesanan Online" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_crm" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="📈 CRM Marketing" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
           </div>
 
-          {/* CATEGORY 5: OPERASIONAL */}
+          {/* 💰 ⑤ KEUANGAN — Laporan, arus kas, alokasi laba */}
           <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">Operasional</span>
-            <SidebarBtn tab="erp_log" active={activeTab} icon={<Truck className="w-4 h-4" />} label="Logistik" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_compliance" active={activeTab} icon={<ShieldAlert className="w-4 h-4" />} label="Recall Pangan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_iot" active={activeTab} icon={<Cpu className="w-4 h-4" />} label="Smart IoT" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑤ Keuangan</span>
+            <SidebarBtn tab="dashboard" active={activeTab} icon={<LineChart className="w-4 h-4" />} label="👋 Ringkasan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_bi" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="📊 Laporan P&L" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_cash_flow" active={activeTab} icon={<Coins className="w-4 h-4" />} label="💵 Arus Kas" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_profit_distribusi" active={activeTab} icon={<PieChart className="w-4 h-4" />} label="🎯 Alokasi Laba" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_bep" active={activeTab} icon={<BarChart3 className="w-4 h-4" />} label="🧮 BEP & Balance" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_budget" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="💰 Anggaran Budget" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_harga_prediksi" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="📈 Harga & Prediksi" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="hpp" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="🧮 Simulasi HPP" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
           </div>
 
-          {/* CATEGORY 6: TOOLS */}
+          {/* 🗑️ ⑥ OPERASIONAL & WASTE — Kerugian, R&D, IoT */}
           <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">Tools</span>
-            <SidebarBtn tab="erp_image_gen" active={activeTab} icon={<Image className="w-4 h-4" />} label="Image Gen" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑥ Operasional & Waste</span>
+            <SidebarBtn tab="erp_waste" active={activeTab} icon={<X className="w-4 h-4" />} label="🗑️ Manajemen Waste" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_rd" active={activeTab} icon={<FlaskConical className="w-4 h-4" />} label="🔬 Sandbox R&D" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_compliance" active={activeTab} icon={<ShieldAlert className="w-4 h-4" />} label="🧊 Recall Pangan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_iot" active={activeTab} icon={<Cpu className="w-4 h-4" />} label="🤖 Smart IoT" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+          </div>
+
+          {/* 🛠️ ⑦ TOOLS */}
+          <div className="space-y-1">
+            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑦ Tools</span>
+            <SidebarBtn tab="erp_image_gen" active={activeTab} icon={<Image className="w-4 h-4" />} label="🎨 Image Gen" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
           </div>
 
         </nav>
@@ -1023,6 +1032,9 @@ export default function App() {
             )}
             {activeTab === 'erp_image_gen' && (
               <ImageGeneratorTab />
+            )}
+            {activeTab === 'erp_profit_distribusi' && (
+              <ProfitDistribusiTab />
             )}
           </div>
         </main>
