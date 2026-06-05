@@ -4,7 +4,7 @@ import { CalculationResult } from '../types';
 
 interface PesananOnlineTabProps {
   calculatedProducts: CalculationResult[];
-  onCompletePOSSale: (productName: string, qty: number, totalRevenue: number) => void;
+  onCompletePOSSale: (productName: string, qty: number, totalRevenue: number, source?: string) => void;
 }
 
 export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale }: PesananOnlineTabProps) {
@@ -25,7 +25,7 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
     const items = `${qty} pcs ${pName}`;
     const txId = `TX-${Math.floor(1000 + Math.random() * 9005)}`;
 
-    if (onCompletePOSSale) onCompletePOSSale(pName, qty, unitPrice * qty);
+    if (onCompletePOSSale) onCompletePOSSale(pName, qty, unitPrice * qty, platform);
 
     alert(`🛎️ ${platform} ORDER MASUK!\nNo: ${txId}\nPesanan: ${items}\nStok bahan baku otomatis terpotong.`);
   };

@@ -14,7 +14,7 @@ interface RetailOrder {
 
 interface PosKasirTabProps {
   calculatedProducts: CalculationResult[];
-  onCompletePOSSale: (productName: string, qty: number, totalRevenue: number) => void;
+  onCompletePOSSale: (productName: string, qty: number, totalRevenue: number, source?: string) => void;
 }
 
 export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: PosKasirTabProps) {
@@ -56,7 +56,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
     };
 
     setOrders(prev => [newOrder, ...prev]);
-    if (onCompletePOSSale) onCompletePOSSale(selectedProduct, orderQty, totalRevenue);
+    if (onCompletePOSSale) onCompletePOSSale(selectedProduct, orderQty, totalRevenue, orderSource);
 
     setNewCustName('');
     setSelectedProduct('');

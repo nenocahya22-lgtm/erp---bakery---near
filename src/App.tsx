@@ -518,7 +518,7 @@ export default function App() {
     setHasUnsavedChanges(true);
   };
 
-  const handleCompletePOSSale = (productName: string, soldQty: number, totalRevenue: number) => {
+  const handleCompletePOSSale = (productName: string, soldQty: number, totalRevenue: number, source?: string) => {
     // 1. Locate the recipe ingredients for this product
     const ingredientsForProduct = detailResep.filter(
       (r) => r.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
@@ -578,8 +578,43 @@ export default function App() {
       }
     }
 
+    // 5. Record revenue to revenue tracker (for profit distribution)
+    try {
+      const saved = localStorage.getItem('revenue_tracker_data');
+      const tracker = saved ? JSON.parse(saved) : { transactions: [], dailyTotals: {} };
+      const today = new Date().toISOString().substring(0, 10);
+      const txEntry = {
+        id: `rev-${Date.now()}`,
+        time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+        product: productName,
+        qty: soldQty,
+        amount: totalRevenue,
+        source: source || 'Walk-In POS',
+        date: today,
+      };
+      tracker.transactions.push(txEntry);
+      // Keep last 500 transactions max
+      if (tracker.transactions.length > 500) {
+        tracker.transactions = tracker.transactions.slice(-500);
+      }
+      // Update daily totals
+      if (!tracker.dailyTotals[today]) {
+        tracker.dailyTotals[today] = { total: 0, sources: {} };
+      }
+      tracker.dailyTotals[today].total += totalRevenue;
+      const src = txEntry.source;
+      if (!tracker.dailyTotals[today].sources[src]) {
+        tracker.dailyTotals[today].sources[src] = 0;
+      }
+      tracker.dailyTotals[today].sources[src] += totalRevenue;
+      localStorage.setItem('revenue_tracker_data', JSON.stringify(tracker));
+    } catch (err) {
+      console.error('Failed to record revenue:', err);
+    }
+
     setHasUnsavedChanges(true);
-    showToast(`Transaksi POS Sukses! Menjual ${soldQty} pcs "${productName}". Bahan baku otomatis dipotong.`, 'success');
+    const revStr = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(totalRevenue);
+    showToast(`Transaksi Sukses! Menjual ${soldQty} pcs "${productName}" (${revStr}). Bahan baku otomatis dipotong.`, 'success');
   };
 
   // Compute calculated results array of all products
