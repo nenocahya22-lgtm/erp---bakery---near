@@ -10,9 +10,11 @@ import {
   loadProjectDataFromSheets,
   createAndInitializeTemplates,
   saveProjectDataToSheets,
+  saveRevenueToSheets,
+  loadRevenueFromSheets,
 } from './lib/sheets';
 import { calculateAllProducts } from './lib/calculations';
-import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog } from './types';
+import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, WasteLog } from './types';
 
 import OwnerLogin from './components/OwnerLogin';
 import DashboardTab from './components/DashboardTab';
@@ -47,6 +49,7 @@ import BepTab from './components/BepTab';
 import DoughTemperatureTab from './components/DoughTemperatureTab';
 import ImageGeneratorTab from './components/ImageGeneratorTab';
 import ProfitDistribusiTab from './components/ProfitDistribusiTab';
+import AlertSystemTab from './components/AlertSystemTab';
 
 import {
   AlertTriangle,
@@ -78,6 +81,7 @@ import {
   PanelRightOpen,
   Image,
   PieChart,
+  Bell,
 } from 'lucide-react';
 
 export default function App() {
@@ -148,6 +152,7 @@ export default function App() {
     | 'erp_harga_prediksi'
     | 'erp_image_gen'
     | 'erp_profit_distribusi'
+    | 'erp_alert_system'
   >('dashboard');
 
   // --- Lifted States with persistent syncing back to localStorage ---
@@ -276,11 +281,24 @@ export default function App() {
       } = autoSaveDataRef.current;
 
       if (currentUnsaved && currentToken && currentId) {
-        saveProjectDataToSheets(currentToken, currentId, {
-          bahanBaku: currentBahan,
-          productHpp: currentHpp,
-          detailResep: currentResep,
-        })
+        Promise.all([
+          saveProjectDataToSheets(currentToken, currentId, {
+            bahanBaku: currentBahan,
+            productHpp: currentHpp,
+            detailResep: currentResep,
+          }),
+          // Also sync revenue data if available
+          (() => {
+            try {
+              const revenueData = localStorage.getItem('revenue_tracker_data');
+              if (revenueData) {
+                const parsed = JSON.parse(revenueData);
+                return saveRevenueToSheets(currentToken, currentId, parsed.transactions || []);
+              }
+            } catch (e) { /* silent */ }
+            return Promise.resolve();
+          })(),
+        ])
           .then(() => {
             setHasUnsavedChanges(false);
             setLastAutoSaved(new Date());
@@ -803,6 +821,12 @@ export default function App() {
             <SidebarBtn tab="erp_image_gen" active={activeTab} icon={<Image className="w-4 h-4" />} label="🎨 Image Gen" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
           </div>
 
+          {/* 🔔 ⑧ MONITORING & ALERT */}
+          <div className="space-y-1">
+            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑧ Monitoring</span>
+            <SidebarBtn tab="erp_alert_system" active={activeTab} icon={<Bell className="w-4 h-4" />} label="🔔 Monitoring & Alert" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+          </div>
+
         </nav>
 
         {/* GOOGLE SHEETS CONNECTION */}
@@ -1070,6 +1094,14 @@ export default function App() {
             )}
             {activeTab === 'erp_profit_distribusi' && (
               <ProfitDistribusiTab />
+            )}
+            {activeTab === 'erp_alert_system' && (
+              <AlertSystemTab
+                calculatedProducts={calculatedProducts}
+                bahanBaku={bahanBaku}
+                hasUnsavedChanges={hasUnsavedChanges}
+                spreadsheetId={spreadsheetId}
+              />
             )}
           </div>
         </main>

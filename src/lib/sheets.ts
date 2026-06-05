@@ -258,3 +258,103 @@ export async function saveProjectDataToSheets(
   await updateSheetValues(accessToken, spreadsheetId, 'HPP Produk!A1', hppRows);
   await updateSheetValues(accessToken, spreadsheetId, 'Resep Detail!A1', resepRows);
 }
+
+export async function saveRevenueToSheets(
+  accessToken: string,
+  spreadsheetId: string,
+  transactions: {
+    id: string;
+    time: string;
+    product: string;
+    qty: number;
+    amount: number;
+    source: string;
+    date: string;
+  }[]
+): Promise<void> {
+  // Check if Revenue Tracker sheet exists, create if not
+  const details = await getSpreadsheetDetails(accessToken, spreadsheetId);
+  const sheetTitles = details.sheets?.map((s: any) => s.properties?.title as string) || [];
+
+  if (!sheetTitles.includes('Revenue Tracker')) {
+    const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        requests: [{ addSheet: { properties: { title: 'Revenue Tracker' } } }],
+      }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error?.message || 'Failed to create Revenue Tracker sheet');
+    }
+  }
+
+  // Write header + data
+  const rows: any[][] = [['Date', 'Time', 'ID', 'Product', 'Qty', 'Amount', 'Source']];
+  // Sort by date descending, newest first
+  const sorted = [...transactions].sort((a, b) => {
+    if (a.date !== b.date) return b.date.localeCompare(a.date);
+    return b.time.localeCompare(a.time);
+  });
+  // Only write last 1000 transactions to sheets (to avoid hitting limits)
+  const limited = sorted.slice(0, 1000);
+  limited.forEach((tx) => {
+    rows.push([tx.date, tx.time, tx.id, tx.product, tx.qty, tx.amount, tx.source]);
+  });
+
+  await clearSheetValues(accessToken, spreadsheetId, 'Revenue Tracker');
+  await updateSheetValues(accessToken, spreadsheetId, 'Revenue Tracker!A1', rows);
+}
+
+export async function loadRevenueFromSheets(
+  accessToken: string,
+  spreadsheetId: string
+): Promise<{
+  transactions: { id: string; time: string; product: string; qty: number; amount: number; source: string; date: string }[];
+  dailyTotals: Record<string, { total: number; sources: Record<string, number> }>;
+}> {
+  const details = await getSpreadsheetDetails(accessToken, spreadsheetId);
+  const sheetTitles = details.sheets?.map((s: any) => s.properties?.title as string) || [];
+
+  if (!sheetTitles.includes('Revenue Tracker')) {
+    return { transactions: [], dailyTotals: {} };
+  }
+
+  const rows = await fetchSheetValues(accessToken, spreadsheetId, 'Revenue Tracker!A1:G2000');
+  const transactions: { id: string; time: string; product: string; qty: number; amount: number; source: string; date: string }[] = [];
+  const dailyTotals: Record<string, { total: number; sources: Record<string, number> }> = {};
+
+  if (rows.length > 1) {
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (row[0]) {
+        const date = String(row[0]).trim();
+        const tx = {
+          id: String(row[2] || '').trim(),
+          time: String(row[1] || '').trim(),
+          product: String(row[3] || '').trim(),
+          qty: parseFloat(row[4]) || 0,
+          amount: parseFloat(row[5]) || 0,
+          source: String(row[6] || '').trim(),
+          date,
+        };
+        transactions.push(tx);
+
+        if (!dailyTotals[date]) {
+          dailyTotals[date] = { total: 0, sources: {} };
+        }
+        dailyTotals[date].total += tx.amount;
+        if (!dailyTotals[date].sources[tx.source]) {
+          dailyTotals[date].sources[tx.source] = 0;
+        }
+        dailyTotals[date].sources[tx.source] += tx.amount;
+      }
+    }
+  }
+
+  return { transactions, dailyTotals };
+}
