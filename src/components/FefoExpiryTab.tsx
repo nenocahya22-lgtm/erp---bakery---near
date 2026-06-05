@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldAlert, PackageOpen, Calendar, AlertTriangle, Clock, Package, Trash2, Plus, RefreshCw, Printer } from 'lucide-react';
-import { BahanBaku } from '../types';
+import { BahanBaku, ProductHpp } from '../types';
 
 interface BatchLog {
   id: string;
@@ -17,11 +17,22 @@ interface BatchLog {
   dateAdded: string;
 }
 
-interface FefoExpiryTabProps {
-  bahanBaku: BahanBaku[];
+interface ProductExpiryLog {
+  id: string;
+  namaProduk: string;
+  batchNo: string;
+  qty: number;
+  expiryDate: string;
+  status: 'aman' | 'warning' | 'expired';
+  notes: string;
 }
 
-export default function FefoExpiryTab({ bahanBaku }: FefoExpiryTabProps) {
+interface FefoExpiryTabProps {
+  bahanBaku: BahanBaku[];
+  productHpp?: ProductHpp[];
+}
+
+export default function FefoExpiryTab({ bahanBaku, productHpp }: FefoExpiryTabProps) {
   const [batches, setBatches] = useState<BatchLog[]>(() => {
     const saved = localStorage.getItem('fefo_expiry_batches_data');
     return saved ? JSON.parse(saved) : [];
@@ -100,6 +111,16 @@ export default function FefoExpiryTab({ bahanBaku }: FefoExpiryTabProps) {
     const d = new Date(b.expiryDate);
     return d > in3Days && d <= in7Days;
   });
+
+  // Product expiry monitoring
+  const [productExpiry, setProductExpiry] = useState<ProductExpiryLog[]>(() => {
+    const saved = localStorage.getItem('fefo_product_expiry_data');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('fefo_product_expiry_data', JSON.stringify(productExpiry));
+  }, [productExpiry]);
 
   // Stock by ingredient
   const stockByBahan = batches.reduce((acc: Record<string, number>, b) => {
@@ -333,8 +354,71 @@ export default function FefoExpiryTab({ bahanBaku }: FefoExpiryTabProps) {
           )}
         </div>
 
-        {/* KANAN: Safety Stock & Reorder */}
+        {/* KANAN: Product Expiry + Safety Stock */}
         <div className="lg:col-span-4 space-y-4">
+          {/* Product Expiry Alert */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <ShieldAlert className="w-4 h-4 text-rose-600" /> Produk Jadi Expiry
+            </h4>
+            <p className="text-xs text-gray-500 mb-3">Pantau produk jadi yang mendekati expired date.</p>
+            {productExpiry.length === 0 ? (
+              <div className="text-center py-4">
+                <p className="text-xs text-gray-400">Belum ada data produk jadi expired.</p>
+                <p className="text-[10px] text-gray-400 mt-1">Data akan muncul ketika produk memiliki tanggal kadaluwarsa.</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[250px] overflow-y-auto">
+                {productExpiry.map(p => (
+                  <div key={p.id} className={`p-3 rounded-lg border text-xs ${
+                    p.status === 'expired' ? 'bg-red-50 border-red-200' :
+                    p.status === 'warning' ? 'bg-amber-50 border-amber-200' :
+                    'bg-green-50 border-green-200'
+                  }`}>
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-gray-800">{p.namaProduk}</span>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        p.status === 'expired' ? 'bg-red-200 text-red-800' :
+                        p.status === 'warning' ? 'bg-amber-200 text-amber-800' :
+                        'bg-green-200 text-green-800'
+                      }`}>{p.status}</span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-0.5">Batch: {p.batchNo} | Qty: {p.qty} pcs</p>
+                    <p className="text-[10px] text-gray-500">Exp: {p.expiryDate}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={() => {
+              const prodName = window.prompt('Nama produk:');
+              if (!prodName) return;
+              const batchNo = window.prompt('No. Batch:');
+              if (!batchNo) return;
+              const qty = parseInt(window.prompt('Jumlah:') || '0');
+              if (qty <= 0) return;
+              const expDate = window.prompt('Tanggal Expired (YYYY-MM-DD):');
+              if (!expDate) return;
+              const today = new Date();
+              const exp = new Date(expDate);
+              let status: 'aman' | 'warning' | 'expired' = 'aman';
+              const daysDiff = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+              if (daysDiff < 0) status = 'expired';
+              else if (daysDiff <= 7) status = 'warning';
+              setProductExpiry(prev => [{
+                id: `pe-${Date.now()}`,
+                namaProduk: prodName,
+                batchNo,
+                qty,
+                expiryDate: expDate,
+                status,
+                notes: '',
+              }, ...prev]);
+            }} className="w-full mt-2 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-1">
+              <Plus className="w-3 h-3" /> Tambah Produk Expired
+            </button>
+          </div>
+
+          {/* Safety Stock & Reorder */}
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
             <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">Safety Stock Settings</h4>
             <p className="text-xs text-gray-500 mb-3">Atur batas minimal stok per bahan. Sistem akan memberi alert jika stok di bawah batas.</p>

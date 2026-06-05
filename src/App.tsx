@@ -1054,13 +1054,13 @@ export default function App() {
               <BomTab productHpp={productHpp} calculatedProducts={calculatedProducts} />
             )}
             {activeTab === 'erp_mps' && (
-              <MpsTab productHpp={productHpp} />
+              <MpsTab productHpp={productHpp} detailResep={detailResep} bahanBaku={bahanBaku} />
             )}
             {activeTab === 'erp_stock' && (
               <StokGudangTab />
             )}
             {activeTab === 'erp_fefo_expiry' && (
-              <FefoExpiryTab bahanBaku={bahanBaku} />
+              <FefoExpiryTab bahanBaku={bahanBaku} productHpp={productHpp} />
             )}
             {activeTab === 'erp_supplier' && (
               <SupplierTab />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, ChefHat, Printer, X, Coins, RefreshCw } from 'lucide-react';
+import { ShoppingCart, ChefHat, Printer, X, Coins, RefreshCw, Calendar, Clock, TrendingUp, BarChart3 } from 'lucide-react';
 import { CalculationResult } from '../types';
 
 interface RetailOrder {
@@ -10,6 +10,18 @@ interface RetailOrder {
   totalSum: number;
   status: 'Queued' | 'Baking' | 'Completed' | 'Refunded';
   timeAgo: string;
+  date: string;
+}
+
+interface ShiftLog {
+  id: string;
+  type: 'end_shift' | 'end_day';
+  date: string;
+  time: string;
+  totalRevenue: number;
+  totalOrders: number;
+  orders: RetailOrder[];
+  cashierName?: string;
 }
 
 interface PosKasirTabProps {
@@ -19,6 +31,8 @@ interface PosKasirTabProps {
 
 export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: PosKasirTabProps) {
   const [activeReceipt, setActiveReceipt] = useState<RetailOrder | null>(null);
+  const [showLaporan, setShowLaporan] = useState(false);
+  const [showRekap, setShowRekap] = useState(false);
   const [newCustName, setNewCustName] = useState('');
   const [selectedProduct, setSelectedProduct] = useState('');
   const [orderQty, setOrderQty] = useState(1);
@@ -29,12 +43,28 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [shiftLogs, setShiftLogs] = useState<ShiftLog[]>(() => {
+    const saved = localStorage.getItem('pos_shift_logs');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   useEffect(() => {
     localStorage.setItem('pos_orders_data', JSON.stringify(orders));
   }, [orders]);
 
+  useEffect(() => {
+    localStorage.setItem('pos_shift_logs', JSON.stringify(shiftLogs));
+  }, [shiftLogs]);
+
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
+
+  const today = new Date().toISOString().substring(0, 10);
+
+  // Filter orders today
+  const todayOrders = orders.filter(o => o.date === today);
+  const todayRevenue = todayOrders.reduce((sum, o) => sum + o.totalSum, 0);
+  const completedOrders = todayOrders.filter(o => o.status === 'Completed');
 
   const handleCreatePOSOrder = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,7 +73,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
     const prodInfo = calculatedProducts.find(p => p.namaProduk === selectedProduct);
     const price = prodInfo ? prodInfo.hargaJualPerPorsi : 19000;
     const totalRevenue = price * orderQty;
-    const txId = `TX-${Math.floor(1000 + Math.random() * 9005)}`;
+    const txId = `TX-${Date.now().toString().slice(-6)}`;
 
     const newOrder: RetailOrder = {
       ordId: txId,
@@ -52,7 +82,8 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
       items: `${orderQty} pcs ${selectedProduct}`,
       totalSum: totalRevenue,
       status: 'Queued',
-      timeAgo: 'Baru saja'
+      timeAgo: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+      date: today,
     };
 
     setOrders(prev => [newOrder, ...prev]);
@@ -67,15 +98,216 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
     setOrders(prev => prev.map(o => o.ordId === ordId ? { ...o, status: newStatus } : o));
   };
 
+  const handleEndShift = () => {
+    const name = window.prompt('Nama kasir untuk shift ini:', 'Kasir');
+    if (!name) return;
+    const todayActive = orders.filter(o => o.date === today);
+    const log: ShiftLog = {
+      id: `shift-${Date.now()}`,
+      type: 'end_shift',
+      date: today,
+      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+      totalRevenue: todayActive.reduce((s, o) => s + o.totalSum, 0),
+      totalOrders: todayActive.length,
+      orders: todayActive,
+      cashierName: name,
+    };
+    setShiftLogs(prev => [log, ...prev]);
+    alert(`✅ End Shift — ${name}\n\nTotal Pendapatan: ${formatCurrency(log.totalRevenue)}\nTotal Transaksi: ${log.totalOrders}\n\nShift telah dicatat. Pesanan tetap tersimpan.`);
+  };
+
+  const handleEndDay = () => {
+    if (!window.confirm('AKHIRI HARI? Semua transaksi hari ini akan diarsipkan. Stok tidak akan di-reset. Lanjutkan?')) return;
+    const todayActive = orders.filter(o => o.date === today);
+    const log: ShiftLog = {
+      id: `day-${Date.now()}`,
+      type: 'end_day',
+      date: today,
+      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+      totalRevenue: todayActive.reduce((s, o) => s + o.totalSum, 0),
+      totalOrders: todayActive.length,
+      orders: todayActive,
+    };
+    setShiftLogs(prev => [log, ...prev]);
+
+    // Cetak laporan otomatis
+    setTimeout(() => handlePrintLaporan(todayActive, today), 500);
+
+    alert(`✅ END DAY — ${today}\n\nTotal Pendapatan: ${formatCurrency(log.totalRevenue)}\nTotal Transaksi: ${log.totalOrders}\n\nData telah diarsipkan. Laporan siap dicetak.`);
+  };
+
+  const handlePrintLaporan = (orderList: RetailOrder[], dateLabel: string) => {
+    const printWin = window.open('', '_blank');
+    if (!printWin) return;
+    const total = orderList.reduce((s, o) => s + o.totalSum, 0);
+    const rows = orderList.map(o => `
+      <tr>
+        <td style="padding:6px;border-bottom:1px solid #eee;font-family:monospace;font-size:11px;">${o.ordId}</td>
+        <td style="padding:6px;border-bottom:1px solid #eee;font-size:11px;">${o.customerName}</td>
+        <td style="padding:6px;border-bottom:1px solid #eee;font-size:11px;">${o.items}</td>
+        <td style="padding:6px;border-bottom:1px solid #eee;font-size:11px;">${o.source}</td>
+        <td style="padding:6px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;font-size:11px;">${formatCurrency(o.totalSum)}</td>
+        <td style="padding:6px;border-bottom:1px solid #eee;text-align:center;font-size:11px;">${o.status}</td>
+      </tr>
+    `).join('');
+
+    // Hitung per produk
+    const productSummary: Record<string, { qty: number; revenue: number }> = {};
+    orderList.forEach(o => {
+      const match = o.items.match(/(\d+) pcs (.+)/);
+      if (match) {
+        const prod = match[2];
+        if (!productSummary[prod]) productSummary[prod] = { qty: 0, revenue: 0 };
+        productSummary[prod].qty += parseInt(match[1]);
+        productSummary[prod].revenue += o.totalSum;
+      }
+    });
+
+    const prodRows = Object.entries(productSummary).map(([prod, data]) => `
+      <tr>
+        <td style="padding:6px;border-bottom:1px solid #eee;font-size:11px;">${prod}</td>
+        <td style="padding:6px;border-bottom:1px solid #eee;text-align:center;font-family:monospace;font-size:11px;">${data.qty}</td>
+        <td style="padding:6px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;font-size:11px;">${formatCurrency(data.revenue)}</td>
+        <td style="padding:6px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;font-size:11px;">${data.qty > 0 ? formatCurrency(Math.round(data.revenue / data.qty)) : formatCurrency(0)}</td>
+      </tr>
+    `).join('');
+
+    printWin.document.write(`
+      <html><head>
+        <title>Laporan Penjualan - ${dateLabel}</title>
+        <style>
+          body{font-family:'Courier New',monospace;max-width:800px;margin:0 auto;padding:40px;color:#1f2937;font-size:12px;}
+          h1{font-size:20px;color:#065f46;text-align:center;}
+          h2{font-size:14px;color:#374151;margin-top:24px;}
+          .meta{color:#6b7280;font-size:11px;text-align:center;margin-bottom:20px;}
+          table{width:100%;border-collapse:collapse;margin:8px 0;}
+          th{background:#f3f4f6;padding:8px;text-align:left;font-size:10px;text-transform:uppercase;}
+          td{padding:6px;border-bottom:1px solid #e5e7eb;}
+          .total{background:#f0fdf4;padding:12px;border-radius:8px;font-weight:bold;margin-top:16px;font-size:14px;}
+          .footer{text-align:center;color:#9ca3af;font-size:10px;margin-top:30px;}
+          @media print{body{padding:10px;}button{display:none;}}
+        </style>
+      </head><body>
+        <h1>🧾 LAPORAN PENJUALAN</h1>
+        <div class="meta">
+          <strong>Near Bakery & Co. ERP</strong><br>
+          Tanggal: ${new Date(dateLabel).toLocaleDateString('id-ID', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}<br>
+          Waktu Cetak: ${new Date().toLocaleString('id-ID')}<br>
+          Total Transaksi: ${orderList.length} | Total Pendapatan: ${formatCurrency(total)}
+        </div>
+
+        <h2>📊 Rekap per Produk</h2>
+        <table>
+          <thead><tr><th>Produk</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Revenue</th><th style="text-align:right;">AOV</th></tr></thead>
+          <tbody>${prodRows || '<tr><td colspan="4" style="text-align:center;color:#9ca3af;">Belum ada transaksi.</td></tr>'}</tbody>
+        </table>
+
+        <h2>📋 Detail Transaksi</h2>
+        <table>
+          <thead><tr><th>ID</th><th>Customer</th><th>Items</th><th>Sumber</th><th style="text-align:right;">Total</th><th style="text-align:center;">Status</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:#9ca3af;">Belum ada transaksi.</td></tr>'}</tbody>
+        </table>
+
+        <div class="total">
+          <div style="display:flex;justify-content:space-between;">
+            <span>TOTAL PENDAPATAN:</span>
+            <span>${formatCurrency(total)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:12px;color:#6b7280;">
+            <span>Rata-rata per Transaksi:</span>
+            <span>${orderList.length > 0 ? formatCurrency(Math.round(total / orderList.length)) : formatCurrency(0)}</span>
+          </div>
+        </div>
+
+        <div class="footer">
+          Near Bakery & Co. ERP — Laporan Penjualan<br>
+          Dicetak dari Sistem POS Kasir
+        </div>
+        <script>window.print();<\/script>
+      </body></html>
+    `);
+    printWin.document.close();
+  };
+
+  // Print struk thermal untuk bill
+  const handlePrintThermalBill = (order: RetailOrder) => {
+    const printWin = window.open('', '_blank');
+    if (!printWin) return;
+    printWin.document.write(`
+      <html><head>
+        <title>Bill - ${order.ordId}</title>
+        <style>
+          @page{margin:0;}
+          body{font-family:'Courier New',monospace;font-size:10px;width:58mm;padding:4mm;margin:0;color:#000;}
+          h2{font-size:11px;text-align:center;margin:2px 0;}
+          .center{text-align:center;}
+          .line{border-top:1px dashed #000;margin:4px 0;}
+          table{width:100%;border-collapse:collapse;}
+          td{padding:2px 0;}
+          .right{text-align:right;}
+          .bold{font-weight:bold;}
+          .total{font-size:12px;font-weight:bold;}
+        </style>
+      </head><body>
+        <h2>NEAR BAKERY & CO.</h2>
+        <p class="center" style="font-size:8px;">Dapur Pusat Sektor 12, DKI Jakarta</p>
+        <div class="line"></div>
+        <p style="font-size:8px;">
+          No: ${order.ordId}<br>
+          ${new Date().toLocaleString('id-ID')}<br>
+          Kasir: POS
+        </p>
+        <div class="line"></div>
+        <table>
+          <tr><td colspan="2"><b>${order.items}</b></td></tr>
+        </table>
+        <div class="line"></div>
+        <table>
+          <tr><td>TOTAL</td><td class="right total">${formatCurrency(order.totalSum)}</td></tr>
+        </table>
+        <p class="center" style="font-size:8px;margin-top:6px;">Terima kasih!</p>
+        <script>window.print();<\/script>
+      </body></html>
+    `);
+    printWin.document.close();
+  };
+
   return (
     <div className="space-y-6">
-      {/* HEADER */}
-      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100">
-        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <ShoppingCart className="w-6 h-6 text-emerald-600" />
-          POS Kasir Walk-in
-        </h2>
-        <p className="text-xs text-gray-500 mt-1">Checkout penjualan langsung di toko. Stok bahan baku otomatis terpotong.</p>
+      {/* HEADER with End Day/Shift buttons */}
+      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <ShoppingCart className="w-6 h-6 text-emerald-600" />
+            POS Kasir Walk-in
+          </h2>
+          <p className="text-xs text-gray-500 mt-1">Checkout penjualan langsung di toko. Stok bahan baku otomatis terpotong.</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Today's summary */}
+          <div className="bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 text-xs text-right">
+            <span className="text-[9px] text-gray-500 block uppercase font-bold">Hari Ini</span>
+            <span className="font-bold font-mono text-emerald-800">{formatCurrency(todayRevenue)}</span>
+            <span className="text-gray-400 ml-1">({todayOrders.length} tx)</span>
+          </div>
+
+          <button onClick={() => { setShowLaporan(true); }}
+            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1">
+            <BarChart3 className="w-3.5 h-3.5" /> Laporan
+          </button>
+          <button onClick={() => { setShowRekap(true); }}
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1">
+            <TrendingUp className="w-3.5 h-3.5" /> Rekap
+          </button>
+          <button onClick={handleEndShift}
+            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5" /> End Shift
+          </button>
+          <button onClick={handleEndDay}
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1">
+            <Calendar className="w-3.5 h-3.5" /> End Day
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -149,12 +381,12 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
               <ChefHat className="w-4 h-4 text-emerald-600" /> Antrean Dapur
             </h3>
             <span className="font-mono text-emerald-800 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded text-[10px] font-bold">
-              {orders.length} order
+              {todayOrders.length} order hari ini
             </span>
           </div>
 
-          <div className="space-y-3 max-h-[400px] overflow-y-auto">
-            {orders.map((o) => (
+          <div className="space-y-3 max-h-[500px] overflow-y-auto">
+            {todayOrders.map((o) => (
               <div key={o.ordId} className="p-4 bg-gray-50 border border-gray-150 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-xs">
                 <div className="space-y-1 flex-1">
                   <div className="flex items-center gap-2">
@@ -182,19 +414,202 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
                     <option value="Completed">Selesai</option>
                     <option value="Refunded">Refund</option>
                   </select>
-                  <button onClick={() => setActiveReceipt(o)}
-                    className="bg-slate-900 text-white font-bold text-[10px] uppercase px-2.5 py-1.5 rounded-lg hover:bg-slate-800 transition cursor-pointer">
-                    <Printer className="w-3 h-3 inline" /> Cetak
-                  </button>
+                  <div className="flex gap-1">
+                    <button onClick={() => setActiveReceipt(o)}
+                      className="bg-slate-900 text-white font-bold text-[10px] uppercase px-2 py-1.5 rounded-lg hover:bg-slate-800 transition cursor-pointer">
+                      <Printer className="w-3 h-3" />
+                    </button>
+                    <button onClick={() => handlePrintThermalBill(o)}
+                      className="bg-emerald-700 text-white font-bold text-[10px] uppercase px-2 py-1.5 rounded-lg hover:bg-emerald-800 transition cursor-pointer" title="Cetak Bill Thermal">
+                      Bill
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
-            {orders.length === 0 && (
+            {todayOrders.length === 0 && (
               <p className="text-xs text-gray-400 text-center py-8">Belum ada transaksi POS hari ini.</p>
             )}
           </div>
         </div>
       </div>
+
+      {/* MODAL LAPORAN PENJUALAN */}
+      {showLaporan && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full shadow-xl border border-gray-100 overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4.5 bg-gray-50 border-b border-gray-100 flex justify-between items-center shrink-0">
+              <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-indigo-600" /> Laporan Penjualan
+              </h3>
+              <button onClick={() => setShowLaporan(false)} className="text-gray-400 hover:text-gray-600 rounded-lg p-1 hover:bg-gray-100 transition-colors cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4 overflow-y-auto">
+              {/* Summary cards */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-center">
+                  <span className="text-[9px] uppercase font-bold text-gray-500 block">Revenue Hari Ini</span>
+                  <span className="text-lg font-black text-emerald-800 font-mono">{formatCurrency(todayRevenue)}</span>
+                </div>
+                <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center">
+                  <span className="text-[9px] uppercase font-bold text-gray-500 block">Transaksi</span>
+                  <span className="text-lg font-black text-blue-800 font-mono">{todayOrders.length}</span>
+                </div>
+                <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 text-center">
+                  <span className="text-[9px] uppercase font-bold text-gray-500 block">AOV</span>
+                  <span className="text-lg font-black text-amber-800 font-mono">{todayOrders.length > 0 ? formatCurrency(Math.round(todayRevenue / todayOrders.length)) : formatCurrency(0)}</span>
+                </div>
+              </div>
+
+              {/* Per produk summary */}
+              {(() => {
+                const prodSummary: Record<string, { qty: number; revenue: number }> = {};
+                todayOrders.forEach(o => {
+                  const match = o.items.match(/(\d+) pcs (.+)/);
+                  if (match) {
+                    const prod = match[2];
+                    if (!prodSummary[prod]) prodSummary[prod] = { qty: 0, revenue: 0 };
+                    prodSummary[prod].qty += parseInt(match[1]);
+                    prodSummary[prod].revenue += o.totalSum;
+                  }
+                });
+                return Object.keys(prodSummary).length > 0 ? (
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Rekap per Produk</h4>
+                    <div className="space-y-2">
+                      {Object.entries(prodSummary).map(([prod, data]) => (
+                        <div key={prod} className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg text-xs">
+                          <span className="font-semibold text-gray-900">{prod}</span>
+                          <div className="flex gap-4 text-right">
+                            <span className="text-gray-500">{data.qty} pcs</span>
+                            <span className="font-mono font-bold text-emerald-700">{formatCurrency(data.revenue)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+
+              {/* Per source */}
+              {(() => {
+                const srcSummary: Record<string, number> = {};
+                todayOrders.forEach(o => {
+                  if (!srcSummary[o.source]) srcSummary[o.source] = 0;
+                  srcSummary[o.source] += o.totalSum;
+                });
+                return Object.keys(srcSummary).length > 0 ? (
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Per Sumber Transaksi</h4>
+                    <div className="space-y-2">
+                      {Object.entries(srcSummary).map(([src, amt]) => (
+                        <div key={src} className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg text-xs">
+                          <span className="font-semibold text-gray-700">{src}</span>
+                          <span className="font-mono font-bold text-gray-900">{formatCurrency(amt)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+
+              {/* Shift Logs */}
+              {shiftLogs.filter(l => l.date === today).length > 0 && (
+                <div>
+                  <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Riwayat Shift Hari Ini</h4>
+                  <div className="space-y-2">
+                    {shiftLogs.filter(l => l.date === today).map(log => (
+                      <div key={log.id} className="bg-gray-50 p-2.5 rounded-lg border border-gray-200 text-xs flex justify-between">
+                        <div>
+                          <span className="font-bold text-gray-700">{log.type === 'end_shift' ? '🔄 End Shift' : '📅 End Day'}</span>
+                          <span className="text-gray-400 ml-2">{log.time}</span>
+                          {log.cashierName && <span className="text-gray-400 ml-2">Kasir: {log.cashierName}</span>}
+                        </div>
+                        <span className="font-mono font-bold text-gray-900">{formatCurrency(log.totalRevenue)} ({log.totalOrders} tx)</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-between pt-4 border-t border-gray-100">
+                <button onClick={() => setShowLaporan(false)}
+                  className="px-4 py-2 text-xs font-medium text-gray-500 hover:text-gray-700 rounded-xl hover:bg-gray-100 transition cursor-pointer">
+                  Tutup
+                </button>
+                <button onClick={() => handlePrintLaporan(todayOrders, today)}
+                  className="px-4 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition cursor-pointer flex items-center gap-1">
+                  <Printer className="w-3.5 h-3.5" /> Cetak Laporan
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL REKAP */}
+      {showRekap && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full shadow-xl border border-gray-100 overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4.5 bg-gray-50 border-b border-gray-100 flex justify-between items-center shrink-0">
+              <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-blue-600" /> Rekap Penjualan
+              </h3>
+              <button onClick={() => setShowRekap(false)} className="text-gray-400 hover:text-gray-600 rounded-lg p-1 hover:bg-gray-100 transition-colors cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4 overflow-y-auto">
+              {/* Summary chart bars */}
+              {(() => {
+                const prodSummary: Record<string, number> = {};
+                todayOrders.forEach(o => {
+                  const match = o.items.match(/(\d+) pcs (.+)/);
+                  if (match) {
+                    const prod = match[2];
+                    if (!prodSummary[prod]) prodSummary[prod] = 0;
+                    prodSummary[prod] += o.totalSum;
+                  }
+                });
+                const maxRev = Math.max(...Object.values(prodSummary), 1);
+                return Object.entries(prodSummary).length > 0 ? (
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-700 uppercase mb-3">Grafik Penjualan per Produk</h4>
+                    <div className="space-y-2">
+                      {Object.entries(prodSummary).sort(([, a], [, b]) => b - a).map(([prod, rev]) => (
+                        <div key={prod}>
+                          <div className="flex justify-between text-xs mb-0.5">
+                            <span className="font-semibold text-gray-700">{prod}</span>
+                            <span className="font-mono font-bold text-gray-900">{formatCurrency(rev)}</span>
+                          </div>
+                          <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${(rev / maxRev) * 100}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 text-center py-4">Belum ada data penjualan hari ini.</p>
+                );
+              })()}
+
+              {/* All time stats */}
+              <div className="bg-slate-50 p-3 rounded-xl text-xs space-y-1">
+                <span className="font-bold text-gray-700 block">Statistik Semua Waktu</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><span className="text-gray-500">Total Transaksi:</span> <span className="font-bold font-mono">{orders.length}</span></div>
+                  <div><span className="text-gray-500">Total Revenue:</span> <span className="font-bold font-mono">{formatCurrency(orders.reduce((s, o) => s + o.totalSum, 0))}</span></div>
+                  <div><span className="text-gray-500">Completed:</span> <span className="font-bold font-mono text-emerald-700">{orders.filter(o => o.status === 'Completed').length}</span></div>
+                  <div><span className="text-gray-500">Refund:</span> <span className="font-bold font-mono text-red-600">{orders.filter(o => o.status === 'Refunded').length}</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL STRUK */}
       {activeReceipt && (
@@ -241,9 +656,9 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
                 className="flex-1 py-2 text-xs font-semibold text-gray-500 bg-white border border-gray-200 rounded-xl hover:bg-gray-100 transition cursor-pointer">
                 Tutup
               </button>
-              <button onClick={() => window.print()}
+              <button onClick={() => handlePrintThermalBill(activeReceipt)}
                 className="flex-1 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition cursor-pointer shadow-sm">
-                <Printer className="w-4 h-4 inline mr-1" /> Cetak
+                <Printer className="w-4 h-4 inline mr-1" /> Cetak Bill
               </button>
             </div>
           </div>

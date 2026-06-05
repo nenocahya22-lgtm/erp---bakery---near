@@ -95,7 +95,10 @@ export default function MaterialsTab({
     const qty = parseFloat(isiKemasan) || 1;
     const pct = parseFloat(markupPercent) || 0;
 
+    const nextIndex = bahanBaku.length;
+    const nextKode = `BB-${String(nextIndex + 1).padStart(3, '0')}`;
     const item: BahanBaku = {
+      kode: nextKode,
       nama: nama.trim(),
       satuan: satuan.trim(),
       hargaBeli: price,
@@ -182,6 +185,7 @@ export default function MaterialsTab({
             <table className="w-full border-collapse text-left">
               <thead>
                 <tr className="border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase bg-gray-50/50">
+                  <th className="px-6 py-4">Kode</th>
                   <th className="px-6 py-4">Nama Bahan</th>
                   <th className="px-6 py-4">Satuan & Isi</th>
                   <th className="px-6 py-4 text-right text-gray-500">Harga Beli Real</th>
@@ -200,6 +204,7 @@ export default function MaterialsTab({
                   
                   return (
                     <tr key={idx} className="hover:bg-emerald-50/10 transition-colors">
+                      <td className="px-6 py-4.5 font-mono text-[10px] font-bold text-gray-500">{b.kode || `BB-${String(idx + 1).padStart(3, '0')}`}</td>
                       <td className="px-6 py-4.5 font-semibold text-gray-900">{b.nama}</td>
                       <td className="px-6 py-4.5">
                         <div className="flex flex-col">

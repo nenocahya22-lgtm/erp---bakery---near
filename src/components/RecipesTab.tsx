@@ -80,7 +80,7 @@ export default function RecipesTab({
 
   const handleDeleteCategory = (cat: string) => {
     if (cat === 'Semua') return;
-    if (!window.confirm(`Hapus kategori "${cat}"? Produk dengan kategori ini akan berubah ke "Lainnya".`)) return;
+    if (!window.confirm(`Hapus kategori "${cat}"? Kategori akan dihapus dari daftar filter. Produk dengan kategori ini tetap ada — ubah kategorinya secara manual di panel Edit.`)) return;
     setCategoriesList(prev => prev.filter(c => c !== cat));
     if (selectedCategory === cat) setSelectedCategory('Semua');
   };
@@ -324,7 +324,9 @@ export default function RecipesTab({
       return;
     }
 
+    const nextKode = `PRD-${String(productHpp.length + 1).padStart(3, '0')}`;
     const newProduct: ProductHpp = {
+      kode: nextKode,
       namaProduk: newProductName.trim(),
       porsiJual: parseFloat(newProductPorsi) || 1,
       overhead: parseFloat(newProductOverhead) || 0,
@@ -615,6 +617,7 @@ export default function RecipesTab({
                     >
                       <div className="truncate pr-2">
                         <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] font-mono font-bold text-gray-400 mr-1">{p.kode || `PRD-${String(productHpp.indexOf(p) + 1).padStart(3, '0')}`}</span>
                           <span className="text-xs font-bold text-gray-900 truncate leading-tight">{p.namaProduk}</span>
                           <span className="text-[8px] font-extrabold uppercase bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md leading-none border border-slate-200/50">
                             {p.kategori || 'Lainnya'}

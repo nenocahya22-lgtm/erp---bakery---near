@@ -1,4 +1,5 @@
 export interface BahanBaku {
+  kode?: string; // Auto-generated kode like BB-001
   nama: string;
   satuan: string;
   hargaBeli: number; // Effective purchase price (marked up)
@@ -10,6 +11,7 @@ export interface BahanBaku {
 }
 
 export interface ProductHpp {
+  kode?: string; // Auto-generated kode like PRD-001
   namaProduk: string;
   porsiJual: number; // Berapa porsi yang dihasilkan dalam satu resep
   overhead: number; // Biaya operasional tambahan per resep
