@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layers, Sparkles, Sliders, Printer } from 'lucide-react';
+import { Layers, Sparkles, Sliders, Printer, Trash2 } from 'lucide-react';
 import { ProductHpp, CalculationResult } from '../types';
 
 interface BOMStage {
@@ -100,7 +100,18 @@ export default function BomTab({ productHpp, calculatedProducts }: BomTabProps) 
                   <span className="font-mono text-[9px] uppercase font-bold text-emerald-600 bg-white border border-emerald-100 px-2 py-0.5 rounded-full float-right">
                     Level {idx + 1}
                   </span>
-                  <h4 className="text-sm font-bold text-gray-900">{stage.stageName}</h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-gray-900">{stage.stageName}</h4>
+                    <button onClick={() => {
+                      if (window.confirm(`Hapus tahap "${stage.stageName}"?`)) {
+                        setBomStages(prev => prev.filter((_, i) => i !== idx));
+                      }
+                    }}
+                      className="text-gray-400 hover:text-red-600 p-1 cursor-pointer"
+                      title="Hapus Tahap">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   <p className="text-xs text-gray-500 mt-1 italic">{stage.description}</p>
                   <div className="mt-3 pt-3 border-t border-gray-200/50">
                     <span className="text-[10px] uppercase font-bold text-gray-400 block mb-2">Komponen:</span>

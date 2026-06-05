@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Layers, Flame, AlarmClock, Users, RefreshCw, Calendar, Gauge } from 'lucide-react';
+import { ShieldCheck, Layers, Flame, AlarmClock, Users, RefreshCw, Calendar, Gauge, Plus, Trash2, CheckCircle } from 'lucide-react';
 
 interface WorkOrder {
   assetName: string;
@@ -19,7 +19,33 @@ export default function SmartKitchenTab() {
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
 
   // Baker shift state optimizer
-  const [dailyDonutsTarget, setDailyDonutsTarget] = useState(0);
+  const [dailyDonutsTarget, setDailyDonutsTarget] = useState(200);
+
+  // New Work Order form state
+  const [newAssetName, setNewAssetName] = useState('');
+  const [newAssetLimit, setNewAssetLimit] = useState('500');
+  const [newAssetTargetDate, setNewAssetTargetDate] = useState('');
+
+  const handleAddWorkOrder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAssetName.trim()) return;
+    const newWO: WorkOrder = {
+      assetName: newAssetName.trim(),
+      opHours: 0, // Baru didaftarkan, belum ada jam operasional
+      limitHours: parseInt(newAssetLimit) || 500,
+      status: 'Aman',
+      targetDate: newAssetTargetDate || new Date().toISOString().substring(0, 10),
+    };
+    setWorkOrders(prev => [...prev, newWO]);
+    setNewAssetName('');
+    setNewAssetLimit('500');
+    setNewAssetTargetDate('');
+  };
+
+  const handleDeleteWorkOrder = (assetName: string) => {
+    if (!window.confirm(`Hapus "${assetName}" dari daftar aset?`)) return;
+    setWorkOrders(prev => prev.filter(w => w.assetName !== assetName));
+  };
 
   // Auto fluctuating IoT numbers simulation in client
   useEffect(() => {
@@ -104,6 +130,37 @@ export default function SmartKitchenTab() {
             </div>
           </div>
 
+          {/* ADD WORK ORDER FORM */}
+          <form onSubmit={handleAddWorkOrder} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-3">
+            <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+              <Plus className="w-4 h-4 text-emerald-600" /> Daftarkan Aset Baru
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Nama Mesin</label>
+                <input type="text" required value={newAssetName} onChange={(e) => setNewAssetName(e.target.value)}
+                  placeholder="Misal: Mixer Bosch 20L"
+                  className="w-full border border-gray-200 rounded-lg p-2" />
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Batas Servis (jam)</label>
+                <input type="number" required min="10" value={newAssetLimit} onChange={(e) => setNewAssetLimit(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg p-2 font-mono" />
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Target Servis</label>
+                <input type="date" value={newAssetTargetDate} onChange={(e) => setNewAssetTargetDate(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg p-2" />
+              </div>
+              <div className="flex items-end">
+                <button type="submit"
+                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-1">
+                  <Plus className="w-3.5 h-3.5" /> Tambah
+                </button>
+              </div>
+            </div>
+          </form>
+
           {/* PREVENTIVE MAINTENANCE EAM */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
             <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
@@ -149,16 +206,25 @@ export default function SmartKitchenTab() {
                           </span>
                         </td>
                         <td className="px-5 py-4 text-center">
-                          {w.status !== 'Aman' ? (
+                          <div className="flex items-center justify-center gap-1.5">
+                            {w.status !== 'Aman' ? (
+                              <button
+                                onClick={() => handleMaintenanceComplete(w.assetName)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-2 py-1 rounded"
+                              >
+                                Selesai Servis
+                              </button>
+                            ) : (
+                              <span className="text-gray-400 font-semibold text-xs">-</span>
+                            )}
                             <button
-                              onClick={() => handleMaintenanceComplete(w.assetName)}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-2 py-1 rounded"
+                              onClick={() => handleDeleteWorkOrder(w.assetName)}
+                              className="text-gray-400 hover:text-red-600 p-1 cursor-pointer"
+                              title="Hapus Aset"
                             >
-                              Selesai Servis
+                              <Trash2 className="w-3 h-3" />
                             </button>
-                          ) : (
-                            <span className="text-gray-400 font-semibold text-xs">-</span>
-                          )}
+                          </div>
                         </td>
                       </tr>
                     );

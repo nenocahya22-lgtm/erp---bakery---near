@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, AlertTriangle, CheckCircle2, PackageOpen } from 'lucide-react';
+import { Layers, AlertTriangle, CheckCircle2, PackageOpen, Trash2 } from 'lucide-react';
 
 export default function StokGudangTab() {
   const [stockLevels, setStockLevels] = useState<Record<string, { mainWh: number; kitchen: number; storefront: number; reorderPoint: number }>>(() => {
@@ -39,6 +39,15 @@ export default function StokGudangTab() {
     }));
   };
 
+  const handleDeleteMaterial = (name: string) => {
+    if (!window.confirm(`Hapus "${name}" dari stok gudang?`)) return;
+    setStockLevels(prev => {
+      const updated = { ...prev };
+      delete updated[name];
+      return updated;
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex justify-between items-start md:items-center gap-4">
@@ -71,6 +80,7 @@ export default function StokGudangTab() {
                   <th className="px-4 py-3 text-right">Toko</th>
                   <th className="px-4 py-3 text-right">Total</th>
                   <th className="px-5 py-3 text-center">ROP</th>
+                  <th className="px-5 py-3 text-center">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-gray-700">
@@ -83,12 +93,18 @@ export default function StokGudangTab() {
                       <td className="px-4 py-3.5 text-right font-mono">{s.mainWh}</td>
                       <td className="px-4 py-3.5 text-right font-mono">{s.kitchen}</td>
                       <td className="px-4 py-3.5 text-right font-mono text-gray-400">{s.storefront}</td>
-                      <td className={`px-4 py-3.5 text-right font-mono font-bold ${isAlert ? 'text-amber-700' : 'text-emerald-800'}`}>{total}</td>
-                      <td className="px-5 py-3.5 text-center">
-                        <input type="number" value={s.reorderPoint}
-                          onChange={(e) => handleUpdateReorderPoint(mat, parseInt(e.target.value) || 0)}
-                          className="w-16 border border-gray-200 bg-white rounded p-1 font-bold text-center text-xs font-mono" />
-                      </td>
+                      <td className={`px-4 py-3.5 text-right font-mono font-bold ${isAlert ? 'text-amber-700' : 'text-emerald-800'}`}>{total}</td>                        <td className="px-5 py-3.5 text-center">
+                          <input type="number" value={s.reorderPoint}
+                            onChange={(e) => handleUpdateReorderPoint(mat, parseInt(e.target.value) || 0)}
+                            className="w-16 border border-gray-200 bg-white rounded p-1 font-bold text-center text-xs font-mono" />
+                        </td>
+                        <td className="px-5 py-3.5 text-center">
+                          <button onClick={() => handleDeleteMaterial(mat)}
+                            className="text-gray-400 hover:text-red-600 cursor-pointer"
+                            title="Hapus Bahan">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
                     </tr>
                   );
                 })}

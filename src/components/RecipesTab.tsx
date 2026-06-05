@@ -40,9 +40,62 @@ export default function RecipesTab({
     productHpp.length > 0 ? productHpp[0].namaProduk : ''
   );
 
-  // Categories Filter State
-  const categoriesList = ['Semua', 'Roti', 'Cake', 'Cookies', 'Coffee', 'Lainnya'];
+  // Categories Filter State — Dynamic with add/edit/delete
+  const [categoriesList, setCategoriesList] = useState<string[]>(() => {
+    const saved = localStorage.getItem('recipe_categories_data');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return ['Semua', ...parsed];
+    }
+    return ['Semua', 'Roti', 'Cake', 'Cookies', 'Coffee', 'Lainnya'];
+  });
   const [selectedCategory, setSelectedCategory] = useState<string>('Semua');
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [editingCategory, setEditingCategory] = useState('');
+  const [newCategoryName, setNewCategoryName] = useState('');
+
+  // Save categories to localStorage
+  useEffect(() => {
+    const catsForStorage = categoriesList.filter(c => c !== 'Semua');
+    localStorage.setItem('recipe_categories_data', JSON.stringify(catsForStorage));
+  }, [categoriesList]);
+
+  const handleAddCategory = () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    if (categoriesList.some(c => c.toLowerCase() === name.toLowerCase())) {
+      alert(`Kategori "${name}" sudah ada!`);
+      return;
+    }
+    setCategoriesList(prev => {
+      const withoutSemua = prev.filter(c => c !== 'Semua');
+      return ['Semua', ...withoutSemua, name].sort((a, b) => {
+        if (a === 'Semua') return -1;
+        if (b === 'Semua') return 1;
+        return a.localeCompare(b);
+      });
+    });
+    setNewCategoryName('');
+  };
+
+  const handleDeleteCategory = (cat: string) => {
+    if (cat === 'Semua') return;
+    if (!window.confirm(`Hapus kategori "${cat}"? Produk dengan kategori ini akan berubah ke "Lainnya".`)) return;
+    setCategoriesList(prev => prev.filter(c => c !== cat));
+    if (selectedCategory === cat) setSelectedCategory('Semua');
+  };
+
+  const handleRenameCategory = (oldName: string) => {
+    const newName = editingCategory.trim();
+    if (!newName || oldName === 'Semua') return;
+    if (categoriesList.some(c => c.toLowerCase() === newName.toLowerCase() && c !== oldName)) {
+      alert(`Kategori "${newName}" sudah ada!`);
+      return;
+    }
+    setCategoriesList(prev => prev.map(c => c === oldName ? newName : c));
+    if (selectedCategory === oldName) setSelectedCategory(newName);
+    setEditingCategory('');
+  };
 
   // AI Image States
   const [imagePrompt, setImagePrompt] = useState('');
@@ -359,21 +412,74 @@ export default function RecipesTab({
       {/* LEFT COLUMN: Products Selector & Creator */}
       <div className="lg:col-span-4 space-y-4">
         
-        {/* GROUP FILTER TAB CAPSULES */}
-        <div className="bg-slate-900 p-2 rounded-2xl flex gap-1 overflow-x-auto border border-slate-800 scrollbar-none">
-          {categoriesList.map((cat) => (
+        {/* GROUP FILTER TAB CAPSULES — Dynamic with Manager */}
+        <div className="space-y-2">
+          <div className="bg-slate-900 p-2 rounded-2xl flex gap-1 overflow-x-auto border border-slate-800 scrollbar-none">
+            {categoriesList.map((cat) => (
+              <div key={cat} className="group relative flex items-center gap-0.5 shrink-0">
+                <button
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-3 py-1.5 rounded-xl text-2xs font-extrabold uppercase tracking-wide cursor-pointer transition-all ${
+                    selectedCategory === cat
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {cat}
+                </button>
+                {showCategoryManager && cat !== 'Semua' && (
+                  <div className="flex items-center gap-0.5">
+                    {editingCategory === cat ? (
+                      <>
+                        <input
+                          type="text"
+                          value={editingCategory}
+                          onChange={(e) => setEditingCategory(e.target.value)}
+                          className="w-16 p-0.5 text-[9px] border border-emerald-500 rounded bg-white text-black"
+                          autoFocus
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleRenameCategory(cat); if (e.key === 'Escape') setEditingCategory(''); }}
+                        />
+                        <button onClick={() => handleRenameCategory(cat)} className="text-emerald-400 hover:text-emerald-300 p-0.5">✓</button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => { setEditingCategory(cat); }} className="text-slate-500 hover:text-white text-[9px] p-0.5 opacity-0 group-hover:opacity-100 transition">✏️</button>
+                        <button onClick={() => handleDeleteCategory(cat)} className="text-slate-500 hover:text-red-400 text-[9px] p-0.5 opacity-0 group-hover:opacity-100 transition">🗑️</button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
             <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-xl text-2xs font-extrabold uppercase tracking-wide cursor-pointer transition-all shrink-0 ${
-                selectedCategory === cat
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+              onClick={() => {
+                setShowCategoryManager(!showCategoryManager);
+                setEditingCategory('');
+              }}
+              className={`text-[9px] font-bold uppercase px-2 py-1 rounded-lg transition cursor-pointer ${
+                showCategoryManager ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
               }`}
             >
-              {cat}
+              {showCategoryManager ? 'Selesai' : '✏️ Kelola Kategori'}
             </button>
-          ))}
+            {showCategoryManager && (
+              <div className="flex items-center gap-1 flex-1">
+                <input
+                  type="text"
+                  placeholder="Nama kategori baru"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  className="flex-1 p-1.5 text-[10px] border border-gray-200 rounded-lg bg-white"
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory(); }}
+                />
+                <button onClick={handleAddCategory} className="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer">
+                  + Tambah
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">

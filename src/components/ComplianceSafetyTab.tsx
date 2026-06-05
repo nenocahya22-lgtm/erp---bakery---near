@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
 import { ShieldCheck, Printer, Search, RefreshCw, AlertTriangle, Layers, ArrowRight } from 'lucide-react';
+import { ProductHpp } from '../types';
+
+interface ComplianceSafetyTabProps {
+  productHpp: ProductHpp[];
+}
 
 interface AllergenInfo {
   materialName: string;
   allergens: string[]; // Wheat, Nuts, Dairy, Eggs, Soy
 }
 
-export default function ComplianceSafetyTab() {
+export default function ComplianceSafetyTab({ productHpp }: ComplianceSafetyTabProps) {
   // Allergen tracking lookup
   const [allergensList] = useState<AllergenInfo[]>([]);
 
@@ -30,12 +35,26 @@ export default function ComplianceSafetyTab() {
   const [selectedProductLabel, setSelectedProductLabel] = useState('');
 
   const handleTriggerMockRecall = () => {
+    if (!contaminatedBatch.trim()) {
+      alert('Masukkan kode batch bahan yang terkontaminasi!');
+      return;
+    }
     setRecallTriggered(true);
     setTimeout(() => {
-      setRecallOutput(prev => ({
-        ...prev,
-        status: 'Triggered'
-      }));
+      // Generate recall data based on actual products
+      const affectedProd = productHpp.length > 0
+        ? productHpp.slice(0, Math.min(4, productHpp.length)).map(p => p.namaProduk)
+        : ['Roti Tawar', 'Croissant', 'Donat', 'Bolu'];
+      const affectedBatches = affectedProd.map(p => `BATCH-${p.slice(0, 3).toUpperCase()}-${Math.floor(Math.random() * 900 + 100)}`);
+      const branches = ['Kota Kasablanka', 'Grand Indonesia', 'Mall Kelapa Gading', 'Dapur Pusat'];
+
+      setRecallOutput({
+        material: contaminatedBatch.trim(),
+        affectedProducts: affectedProd,
+        affectedBatches,
+        logisticsBranches: branches.slice(0, Math.floor(Math.random() * 3) + 2),
+        status: 'Triggered',
+      });
     }, 1500);
   };
 
@@ -180,6 +199,9 @@ export default function ComplianceSafetyTab() {
                 className="w-full border border-gray-200 rounded-lg p-2 bg-white text-xs"
               >
                 <option value="">-- Pilih Produk --</option>
+                {productHpp.map(p => (
+                  <option key={p.namaProduk} value={p.namaProduk}>{p.namaProduk}</option>
+                ))}
               </select>
             </div>
 

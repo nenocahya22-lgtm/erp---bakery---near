@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Flame, Printer } from 'lucide-react';
+import { Calendar, Flame, Printer, RefreshCw } from 'lucide-react';
 import { ProductHpp } from '../types';
 
 interface MpsTabProps {
@@ -80,10 +80,22 @@ export default function MpsTab({ productHpp }: MpsTabProps) {
                   </div>
                 </div>
                 <div className="flex justify-between border-t border-gray-150 pt-2 text-xs font-semibold">
-                  <span className="text-gray-500">Rekomendasi Oven:</span>
-                  <span className="text-emerald-700 font-mono font-bold text-sm bg-emerald-50 px-2 py-0.5 rounded border border-emerald-150">
-                    {rec} porsi
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-500">Rekomendasi Oven:</span>
+                    <span className="text-emerald-700 font-mono font-bold text-sm bg-emerald-50 px-2 py-0.5 rounded border border-emerald-150">
+                      {rec} porsi
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setPreOrders(pv => ({ ...pv, [p.namaProduk]: 0 }));
+                      setDisplayStock(pv => ({ ...pv, [p.namaProduk]: 0 }));
+                    }}
+                    className="text-gray-400 hover:text-red-600 p-1 cursor-pointer text-[10px] flex items-center gap-1"
+                    title="Reset"
+                  >
+                    <RefreshCw className="w-3 h-3" /> Reset
+                  </button>
                 </div>
               </div>
             );

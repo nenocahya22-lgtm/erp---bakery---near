@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Star, FileText, Printer, Download } from 'lucide-react';
+import { Star, FileText, Printer, Download, Trash2 } from 'lucide-react';
 
 interface SupplierRating {
   name: string;
@@ -14,12 +14,18 @@ export default function SupplierTab() {
   const [poSupplier, setPoSupplier] = useState('');
   const [poMaterial, setPoMaterial] = useState('');
   const [poQty, setPoQty] = useState('');
+  const [poUnit, setPoUnit] = useState('');
   const [newSup, setNewSup] = useState({ name: '', contractPrice: '', complianceRatio: 90, rating: 4 });
 
   const handleAddSupplier = () => {
     if (!newSup.name) return;
-    setSuppliers(prev => [...prev, newSup as SupplierRating]);
+    setSuppliers(prev => [...prev, { ...newSup, name: newSup.name.trim(), contractPrice: newSup.contractPrice.trim() }]);
     setNewSup({ name: '', contractPrice: '', complianceRatio: 90, rating: 4 });
+  };
+
+  const handleDeleteSupplier = (name: string) => {
+    if (!window.confirm(`Hapus supplier "${name}"?`)) return;
+    setSuppliers(prev => prev.filter(s => s.name !== name));
   };
 
   return (
@@ -37,15 +43,21 @@ export default function SupplierTab() {
           <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-2">Daftar Supplier</h3>
 
           <div className="space-y-3 max-h-[250px] overflow-y-auto">
-            {suppliers.map((s, idx) => (
-              <div key={idx} className="flex justify-between items-start text-xs border-b border-gray-50 pb-2">
+            {suppliers.map((s, idx) => (                  <div key={idx} className="flex justify-between items-start text-xs border-b border-gray-50 pb-2 group">
                 <div>
                   <span className="font-bold text-gray-950 block">{s.name}</span>
                   <span className="text-[10px] text-gray-400">{s.contractPrice}</span>
                 </div>
-                <div className="text-right">
-                  <span className="font-bold text-emerald-800 text-sm block">★ {s.rating.toFixed(1)}</span>
-                  <span className="text-[9px] text-gray-400">Ontime: {s.complianceRatio}%</span>
+                <div className="text-right flex items-center gap-2">
+                  <div>
+                    <span className="font-bold text-emerald-800 text-sm block">★ {s.rating.toFixed(1)}</span>
+                    <span className="text-[9px] text-gray-400">Ontime: {s.complianceRatio}%</span>
+                  </div>
+                  <button onClick={() => handleDeleteSupplier(s.name)}
+                    className="text-gray-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                    title="Hapus Supplier">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             ))}
@@ -86,8 +98,7 @@ export default function SupplierTab() {
                   : suppliers.map(s => <option key={s.name} value={s.name}>{s.name}</option>)
                 }
               </select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+            </div>              <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Bahan</label>
                 <input type="text" value={poMaterial} onChange={(e) => setPoMaterial(e.target.value)}
@@ -98,6 +109,12 @@ export default function SupplierTab() {
                 <input type="number" value={poQty} onChange={(e) => setPoQty(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg p-2 font-mono" />
               </div>
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Satuan</label>
+              <input type="text" value={poUnit} onChange={(e) => setPoUnit(e.target.value)}
+                placeholder="Misal: Karton, Sack, Kg"
+                className="w-full border border-gray-200 rounded-lg p-2" />
             </div>
             <div className="flex gap-2">
               <button onClick={() => {

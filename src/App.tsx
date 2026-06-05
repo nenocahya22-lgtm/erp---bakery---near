@@ -316,28 +316,60 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Connect to Google Sheets via Google Sign-In + URL
+  // Connect to Google Sheets — improved with better UX & feedback
   const initiateGoogleConnect = async () => {
-    try {
-      // Try to sign in with Google first to get API access
-      const result = await googleSignIn();
-      if (result) {
-        setToken(result.accessToken);
-        
-        // Now ask for the spreadsheet URL
-        const url = window.prompt('Masukkan URL Google Sheets Anda:\n\nContoh: https://docs.google.com/spreadsheets/d/...');
-        if (url) {
-          localStorage.setItem('spreadsheet_url', url);
-          handleManualConnect(url);
+    const choice = window.confirm(
+      'HUBUNGKAN GOOGLE SHEETS\n\n' +
+      'Pilih metode:\n\n' +
+      '• OK = Login dengan Google (akses penuh baca/tulis)\n' +
+      '• BATAL = Input URL manual (sheet harus publik)'
+    );
+
+    if (choice) {
+      try {
+        showToast('⏳ Mencoba login ke Google...', 'info');
+        const result = await googleSignIn();
+        if (result && result.accessToken) {
+          setToken(result.accessToken);
+          showToast('✅ Login Google berhasil!', 'success');
+
+          const url = window.prompt(
+            'Masukkan URL Google Sheets Anda:\n\nContoh: https://docs.google.com/spreadsheets/d/1ABCxyz.../edit',
+            localStorage.getItem('spreadsheet_url') || ''
+          );
+          if (url) {
+            localStorage.setItem('spreadsheet_url', url);
+            handleManualConnect(url);
+          }
+        } else {
+          showToast('Login gagal — coba input manual.', 'error');
+          tryManualConnect();
         }
+      } catch (err: any) {
+        console.error(err);
+        showToast('Login gagal: ' + (err.message || 'Gagal terhubung ke Google'), 'error');
+        tryManualConnect();
       }
-    } catch (err: any) {
-      // If Google Sign-In fails, still try with URL only (public sheets)
-      const url = window.prompt('Login Google gagal.\n\nMasukkan URL Google Sheets Anda:\n(Catatan: Sheet harus diatur ke "Anyone with the link can view" untuk akses publik)\n\nAtau Anda bisa menggunakan mode offline (semua data disimpan di browser).');
-      if (url) {
-        localStorage.setItem('spreadsheet_url', url);
-        handleManualConnect(url);
-      }
+    } else {
+      tryManualConnect();
+    }
+  };
+
+  // Manual URL input fallback with clear feedback
+  const tryManualConnect = () => {
+    const url = window.prompt(
+      'Masukkan URL Google Sheets Anda:\n\n' +
+      'Pastikan sheet diatur ke \"Anyone with the link can view\"\n' +
+      'untuk akses baca.\n\n' +
+      'Atau kosongkan untuk tetap mode offline (data lokal).',
+      localStorage.getItem('spreadsheet_url') || ''
+    );
+    if (url) {
+      localStorage.setItem('spreadsheet_url', url);
+      showToast('⏳ Mencoba koneksi manual...', 'info');
+      handleManualConnect(url);
+    } else {
+      showToast('✅ Mode offline — semua data aman di localStorage.', 'info');
     }
   };
 
@@ -1062,7 +1094,7 @@ export default function App() {
               <SmartKitchenTab />
             )}
             {activeTab === 'erp_compliance' && (
-              <ComplianceSafetyTab />
+              <ComplianceSafetyTab productHpp={productHpp} />
             )}
             {activeTab === 'erp_production_planner' && (
               <ProductionPlannerTab
