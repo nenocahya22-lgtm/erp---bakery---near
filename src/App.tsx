@@ -50,6 +50,7 @@ import DoughTemperatureTab from './components/DoughTemperatureTab';
 import ImageGeneratorTab from './components/ImageGeneratorTab';
 import ProfitDistribusiTab from './components/ProfitDistribusiTab';
 import AlertSystemTab from './components/AlertSystemTab';
+import BackupSystemTab from './components/BackupSystemTab';
 
 import {
   AlertTriangle,
@@ -82,6 +83,7 @@ import {
   Image,
   PieChart,
   Bell,
+  Cloud,
 } from 'lucide-react';
 
 export default function App() {
@@ -153,6 +155,7 @@ export default function App() {
     | 'erp_image_gen'
     | 'erp_profit_distribusi'
     | 'erp_alert_system'
+    | 'erp_backup'
   >('dashboard');
 
   // --- Lifted States with persistent syncing back to localStorage ---
@@ -827,6 +830,12 @@ export default function App() {
             <SidebarBtn tab="erp_alert_system" active={activeTab} icon={<Bell className="w-4 h-4" />} label="🔔 Monitoring & Alert" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
           </div>
 
+          {/* 💾 ⑨ BACKUP & RESTORE */}
+          <div className="space-y-1">
+            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑨ Backup</span>
+            <SidebarBtn tab="erp_backup" active={activeTab} icon={<Cloud className="w-4 h-4" />} label="💾 Backup & Restore" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+          </div>
+
         </nav>
 
         {/* GOOGLE SHEETS CONNECTION */}
@@ -1102,6 +1111,9 @@ export default function App() {
                 hasUnsavedChanges={hasUnsavedChanges}
                 spreadsheetId={spreadsheetId}
               />
+            )}
+            {activeTab === 'erp_backup' && (
+              <BackupSystemTab />
             )}
           </div>
         </main>

@@ -119,6 +119,53 @@ app.post('/api/marketing/assistant-auto', async (req, res) => {
   }
 });
 
+// Backup Email API Route — Send backup data via SMTP using Nodemailer
+app.post('/api/backup/send', async (req, res) => {
+  try {
+    const { smtpHost, smtpPort, smtpUser, smtpPass, fromEmail, toEmail, backupData, backupDate } = req.body;
+
+    if (!smtpHost || !smtpPort || !smtpUser || !smtpPass || !toEmail || !backupData) {
+      return res.status(400).json({ error: 'SMTP configuration incomplete or missing backup data.' });
+    }
+
+    const nodemailer = await import('nodemailer');
+    
+    const transporter = nodemailer.default.createTransport({
+      host: smtpHost,
+      port: parseInt(smtpPort) || 587,
+      secure: parseInt(smtpPort) === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+    });
+
+    const formattedDate = new Date(backupDate || Date.now()).toLocaleDateString('id-ID', {
+      year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+
+    const info = await transporter.sendMail({
+      from: fromEmail || smtpUser,
+      to: toEmail,
+      subject: `📦 Backup Data ERP Near Bakery — ${formattedDate}`,
+      text: `Backup data sistem ERP Near Bakery & Co.\n\nTanggal: ${formattedDate}\n\nFile backup terlampir dalam format JSON. Simpan file ini di tempat yang aman.\n\nData yang disertakan:\n- Bahan Baku\n- HPP Produk\n- Resep Detail\n- Revenue Transaksi\n- Waste & Write-off\n- R&D Experiments\n\nNear Bakery & Co. ERP\nSistem Backup Otomatis`,
+      attachments: [
+        {
+          filename: `near-bakery-backup-${new Date().toISOString().substring(0, 10)}.json`,
+          content: backupData,
+          contentType: 'application/json',
+        },
+      ],
+    });
+
+    console.log('Backup email sent:', info.messageId);
+    res.json({ success: true, messageId: info.messageId });
+  } catch (error: any) {
+    console.error('Backup email error:', error);
+    res.status(500).json({ error: error.message || 'Failed to send backup email' });
+  }
+});
+
 // Vite middleware for development, and static file serving for production
 async function setupVite() {
   if (process.env.NODE_ENV !== "production") {
