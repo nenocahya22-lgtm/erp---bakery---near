@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Cloud, Download, Mail, Settings, Clock, CheckCircle2, AlertTriangle, Trash2, Send, RefreshCw, Database } from 'lucide-react';
+import { BahanBaku, ProductHpp, DetailResep, CalculationResult } from '../types';
 
 interface BackupSettings {
   smtpHost: string;
@@ -26,6 +27,13 @@ interface BackupHistory {
   message: string;
 }
 
+interface BackupSystemTabProps {
+  bahanBaku: BahanBaku[];
+  productHpp: ProductHpp[];
+  detailResep: DetailResep[];
+  calculatedProducts: CalculationResult[];
+}
+
 const DEFAULT_SETTINGS: BackupSettings = {
   smtpHost: 'smtp.gmail.com',
   smtpPort: 587,
@@ -42,7 +50,7 @@ const DEFAULT_SETTINGS: BackupSettings = {
   includeRd: true,
 };
 
-export default function BackupSystemTab() {
+export default function BackupSystemTab({ bahanBaku, productHpp, detailResep, calculatedProducts }: BackupSystemTabProps) {
   const [settings, setSettings] = useState<BackupSettings>(() => {
     const saved = localStorage.getItem('backup_settings');
     return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
@@ -63,18 +71,21 @@ export default function BackupSystemTab() {
     localStorage.setItem('backup_history', JSON.stringify(history));
   }, [history]);
 
-  // Check if weekly backup is due
+  // Track backup overdue status
+  const [backupOverdue, setBackupOverdue] = useState(false);
+  const [overdueDays, setOverdueDays] = useState(0);
+
   useEffect(() => {
     const lastBackup = localStorage.getItem('last_backup_date');
-    const today = new Date().toISOString().substring(0, 10);
-
-    if (settings.frequency === 'weekly' && lastBackup) {
+    if (settings.frequency !== 'manual' && lastBackup && settings.toEmail) {
       const lastDate = new Date(lastBackup);
       const daysSince = Math.floor((Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysSince >= 7 && settings.toEmail) {
-        // Notify user that backup is due
-        // Don't auto-send, just show indicator
-      }
+      const maxDays = settings.frequency === 'daily' ? 1 : settings.frequency === 'weekly' ? 7 : 30;
+      setBackupOverdue(daysSince >= maxDays);
+      setOverdueDays(daysSince);
+    } else {
+      setBackupOverdue(false);
+      setOverdueDays(0);
     }
   }, [settings.frequency, settings.toEmail]);
 
@@ -84,36 +95,21 @@ export default function BackupSystemTab() {
       version: '1.0',
     };
 
+    // Use live props (direct from App.tsx state) — most reliable
     if (settings.includeBahan) {
-      try {
-        const saved = localStorage.getItem('bahan_baku_data');
-        if (saved) data.bahanBaku = JSON.parse(saved);
-      } catch {}
-      // Also try from main app state
-      const allKeys = Object.keys(localStorage);
-      allKeys.forEach(key => {
-        if (key.startsWith('bahan')) {
-          try { data[key] = JSON.parse(localStorage.getItem(key) || ''); } catch {}
-        }
-      });
+      data.bahanBaku = bahanBaku;
     }
 
     if (settings.includeProduk) {
-      const allKeys = Object.keys(localStorage);
-      allKeys.forEach(key => {
-        if (key.toLowerCase().includes('produk') || key.toLowerCase().includes('hpp')) {
-          try { data[key] = JSON.parse(localStorage.getItem(key) || ''); } catch {}
-        }
-      });
+      data.productHpp = productHpp;
+      data.calculatedProducts = calculatedProducts;
     }
 
     if (settings.includeResep) {
-      try {
-        const saved = localStorage.getItem('detail_resep_data');
-        if (saved) data.detailResep = JSON.parse(saved);
-      } catch {}
+      data.detailResep = detailResep;
     }
 
+    // Secondary data from localStorage (these ARE synced there)
     if (settings.includeRevenue) {
       try {
         const saved = localStorage.getItem('revenue_tracker_data');
@@ -189,6 +185,11 @@ export default function BackupSystemTab() {
   const handleSendEmailBackup = async () => {
     if (!settings.toEmail || !settings.smtpUser) {
       alert('⚠️ Email tujuan dan SMTP User harus diisi terlebih dahulu!\n\nAtur di tab Pengaturan.');
+      return;
+    }
+
+    if (!settings.smtpPass) {
+      alert('⚠️ Password SMTP harus diisi!\n\nAtur di tab Pengaturan — untuk Gmail gunakan App Password 16 karakter.');
       return;
     }
 
@@ -282,12 +283,18 @@ export default function BackupSystemTab() {
           <p className="text-xs text-gray-500 mt-1">
             Backup data otomatis mingguan via email. Download cadangan kapan saja.
           </p>
-        </div>
-        {settings.toEmail && (
-          <span className="px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-bold rounded-lg flex items-center gap-1">
-            <Mail className="w-3 h-3" /> Backup ke {settings.toEmail}
-          </span>
-        )}
+        </div>          <div className="flex items-center gap-2">
+            {backupOverdue && (
+              <span className="px-2.5 py-1 bg-red-500 text-white text-[10px] font-bold rounded-lg animate-pulse flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" /> Terlambat {overdueDays} hari
+              </span>
+            )}
+            {settings.toEmail && (
+              <span className="px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-bold rounded-lg flex items-center gap-1">
+                <Mail className="w-3 h-3" /> Backup ke {settings.toEmail}
+              </span>
+            )}
+          </div>
       </div>
 
       {/* Status Card */}

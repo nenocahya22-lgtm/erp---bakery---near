@@ -1113,7 +1113,12 @@ export default function App() {
               />
             )}
             {activeTab === 'erp_backup' && (
-              <BackupSystemTab />
+              <BackupSystemTab
+                bahanBaku={bahanBaku}
+                productHpp={productHpp}
+                detailResep={detailResep}
+                calculatedProducts={calculatedProducts}
+              />
             )}
           </div>
         </main>
