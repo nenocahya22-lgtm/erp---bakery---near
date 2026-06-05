@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BahanBaku, ProductHpp, DetailResep, CalculationResult } from '../types';
-import { Percent, TrendingUp, Info, HelpCircle, AlertOctagon, CheckCircle2, ChevronRight, Calculator, Edit3, Trash2, DollarSign, Sparkles, ArrowRight, Shuffle, TrendingDown, Package, AlertTriangle } from 'lucide-react';
+import { Percent, TrendingUp, Info, HelpCircle, AlertOctagon, CheckCircle2, ChevronRight, Calculator, Edit3, Trash2, DollarSign, Sparkles, ArrowRight, Shuffle, TrendingDown, Package, AlertTriangle, Printer } from 'lucide-react';
 
 interface HppTabProps {
   calculatedProducts: CalculationResult[];
@@ -334,11 +334,36 @@ export default function HppTab({ calculatedProducts, onUpdateProductPricing, onD
 
       {/* LEFT PANEL: Live Table of all Product COGS/HPP and Pricing */}
       <div className="lg:col-span-8 bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
-        <div className="p-5 border-b border-gray-100 bg-gray-50/50">
-          <h2 className="text-base font-semibold text-gray-900">Harga Pokok Penjualan (HPP) & Margin Keuntungan</h2>
-          <p className="text-xs text-gray-500 mt-1">
-            Simulasi biaya overhead, harga jual, laba bersih, dan margin keuntungan langsung. Ubah nilai untuk mensimulasikan harga baru.
-          </p>
+        <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-start">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Harga Pokok Penjualan (HPP) & Margin Keuntungan</h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Simulasi biaya overhead, harga jual, laba bersih, dan margin keuntungan langsung. Ubah nilai untuk mensimulasikan harga baru.
+            </p>
+          </div>
+          <button onClick={() => {
+            const printWin = window.open('', '_blank');
+            if (!printWin) return;
+            const rows = calculatedProducts.map(p => `
+              <tr><td style="padding:8px;border-bottom:1px solid #eee;font-weight:500;">${p.namaProduk}</td>
+              <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;">${p.porsiJual} porsi</td>
+              <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;">${formatCurrency(p.hppPerPorsi)}</td>
+              <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;">${formatCurrency(p.profitPerPorsi)}</td>
+              <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;font-weight:bold;${p.marginPersen < 15 ? 'color:#dc2626;' : p.marginPersen < 30 ? 'color:#d97706;' : 'color:#059669;'}">${p.marginPersen.toFixed(1)}%</td></tr>
+            `).join('');
+            printWin.document.write(`
+              <html><head><title>Laporan HPP</title>
+              <style>body{font-family:'Segoe UI',Arial,sans-serif;max-width:900px;margin:0 auto;padding:40px;color:#1f2937;}h1{font-size:22px;color:#065f46;margin-bottom:4px;}.meta{color:#6b7280;font-size:12px;margin-bottom:24px;}table{width:100%;border-collapse:collapse;margin:10px 0;}th{background:#f3f4f6;padding:10px;text-align:left;font-size:11px;text-transform:uppercase;}td{padding:8px;border-bottom:1px solid #e5e7eb;font-size:12px;}.total{background:#f0fdf4;padding:12px;border-radius:8px;margin-top:16px;}@media print{body{padding:20px;}}</style></head><body>
+              <h1>📊 LAPORAN HPP & MARGIN</h1>
+              <div class="meta">Tanggal Cetak: ${new Date().toLocaleDateString('id-ID', { year:'numeric',month:'long',day:'numeric' })}</div>
+              <table><thead><tr><th>Produk</th><th style="text-align:right;">Yield</th><th style="text-align:right;">HPP/Porsi</th><th style="text-align:right;">Laba/Porsi</th><th style="text-align:right;">Margin</th></tr></thead><tbody>${rows}</tbody></table>
+              <p style="margin-top:40px;text-align:center;color:#9ca3af;font-size:11px;">Near Bakery & Co. ERP — Laporan HPP & Margin</p>
+              <script>window.print();<\/script></body></html>
+            `);
+            printWin.document.close();
+          }} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1 shrink-0">
+            <Printer className="w-3.5 h-3.5" /> Cetak
+          </button>
         </div>
 
         {calculatedProducts.length === 0 ? (

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layers, Sparkles, Sliders } from 'lucide-react';
+import { Layers, Sparkles, Sliders, Printer } from 'lucide-react';
 import { ProductHpp, CalculationResult } from '../types';
 
 interface BOMStage {
@@ -41,15 +41,48 @@ export default function BomTab({ productHpp, calculatedProducts }: BomTabProps) 
           </h2>
           <p className="text-xs text-gray-500 mt-1">Multi-level Bill of Materials dan kalkulasi penyusutan baking.</p>
         </div>
-        {productHpp.length > 0 && (
-          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl">
-            <span className="text-xs text-gray-400 font-bold">Produk:</span>
-            <select value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)}
-              className="text-xs font-bold text-gray-800 bg-transparent focus:outline-none">
-              {productHpp.map(p => <option key={p.namaProduk} value={p.namaProduk}>{p.namaProduk}</option>)}
-            </select>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {productHpp.length > 0 && (
+            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl">
+              <span className="text-xs text-gray-400 font-bold">Produk:</span>
+              <select value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)}
+                className="text-xs font-bold text-gray-800 bg-transparent focus:outline-none">
+                {productHpp.map(p => <option key={p.namaProduk} value={p.namaProduk}>{p.namaProduk}</option>)}
+              </select>
+            </div>
+          )}
+          <button onClick={() => {
+            if (!selectedProduct) return;
+            const printWin = window.open('', '_blank');
+            if (!printWin) return;
+            const stageHtml = activeStages.map((stage, idx) => `
+              <div style="margin-bottom:16px;padding:12px;border:1px solid #e5e7eb;border-radius:8px;">
+                <h3 style="font-size:14px;margin:0 0 4px;color:#065f46;">Level ${idx+1}: ${stage.stageName}</h3>
+                <p style="color:#6b7280;font-size:12px;margin:0 0 8px;">${stage.description}</p>
+                <table style="width:100%;border-collapse:collapse;">
+                  <thead><tr><th style="background:#f3f4f6;padding:8px;text-align:left;font-size:11px;">Komponen</th><th style="background:#f3f4f6;padding:8px;text-align:right;font-size:11px;">Qty</th></tr></thead>
+                  <tbody>${stage.ingredients.map(ing => `<tr><td style="padding:6px;border-bottom:1px solid #eee;">${ing.name}</td><td style="padding:6px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;">${ing.quantity} ${ing.unit}</td></tr>`).join('')}</tbody>
+                </table></div>
+            `).join('');
+            printWin.document.write(`
+              <html><head><title>BOM - ${selectedProduct}</title>
+              <style>body{font-family:'Segoe UI',Arial,sans-serif;max-width:800px;margin:0 auto;padding:40px;color:#1f2937;}h1{font-size:22px;color:#065f46;}h2{font-size:16px;margin-top:20px;color:#374151;}.meta{color:#6b7280;font-size:12px;margin-bottom:20px;}.yield{background:#f0fdf4;padding:12px;border-radius:8px;margin-top:16px;font-size:13px;}@media print{body{padding:20px;}}</style></head><body>
+              <h1>🏭 BOM PRODUKSI</h1>
+              <div class="meta">Produk: <strong>${selectedProduct}</strong> | Tanggal: ${new Date().toLocaleDateString('id-ID', { year:'numeric',month:'long',day:'numeric' })}</div>
+              ${stageHtml || '<p style="color:#9ca3af;">Belum ada tahap BOM.</p>'}
+              <div class="yield">
+                <strong>Yield Kalkulasi:</strong><br>
+                Input Mentah: ${rawWeight.toFixed(0)} gr | Shrinkage: ${currentShrinkage}% | Scrap: ${currentWaste}%<br>
+                <strong>Hasil Jadi: ${finalBakedYield.toFixed(0)} gr</strong>
+              </div>
+              <p style="margin-top:40px;text-align:center;color:#9ca3af;font-size:11px;">Near Bakery & Co. ERP — BOM & Yield</p>
+              <script>window.print();<\/script></body></html>
+            `);
+            printWin.document.close();
+          }} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1">
+            <Printer className="w-3.5 h-3.5" /> Cetak BOM
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

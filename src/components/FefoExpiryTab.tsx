@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldAlert, PackageOpen, Calendar, AlertTriangle, Clock, Package, Trash2, Plus, RefreshCw } from 'lucide-react';
+import { ShieldAlert, PackageOpen, Calendar, AlertTriangle, Clock, Package, Trash2, Plus, RefreshCw, Printer } from 'lucide-react';
 import { BahanBaku } from '../types';
 
 interface BatchLog {
@@ -129,13 +129,52 @@ export default function FefoExpiryTab({ bahanBaku }: FefoExpiryTabProps) {
   return (
     <div className="space-y-6">
       {/* HEADER */}
-      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100">
-        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <ShieldAlert className="w-6 h-6 text-emerald-600" /> FEFO & Expiry Alert
-        </h2>
-        <p className="text-xs text-gray-500 mt-1">
-          Lacak batch bahan baku berdasarkan tanggal kedaluwarsa (First Expired First Out) + peringatan stok kritis.
-        </p>
+      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex justify-between items-start">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <ShieldAlert className="w-6 h-6 text-emerald-600" /> FEFO & Expiry Alert
+          </h2>
+          <p className="text-xs text-gray-500 mt-1">
+            Lacak batch bahan baku berdasarkan tanggal kedaluwarsa (First Expired First Out) + peringatan stok kritis.
+          </p>
+        </div>
+        <button onClick={() => {
+          const printWin = window.open('', '_blank');
+          if (!printWin) return;
+          const rows = [...expiredBatches, ...criticalBatches, ...warningBatches, ...batches.filter(b => {
+            const d = new Date(b.expiryDate);
+            return d > in7Days;
+          })].map(b => {
+            const days = daysUntil(b.expiryDate);
+            const isExpired = days < 0;
+            const isCritical = days >= 0 && days <= 3;
+            return `<tr${isExpired ? ' style="background:#fef2f2;"' : isCritical ? ' style="background:#fffbeb;"' : ''}>
+              <td style="padding:8px;border-bottom:1px solid #eee;font-family:monospace;font-weight:bold;">${b.batchNo}</td>
+              <td style="padding:8px;border-bottom:1px solid #eee;">${b.bahanNama}</td>
+              <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;">${b.qty >= 1000 ? (b.qty/1000).toFixed(1) + ' kg' : b.qty + ' ' + b.satuan}</td>
+              <td style="padding:8px;border-bottom:1px solid #eee;">${b.supplier || '-'}</td>
+              <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">${formatDate(b.expiryDate)}</td>
+              <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;${isExpired ? 'color:#dc2626;font-weight:bold;' : ''}">${isExpired ? 'Expired!' : days + ' hr'}</td>
+            </tr>`;
+          }).join('');
+          printWin.document.write(`
+            <html><head><title>Laporan FEFO</title>
+            <style>body{font-family:'Segoe UI',Arial,sans-serif;max-width:900px;margin:0 auto;padding:40px;color:#1f2937;}h1{font-size:22px;color:#065f46;}.meta{color:#6b7280;font-size:12px;margin-bottom:20px;}table{width:100%;border-collapse:collapse;}th{background:#f3f4f6;padding:10px;text-align:left;font-size:11px;text-transform:uppercase;}td{padding:8px;border-bottom:1px solid #e5e7eb;}.alert{display:inline-block;padding:6px 14px;border-radius:8px;font-size:13px;margin-right:8px;}.red{background:#fef2f2;color:#dc2626;}.amber{background:#fffbeb;color:#d97706;}.green{background:#f0fdf4;color:#059669;}@media print{body{padding:20px;}}</style></head><body>
+            <h1>📋 LAPORAN BATCH & EXPIRY</h1>
+            <div class="meta">Tanggal Cetak: ${new Date().toLocaleDateString('id-ID', { year:'numeric',month:'long',day:'numeric' })}</div>
+            <div style="margin-bottom:16px;">
+              <span class="alert red">⚠️ Kedaluwarsa: ${expiredBatches.length}</span>
+              <span class="alert amber">⏰ Kritis: ${criticalBatches.length}</span>
+              <span class="alert green">✅ Stok Kritis: ${lowStockItems.length}</span>
+            </div>
+            <table><thead><tr><th>Batch</th><th>Bahan</th><th style="text-align:right;">Stok</th><th>Supplier</th><th style="text-align:right;">Expired</th><th style="text-align:center;">Status</th></tr></thead><tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:20px;">Belum ada batch.</td></tr>'}</tbody></table>
+            <p style="margin-top:40px;text-align:center;color:#9ca3af;font-size:11px;">Near Bakery & Co. ERP — FEFO & Expiry System</p>
+            <script>window.print();<\/script></body></html>
+          `);
+          printWin.document.close();
+        }} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1 shrink-0">
+          <Printer className="w-3.5 h-3.5" /> Cetak
+        </button>
       </div>
 
       {/* ALERT PANELS */}

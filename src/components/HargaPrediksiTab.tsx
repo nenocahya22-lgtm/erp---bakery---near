@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TrendingUp, Plus, Trash2, Sun, CloudRain, Calendar, Sliders, Sparkles, BarChart3 } from 'lucide-react';
+import { TrendingUp, Plus, Trash2, Sun, CloudRain, Calendar, Sliders, Sparkles, BarChart3, Printer } from 'lucide-react';
 import { BahanBaku, PriceRecord, CalculationResult } from '../types';
 
 interface HargaPrediksiTabProps {
@@ -81,13 +81,44 @@ export default function HargaPrediksiTab({ bahanBaku, calculatedProducts }: Harg
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100">
-        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <TrendingUp className="w-6 h-6 text-emerald-600" /> Analisis Harga & Prediksi
-        </h2>
-        <p className="text-xs text-gray-500 mt-1">
-          Catat history harga beli bahan baku + simulasi inflasi & prediksi musiman untuk antisipasi bisnis.
-        </p>
+      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex justify-between items-start">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <TrendingUp className="w-6 h-6 text-emerald-600" /> Analisis Harga & Prediksi
+          </h2>
+          <p className="text-xs text-gray-500 mt-1">
+            Catat history harga beli bahan baku + simulasi inflasi & prediksi musiman untuk antisipasi bisnis.
+          </p>
+        </div>
+        <button onClick={() => {
+          const printWin = window.open('', '_blank');
+          if (!printWin) return;
+          const historyRows = records.slice(0, 30).map(r => `
+            <tr><td style="padding:8px;border-bottom:1px solid #eee;font-family:monospace;">${r.date}</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:500;">${r.bahanNama}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;">${formatCurrency(r.hargaBeli)}</td></tr>
+          `).join('');
+          printWin.document.write(`
+            <html><head><title>Laporan Harga & Prediksi</title>
+            <style>body{font-family:'Segoe UI',Arial,sans-serif;max-width:800px;margin:0 auto;padding:40px;color:#1f2937;}h1{font-size:22px;color:#065f46;}.meta{color:#6b7280;font-size:12px;margin-bottom:20px;}table{width:100%;border-collapse:collapse;margin:10px 0;}th{background:#f3f4f6;padding:10px;text-align:left;font-size:11px;text-transform:uppercase;}td{padding:8px;border-bottom:1px solid #e5e7eb;}.section{margin-top:24px;padding:12px;border:1px solid #e5e7eb;border-radius:8px;}h2{font-size:16px;color:#065f46;}@media print{body{padding:20px;}}</style></head><body>
+            <h1>📈 LAPORAN ANALISIS HARGA & PREDIKSI</h1>
+            <div class="meta">Tanggal Cetak: ${new Date().toLocaleDateString('id-ID', { year:'numeric',month:'long',day:'numeric' })}</div>
+            <h2>History Harga Bahan Baku</h2>
+            <table><thead><tr><th>Tanggal</th><th>Bahan</th><th style="text-align:right;">Harga</th></tr></thead><tbody>${historyRows || '<tr><td colspan="3" style="text-align:center;color:#9ca3af;padding:20px;">Belum ada data.</td></tr>'}</tbody></table>
+            <div class="section">
+              <strong>Simulasi Inflasi:</strong> +${commodityInflation}%<br>
+              <strong>HPP Portofolio:</strong> ${formatCurrency(rawPortfolioSum + overheadSum)} → ${formatCurrency(inflatedPortfolio)}<br>
+              <strong>Margin Rata-rata:</strong> ${avgMargin.toFixed(1)}% → ${inflatedMargin.toFixed(1)}%
+            </div>
+            <div class="section">
+              <strong>Prediksi Musiman:</strong> ${forecast.effect}<br>
+              <strong>Tip:</strong> ${forecast.tip}
+            </div>
+            <p style="margin-top:40px;text-align:center;color:#9ca3af;font-size:11px;">Near Bakery & Co. ERP — Analisis Harga & Prediksi</p>
+            <script>window.print();<\/script></body></html>
+          `);
+          printWin.document.close();
+        }} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1 shrink-0">
+          <Printer className="w-3.5 h-3.5" /> Cetak
+        </button>
       </div>
 
       {/* SECTION 1: PRICE HISTORY */}

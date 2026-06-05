@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Trash2, Plus, AlertTriangle, ShoppingCart, Camera } from 'lucide-react';
+import { Trash2, Plus, AlertTriangle, ShoppingCart, Camera, Printer } from 'lucide-react';
 import { CalculationResult, WriteOffLog } from '../types';
 
 interface WasteControlTabProps {
@@ -85,8 +85,34 @@ export default function WasteControlTab({
           </h2>
           <p className="text-xs text-gray-500 mt-1">Catat bahan rusak, adonan gagal, dan roti tidak terjual untuk hitung laba bersih riil.</p>
         </div>
-        <div className="text-right text-xs bg-rose-50 text-rose-800 border border-rose-100 font-extrabold px-3 py-1.5 rounded-xl font-mono">
-          Total Kerugian: {formatCurrency(totalWasteLoss + totalWriteOffLoss)}
+        <div className="flex items-center gap-2">
+          <button onClick={() => {
+            const printWin = window.open('', '_blank');
+            if (!printWin) return;
+            const wasteRows = wasteLogs.map((log: any) => `
+              <tr><td style="padding:8px;border-bottom:1px solid #eee;">${log.dateLogged}</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:500;">${log.bahanNama}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;">${log.qtyWasted} ${log.satuan}</td><td style="padding:8px;border-bottom:1px solid #eee;">${log.reason}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;color:#dc2626;">${formatCurrency(log.lossValue)}</td></tr>`).join('');
+            const woRows = writeOffLogs.map(log => `
+              <tr><td style="padding:8px;border-bottom:1px solid #eee;">${log.dateLogged}</td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:500;">${log.namaProduk}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;">${log.qtyUnsold} pcs</td><td style="padding:8px;border-bottom:1px solid #eee;">${log.reason}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;color:#d97706;">${formatCurrency(log.lossValue)}</td></tr>`).join('');
+            printWin.document.write(`
+              <html><head><title>Laporan Waste</title>
+              <style>body{font-family:'Segoe UI',Arial,sans-serif;max-width:800px;margin:0 auto;padding:40px;color:#1f2937;}h1{font-size:22px;color:#be123c;margin-bottom:4px;}.meta{color:#6b7280;font-size:12px;margin-bottom:24px;}table{width:100%;border-collapse:collapse;margin:10px 0;}th{background:#f3f4f6;padding:10px;text-align:left;font-size:11px;text-transform:uppercase;}td{padding:8px;border-bottom:1px solid #e5e7eb;font-size:12px;}.total{background:#fef2f2;padding:12px;border-radius:8px;font-weight:bold;margin-top:16px;}h2{font-size:16px;margin-top:30px;color:#065f46;}@media print{body{padding:20px;}}</style></head><body>
+              <h1>🗑️ LAPORAN WASTE & WRITE-OFF</h1>
+              <div class="meta">Tanggal Cetak: ${new Date().toLocaleDateString('id-ID', { year:'numeric',month:'long',day:'numeric' })}</div>
+              <h2>Waste Bahan Baku</h2>
+              <table><thead><tr><th>Tanggal</th><th>Bahan</th><th style="text-align:right;">Qty</th><th>Alasan</th><th style="text-align:right;">Nilai</th></tr></thead><tbody>${wasteRows || '<tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:20px;">Belum ada data waste.</td></tr>'}</tbody></table>
+              <h2 style="color:#d97706;">Write-off Produk Jadi</h2>
+              <table><thead><tr><th>Tanggal</th><th>Produk</th><th style="text-align:right;">Qty</th><th>Alasan</th><th style="text-align:right;">Nilai</th></tr></thead><tbody>${woRows || '<tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:20px;">Belum ada data write-off.</td></tr>'}</tbody></table>
+              <div class="total">Total Kerugian: ${formatCurrency(totalWasteLoss + totalWriteOffLoss)}</div>
+              <p style="margin-top:40px;text-align:center;color:#9ca3af;font-size:11px;">Near Bakery & Co. ERP — Laporan Waste & Write-off</p>
+              <script>window.print();<\/script></body></html>
+            `);
+            printWin.document.close();
+          }} className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1">
+            <Printer className="w-3.5 h-3.5" /> Cetak
+          </button>
+          <div className="text-right text-xs bg-rose-50 text-rose-800 border border-rose-100 font-extrabold px-3 py-1.5 rounded-xl font-mono">
+            Total Kerugian: {formatCurrency(totalWasteLoss + totalWriteOffLoss)}
+          </div>
         </div>
       </div>
 
