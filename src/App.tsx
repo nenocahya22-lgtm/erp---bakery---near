@@ -36,18 +36,16 @@ import CrmMarketingTab from './components/CrmMarketingTab';
 import BomTab from './components/BomTab';
 import MpsTab from './components/MpsTab';
 import StokGudangTab from './components/StokGudangTab';
-import FefoTab from './components/FefoTab';
+import FefoExpiryTab from './components/FefoExpiryTab';
 import SupplierTab from './components/SupplierTab';
-import PrediksiTab from './components/PrediksiTab';
+import HargaPrediksiTab from './components/HargaPrediksiTab';
 import BudgetTab from './components/BudgetTab';
 import ProductionPlannerTab from './components/ProductionPlannerTab';
-import PriceHistoryTab from './components/PriceHistoryTab';
-import SubstitutionSimulatorTab from './components/SubstitutionSimulatorTab';
 import KitchenWorkOrderTab from './components/KitchenWorkOrderTab';
 import BakerPercentageTab from './components/BakerPercentageTab';
 import BepTab from './components/BepTab';
 import DoughTemperatureTab from './components/DoughTemperatureTab';
-import ExpiryAlertTab from './components/ExpiryAlertTab';
+import ImageGeneratorTab from './components/ImageGeneratorTab';
 
 import {
   AlertTriangle,
@@ -70,7 +68,6 @@ import {
   FlaskConical,
   LogOut,
   Menu,
-  Shuffle,
   ClipboardList,
   Percent,
   BarChart3,
@@ -78,6 +75,7 @@ import {
   Calendar,
   PanelRightClose,
   PanelRightOpen,
+  Image,
 } from 'lucide-react';
 
 export default function App() {
@@ -131,24 +129,22 @@ export default function App() {
     | 'erp_bom'
     | 'erp_mps'
     | 'erp_stock'
-    | 'erp_fefo'
+    | 'erp_fefo_expiry'
     | 'erp_supplier'
     | 'erp_log'
     | 'erp_pos'
     | 'erp_online'
     | 'erp_crm'
-    | 'erp_prediksi'
     | 'erp_budget'
     | 'erp_iot'
     | 'erp_compliance'
     | 'erp_production_planner'
-    | 'erp_price_history'
-    | 'erp_substitution'
     | 'erp_work_order'
     | 'erp_baker_pct'
     | 'erp_bep'
     | 'erp_dough_temp'
-    | 'erp_expiry'
+    | 'erp_harga_prediksi'
+    | 'erp_image_gen'
   >('dashboard');
 
   // --- Lifted States with persistent syncing back to localStorage ---
@@ -721,10 +717,9 @@ export default function App() {
             <SidebarBtn tab="erp_production_planner" active={activeTab} icon={<ShoppingCart className="w-4 h-4" />} label="Prod. Planner" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_baker_pct" active={activeTab} icon={<Percent className="w-4 h-4" />} label="Baker's %" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_dough_temp" active={activeTab} icon={<Thermometer className="w-4 h-4" />} label="Suhu Adonan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_expiry" active={activeTab} icon={<Calendar className="w-4 h-4" />} label="Expiry Alert" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_fefo_expiry" active={activeTab} icon={<ShieldAlert className="w-4 h-4" />} label="FEFO & Expiry" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_mps" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="Jadwal MPS" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_stock" active={activeTab} icon={<Package className="w-4 h-4" />} label="Stok Gudang" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_fefo" active={activeTab} icon={<ShieldAlert className="w-4 h-4" />} label="Batch & FEFO" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_supplier" active={activeTab} icon={<Coins className="w-4 h-4" />} label="Supplier & PO" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
           </div>
 
@@ -744,9 +739,7 @@ export default function App() {
             <SidebarBtn tab="erp_cash_flow" active={activeTab} icon={<Coins className="w-4 h-4" />} label="Arus Kas" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_budget" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="Anggaran Budget" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_bep" active={activeTab} icon={<BarChart3 className="w-4 h-4" />} label="BEP & Balance" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_prediksi" active={activeTab} icon={<Cpu className="w-4 h-4" />} label="Prediksi & Inflasi" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_substitution" active={activeTab} icon={<Shuffle className="w-4 h-4" />} label="Substitusi Bahan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_price_history" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="History Harga" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_harga_prediksi" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="Harga & Prediksi" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="hpp" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="Simulasi HPP" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_waste" active={activeTab} icon={<X className="w-4 h-4" />} label="Manajemen Waste" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_rd" active={activeTab} icon={<FlaskConical className="w-4 h-4" />} label="Sandbox R&D" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
@@ -758,6 +751,12 @@ export default function App() {
             <SidebarBtn tab="erp_log" active={activeTab} icon={<Truck className="w-4 h-4" />} label="Logistik" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_compliance" active={activeTab} icon={<ShieldAlert className="w-4 h-4" />} label="Recall Pangan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_iot" active={activeTab} icon={<Cpu className="w-4 h-4" />} label="Smart IoT" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+          </div>
+
+          {/* CATEGORY 6: TOOLS */}
+          <div className="space-y-1">
+            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">Tools</span>
+            <SidebarBtn tab="erp_image_gen" active={activeTab} icon={<Image className="w-4 h-4" />} label="Image Gen" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
           </div>
 
         </nav>
@@ -907,6 +906,9 @@ export default function App() {
                 calculatedProducts={calculatedProducts}
                 onUpdateProductPricing={handleUpdateProductPricing}
                 onDeleteProduct={handleDeleteProduct}
+                bahanBaku={bahanBaku}
+                productHpp={productHpp}
+                detailResep={detailResep}
               />
             )}
             {activeTab === 'erp_bi' && (
@@ -948,8 +950,8 @@ export default function App() {
             {activeTab === 'erp_stock' && (
               <StokGudangTab />
             )}
-            {activeTab === 'erp_fefo' && (
-              <FefoTab />
+            {activeTab === 'erp_fefo_expiry' && (
+              <FefoExpiryTab bahanBaku={bahanBaku} />
             )}
             {activeTab === 'erp_supplier' && (
               <SupplierTab />
@@ -972,9 +974,6 @@ export default function App() {
             {activeTab === 'erp_crm' && (
               <CrmMarketingTab calculatedProducts={calculatedProducts} />
             )}
-            {activeTab === 'erp_prediksi' && (
-              <PrediksiTab calculatedProducts={calculatedProducts} />
-            )}
             {activeTab === 'erp_budget' && (
               <BudgetTab
                 calculatedProducts={calculatedProducts}
@@ -996,14 +995,9 @@ export default function App() {
                 bahanBaku={bahanBaku}
               />
             )}
-            {activeTab === 'erp_price_history' && (
-              <PriceHistoryTab bahanBaku={bahanBaku} />
-            )}
-            {activeTab === 'erp_substitution' && (
-              <SubstitutionSimulatorTab
+            {activeTab === 'erp_harga_prediksi' && (
+              <HargaPrediksiTab
                 bahanBaku={bahanBaku}
-                productHpp={productHpp}
-                detailResep={detailResep}
                 calculatedProducts={calculatedProducts}
               />
             )}
@@ -1027,8 +1021,8 @@ export default function App() {
             {activeTab === 'erp_dough_temp' && (
               <DoughTemperatureTab />
             )}
-            {activeTab === 'erp_expiry' && (
-              <ExpiryAlertTab bahanBaku={bahanBaku} />
+            {activeTab === 'erp_image_gen' && (
+              <ImageGeneratorTab />
             )}
           </div>
         </main>

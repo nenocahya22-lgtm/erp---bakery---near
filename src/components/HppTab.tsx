@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
-import { CalculationResult } from '../types';
-import { Percent, TrendingUp, Info, HelpCircle, AlertOctagon, CheckCircle2, ChevronRight, Calculator, Edit3, Trash2, DollarSign, Sparkles, ArrowRight } from 'lucide-react';
+import { BahanBaku, ProductHpp, DetailResep, CalculationResult } from '../types';
+import { Percent, TrendingUp, Info, HelpCircle, AlertOctagon, CheckCircle2, ChevronRight, Calculator, Edit3, Trash2, DollarSign, Sparkles, ArrowRight, Shuffle, TrendingDown, Package, AlertTriangle } from 'lucide-react';
 
 interface HppTabProps {
   calculatedProducts: CalculationResult[];
   onUpdateProductPricing: (productName: string, overhead: number, hargaJual: number) => void;
   onDeleteProduct: (productName: string) => void;
+  bahanBaku?: BahanBaku[];
+  productHpp?: ProductHpp[];
+  detailResep?: DetailResep[];
 }
 
-export default function HppTab({ calculatedProducts, onUpdateProductPricing, onDeleteProduct }: HppTabProps) {
+export default function HppTab({ calculatedProducts, onUpdateProductPricing, onDeleteProduct, bahanBaku, detailResep }: HppTabProps) {
   const [selectedProductName, setSelectedProductName] = useState<string>(
     calculatedProducts.length > 0 ? calculatedProducts[0].namaProduk : ''
   );
@@ -65,8 +68,47 @@ export default function HppTab({ calculatedProducts, onUpdateProductPricing, onD
     }).format(val);
   };
 
+  // ===== SUBSTITUTION SIMULATOR STATE =====
+  const [showSubstitution, setShowSubstitution] = useState(false);
+  const [subOriginalBahan, setSubOriginalBahan] = useState('');
+  const [substituteName, setSubstituteName] = useState('');
+  const [substitutePrice, setSubstitutePrice] = useState('');
+
+  const subOriginal = bahanBaku?.find(b => b.nama === subOriginalBahan);
+  const substituteUnitPrice = parseFloat(substitutePrice) || 0;
+
+  // Find all products that use this ingredient
+  const subAffected = subOriginal && detailResep
+    ? detailResep.filter(r => r.namaBahan.toLowerCase().trim() === subOriginal.nama.toLowerCase().trim())
+    : [];
+
+  // Calculate simulated HPP for each affected product
+  const subResults = subAffected.map(r => {
+    const product = calculatedProducts.find(p => p.namaProduk === r.namaProduk);
+    if (!product) return null;
+    const ingInCalc = product.bahanList.find(b => b.namaBahan.toLowerCase().trim() === subOriginal?.nama.toLowerCase().trim());
+    if (!ingInCalc) return null;
+    const oldIngCost = ingInCalc.totalBiayaBahan;
+    const newIngCost = substituteUnitPrice * r.takaran;
+    const costDiff = newIngCost - oldIngCost;
+    const oldHppPerPorsi = product.hppPerPorsi;
+    const newHppPerPorsi = Math.max(0, oldHppPerPorsi + costDiff);
+    const newMargin = product.hargaJualPerPorsi > 0
+      ? ((product.hargaJualPerPorsi - newHppPerPorsi) / product.hargaJualPerPorsi) * 100
+      : 0;
+    return {
+      namaProduk: r.namaProduk,
+      oldHpp: oldHppPerPorsi,
+      newHpp: newHppPerPorsi,
+      oldMargin: product.marginPersen,
+      newMargin,
+      costDiff,
+      takaran: r.takaran,
+    };
+  }).filter(Boolean);
+
   return (
-    // HPP Tab with Dynamic Pricing
+    // HPP Tab with Dynamic Pricing & Substitution
     <div id="hpp-container" className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
       {/* DYNAMIC PRICING & PROFIT TARGET RECOMMENDER */}
@@ -185,6 +227,106 @@ export default function HppTab({ calculatedProducts, onUpdateProductPricing, onD
                 <Info className="w-3 h-3" />
                 Harga rekomendasi dihitung dari HPP / (1 - target margin). Klik "Terapkan ke Semua" untuk update harga jual semua produk sekaligus.
               </p>
+            </div>
+          )}
+        </div>
+
+        {/* SUBSTITUTION SIMULATOR PANEL */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs mt-4">
+          <button onClick={() => setShowSubstitution(!showSubstitution)}
+            className="w-full flex items-center justify-between cursor-pointer">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white shadow-md">
+                <Shuffle className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Substitusi Bahan Baku</h3>
+                <p className="text-[10px] text-gray-500 mt-0.5">Simulasi dampak pergantian bahan terhadap HPP & margin</p>
+              </div>
+            </div>
+            <ChevronRight className={`w-5 h-5 text-gray-400 transition-transform ${showSubstitution ? 'rotate-90' : ''}`} />
+          </button>
+
+          {showSubstitution && (
+            <div className="mt-5 pt-4 border-t border-gray-100 grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* KIRI: Form */}
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Bahan Asli</label>
+                  <select value={subOriginalBahan} onChange={(e) => setSubOriginalBahan(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg p-2.5 bg-white">
+                    <option value="">-- Pilih Bahan --</option>
+                    {(bahanBaku || []).map(b => (
+                      <option key={b.nama} value={b.nama}>{b.nama} ({formatCurrency(b.hargaSatuan)}/{b.satuan})</option>
+                    ))}
+                  </select>
+                </div>
+                {subOriginal && (
+                  <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                    <span className="font-bold text-blue-800 block text-[11px]">Harga Asli: {formatCurrency(subOriginal.hargaSatuan)}/{subOriginal.satuan}</span>
+                  </div>
+                )}
+                <div className="border-t border-gray-100 pt-3">
+                  <span className="block text-[10px] uppercase font-bold text-gray-500 mb-2">Bahan Pengganti</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Nama</label>
+                      <input type="text" value={substituteName}
+                        onChange={(e) => setSubstituteName(e.target.value)}
+                        placeholder="Nama bahan pengganti"
+                        className="w-full border border-gray-200 rounded-lg p-2.5" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Harga Satuan (Rp)</label>
+                      <input type="number" min="0" value={substitutePrice}
+                        onChange={(e) => setSubstitutePrice(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg p-2.5 font-mono font-bold" />
+                    </div>
+                  </div>
+                </div>
+                <button onClick={() => setShowSubstitution(true)}
+                  disabled={!subOriginalBahan || !substitutePrice}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold text-xs py-2.5 rounded-lg transition cursor-pointer">
+                  <Shuffle className="w-3.5 h-3.5 inline mr-1" /> Jalankan Simulasi
+                </button>
+              </div>
+
+              {/* KANAN: Hasil */}
+              <div className="space-y-2">
+                {subResults.length === 0 ? (
+                  <div className="bg-gray-50 p-6 rounded-xl text-center text-xs text-gray-400">
+                    <Shuffle className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+                    Pilih bahan asli, masukkan data pengganti untuk melihat dampak.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                    {subResults.map(r => (
+                      <div key={r.namaProduk} className={`p-3 rounded-xl border text-xs ${
+                        r.costDiff > 0 ? 'bg-red-50 border-red-200' : r.costDiff < 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-150'
+                      }`}>
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-bold text-gray-900">{r.namaProduk}</span>
+                          <span className={`font-bold px-1.5 py-0.5 rounded-full ${r.costDiff > 0 ? 'bg-red-100 text-red-700' : r.costDiff < 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'}`}>
+                            {r.costDiff > 0 ? '+' : ''}{formatCurrency(r.costDiff)}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 mt-2">
+                          <div><span className="text-gray-400 block text-[9px]">HPP Lama</span><span className="font-mono font-bold">{formatCurrency(r.oldHpp)}</span></div>
+                          <div><span className="text-gray-400 block text-[9px]">HPP Baru</span><span className={`font-mono font-bold ${r.costDiff > 0 ? 'text-red-700' : r.costDiff < 0 ? 'text-emerald-700' : ''}`}>{formatCurrency(r.newHpp)}</span></div>
+                          <div><span className="text-gray-400 block text-[9px]">Margin Lama</span><span className="font-mono font-bold">{r.oldMargin.toFixed(1)}%</span></div>
+                          <div><span className="text-gray-400 block text-[9px]">Margin Baru</span><span className={`font-mono font-bold flex items-center gap-0.5 ${r.costDiff > 0 ? 'text-red-700' : r.costDiff < 0 ? 'text-emerald-700' : ''}`}>{r.newMargin.toFixed(1)}%{r.costDiff !== 0 && (r.costDiff > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />)}</span></div>
+                        </div>
+                      </div>
+                    ))}
+                    {subResults.some(r => r.newMargin < 15) && (
+                      <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 flex items-start gap-2 text-xs">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <span className="text-amber-800">Peringatan: Beberapa produk memiliki margin di bawah 15% setelah substitusi!</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

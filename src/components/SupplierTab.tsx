@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Star, FileText } from 'lucide-react';
+import { Star, FileText, Printer, Download } from 'lucide-react';
 
 interface SupplierRating {
   name: string;
@@ -99,10 +99,65 @@ export default function SupplierTab() {
                   className="w-full border border-gray-200 rounded-lg p-2 font-mono" />
               </div>
             </div>
+            <div className="flex gap-2">
+              <button onClick={() => {
+                if (!poSupplier || !poMaterial || !poQty) {
+                  alert('Lengkapi semua field PO terlebih dahulu!');
+                  return;
+                }
+                const total = parseFloat(poQty) * 0;
+                const printWin = window.open('', '_blank');
+                if (!printWin) return;
+                printWin.document.write(`
+                  <html><head>
+                    <title>PO - ${poSupplier}</title>
+                    <style>
+                      body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 40px; color: #1f2937; }
+                      h1 { font-size: 22px; color: #065f46; margin-bottom: 4px; }
+                      .meta { color: #6b7280; font-size: 12px; margin-bottom: 24px; }
+                      table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                      th { background: #f3f4f6; padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; }
+                      td { padding: 10px 12px; border-bottom: 1px solid #e5e7eb; }
+                      .footer { margin-top: 30px; border-top: 2px solid #d1d5db; padding-top: 16px; font-size: 12px; }
+                      .sign { margin-top: 40px; display: flex; justify-content: space-between; font-size: 12px; }
+                      @media print { body { padding: 0; } }
+                    </style>
+                  </head><body>
+                    <h1>📄 PURCHASE ORDER</h1>
+                    <div class="meta">
+                      <strong>No PO:</strong> PO-2026-${Date.now().toString().slice(-4)}<br>
+                      <strong>Supplier:</strong> ${poSupplier}<br>
+                      <strong>Tanggal:</strong> ${new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}<br>
+                      <strong>Status:</strong> Draft
+                    </div>
+                    <table>
+                      <thead><tr><th>Item Bahan</th><th style="text-align:right;">Qty</th><th>Satuan</th></tr></thead>
+                      <tbody>
+                        <tr><td>${poMaterial}</td><td style="text-align:right;font-family:monospace;">${poQty}</td><td>${poUnit || '-'}</td></tr>
+                      </tbody>
+                    </table>
+                    <div class="footer">
+                      <p><strong>Catatan:</strong> PO ini diterbitkan secara digital melalui Near Bakery & Co. ERP.</p>
+                      <p>Mohon konfirmasi ketersediaan stok dan jadwal pengiriman.</p>
+                    </div>
+                    <div class="sign">
+                      <div>_____________<br>Pembeli</div>
+                      <div>_____________<br>Supplier</div>
+                    </div>
+                    <p style="margin-top:40px;text-align:center;color:#9ca3af;font-size:11px;">Near Bakery & Co. ERP — Purchase Order System</p>
+                    <script>window.print();<\/script>
+                  </body></html>
+                `);
+                printWin.document.close();
+              }}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5">
+              <Printer className="w-3.5 h-3.5" /> Cetak PO
+            </button>
             <button onClick={() => alert(`PO untuk ${poMaterial} sebanyak ${poQty} ke ${poSupplier} siap dikirim!`)}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 rounded-xl transition cursor-pointer">
+              className="flex-1 bg-gray-900 hover:bg-gray-800 text-white font-bold text-xs py-2.5 rounded-xl transition cursor-pointer">
               Kirim PO via Email
             </button>
+            </div>
           </div>
         </div>
       </div>

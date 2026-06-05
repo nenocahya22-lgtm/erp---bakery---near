@@ -372,11 +372,72 @@ export default function LogisticsTab() {
                       <td className="px-5 py-4 text-center">
                         <div className="flex justify-center items-center gap-1.5">
                           <button
-                            onClick={() => setActivePO(p)}
+                            onClick={() => {
+                              const printWin = window.open('', '_blank');
+                              if (!printWin) return;
+                              printWin.document.write(`
+                                <html><head>
+                                  <title>Surat Jalan - ${p.poNo}</title>
+                                  <style>
+                                    body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 40px; color: #1f2937; }
+                                    h1 { font-size: 22px; color: #065f46; margin-bottom: 4px; }
+                                    .header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 24px; }
+                                    .box { border: 1px solid #e5e7eb; padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 12px; }
+                                    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                                    th { background: #f3f4f6; padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase; }
+                                    td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; font-size: 12px; }
+                                    .meta { color: #6b7280; font-size: 12px; }
+                                    .footer { margin-top: 30px; border-top: 2px solid #d1d5db; padding-top: 16px; font-size: 12px; }
+                                    .sign { margin-top: 50px; display: flex; justify-content: space-between; font-size: 11px; }
+                                    @media print { body { padding: 20px; } @page { margin: 15mm; } }
+                                  </style>
+                                </head><body>
+                                  <div class="header">
+                                    <div>
+                                      <h1>🚚 SURAT JALAN</h1>
+                                      <p class="meta">No: ${p.poNo}</p>
+                                    </div>
+                                    <div style="text-align:right;">
+                                      <p class="meta">Tanggal: ${new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                                    </div>
+                                  </div>
+                                  <div class="box">
+                                    <strong>Supplier / Vendor:</strong> ${p.vendorName}<br>
+                                    <strong>Alamat:</strong> Dikirim ke Dapur Pusat Near Bakery & Co.<br>
+                                    <strong>Status:</strong> ${p.status}
+                                  </div>
+                                  <table>
+                                    <thead><tr><th>No</th><th>Nama Barang</th><th style="text-align:right;">Qty</th><th style="text-align:center;">Satuan</th><th style="text-align:right;">Harga</th><th style="text-align:right;">Total</th></tr></thead>
+                                    <tbody>
+                                      <tr>
+                                        <td>1</td>
+                                        <td>${p.itemName}</td>
+                                        <td style="text-align:right;font-family:monospace;">${p.qty}</td>
+                                        <td style="text-align:center;">${p.unit || '-'}</td>
+                                        <td style="text-align:right;font-family:monospace;">${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(p.pricePerUnit)}</td>
+                                        <td style="text-align:right;font-family:monospace;font-weight:bold;">${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(p.totalCost)}</td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                  <div class="footer">
+                                    <p><strong>Total Tagihan:</strong> ${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(p.totalCost)}</p>
+                                    <p style="color:#6b7280;margin-top:4px;">Barang yang sudah diterima tidak dapat dikembalikan kecuali ada cacat produksi.</p>
+                                  </div>
+                                  <div class="sign">
+                                    <div>_____________<br>Penerima<br>(Nama & Tanda Tangan)</div>
+                                    <div>_____________<br>Pengirim<br>(Nama & Tanda Tangan)</div>
+                                    <div>_____________<br>Mengetahui<br>(Supervisor)</div>
+                                  </div>
+                                  <p style="margin-top:40px;text-align:center;color:#9ca3af;font-size:10px;">Near Bakery & Co. ERP — Logistik & Distribusi Internal</p>
+                                  <script>window.print();<\/script>
+                                </body></html>
+                              `);
+                              printWin.document.close();
+                            }}
                             className="bg-gray-100 hover:bg-gray-200 text-slate-900 font-semibold font-sans text-[10px] px-2.5 py-1 rounded-md flex items-center gap-1 cursor-pointer border border-gray-300"
-                            title="Preview & Cetak PO PDF"
+                            title="Cetak Surat Jalan"
                           >
-                            <Printer className="w-3.5 h-3.5 text-indigo-650" /> PDF
+                            <Printer className="w-3.5 h-3.5 text-indigo-650" /> Cetak
                           </button>
                           {p.status === 'Draft' && (
                             <button
