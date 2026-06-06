@@ -255,6 +255,77 @@ export default function FinanceCashFlowTab({ calculatedProducts, wasteTotalLoss,
           </div>
         )}
       </div>
+
+      {/* DAFTAR TRANSAKSI INDIVIDU — dengan tombol delete */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+            <ShoppingCart className="w-4 h-4 text-emerald-600" /> Daftar Transaksi (30hr)
+          </h3>
+          <span className="text-[10px] text-gray-400 font-mono">{monthlyTransactions.length} transaksi</span>
+        </div>
+        {monthlyTransactions.length === 0 ? (
+          <div className="p-6 text-center text-xs text-gray-400">
+            Belum ada transaksi dalam 30 hari terakhir.
+          </div>
+        ) : (
+          <div className="max-h-[300px] overflow-y-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50/50 sticky top-0">
+                <tr>
+                  <th className="px-4 py-2.5">Tanggal</th>
+                  <th className="px-4 py-2.5">Produk</th>
+                  <th className="px-4 py-2.5 text-right">Qty</th>
+                  <th className="px-4 py-2.5 text-right">Amount</th>
+                  <th className="px-4 py-2.5">Sumber</th>
+                  <th className="px-4 py-2.5 text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {monthlyTransactions.slice().reverse().map(tx => (
+                  <tr key={tx.id} className="hover:bg-gray-50/50">
+                    <td className="px-4 py-2.5 font-mono text-gray-500 text-[9px]">{tx.date}</td>
+                    <td className="px-4 py-2.5 font-semibold text-gray-900">{tx.product}</td>
+                    <td className="px-4 py-2.5 text-right font-mono">{tx.qty}</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-bold text-emerald-700">{formatCurrency(tx.amount)}</td>
+                    <td className="px-4 py-2.5 text-gray-500">{tx.source}</td>
+                    <td className="px-4 py-2.5 text-center">
+                      <button onClick={() => {
+                        if (window.confirm(`Hapus transaksi ${tx.id} (${tx.product})?`)) {
+                          // Hapus dari revenue_tracker_data
+                          try {
+                            const saved = localStorage.getItem('revenue_tracker_data');
+                            if (saved) {
+                              const data = JSON.parse(saved);
+                              data.transactions = data.transactions.filter((t: any) => t.id !== tx.id);
+                              // Recalc daily totals
+                              data.dailyTotals = {};
+                              data.transactions.forEach((t: any) => {
+                                if (!data.dailyTotals[t.date]) data.dailyTotals[t.date] = { total: 0, sources: {} };
+                                data.dailyTotals[t.date].total += t.amount;
+                                if (!data.dailyTotals[t.date].sources[t.source]) data.dailyTotals[t.date].sources[t.source] = 0;
+                                data.dailyTotals[t.date].sources[t.source] += t.amount;
+                              });
+                              localStorage.setItem('revenue_tracker_data', JSON.stringify(data));
+                              setRevenueData(data);
+                            }
+                          } catch (e) { console.error('Delete tx failed:', e); }
+                        }
+                      }} className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer" title="Hapus transaksi">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="p-3 bg-gray-50 border-t border-gray-100 text-[10px] text-gray-500 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-red-400" />
+          Hapus transaksi untuk koreksi data. Perubahan akan recalculate daily totals otomatis.
+        </div>
+      </div>
     </div>
   );
 }

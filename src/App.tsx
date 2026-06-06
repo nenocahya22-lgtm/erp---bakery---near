@@ -1168,6 +1168,7 @@ export default function App() {
                 detailResep={detailResep}
                 onUpdateProductPricing={handleUpdateProductPricing}
                 onDeleteProduct={handleDeleteProduct}
+                onEditMaterial={handleEditMaterial}
               />
             )}
             {activeTab === 'erp_bi' && (

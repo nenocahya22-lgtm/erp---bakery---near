@@ -12,9 +12,10 @@ interface HargaHppTabProps {
   detailResep: DetailResep[];
   onUpdateProductPricing: (productName: string, overhead: number, hargaJual: number) => void;
   onDeleteProduct: (productName: string) => void;
+  onEditMaterial?: (oldName: string, updated: BahanBaku) => void;
 }
 
-export default function HargaHppTab({ bahanBaku, calculatedProducts, detailResep, onUpdateProductPricing, onDeleteProduct }: HargaHppTabProps) {
+export default function HargaHppTab({ bahanBaku, calculatedProducts, detailResep, onUpdateProductPricing, onDeleteProduct, onEditMaterial }: HargaHppTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<'harga' | 'hpp' | 'substitusi'>('hpp');
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
@@ -75,6 +76,7 @@ export default function HargaHppTab({ bahanBaku, calculatedProducts, detailResep
         detailResep={detailResep}
         calculatedProducts={calculatedProducts}
         formatCurrency={formatCurrency}
+        onEditMaterial={onEditMaterial}
       />}
     </div>
   );
@@ -603,16 +605,22 @@ function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDelete
 }
 
 // ===== SUB-TAB: SUBSTITUSI =====
-function SubstitusiSection({ bahanBaku, detailResep, calculatedProducts, formatCurrency }: {
+function SubstitusiSection({ bahanBaku, detailResep, calculatedProducts, formatCurrency, onEditMaterial }: {
   bahanBaku: BahanBaku[]; detailResep: DetailResep[]; calculatedProducts: CalculationResult[]; formatCurrency: (v: number) => string;
+  onEditMaterial?: (oldName: string, updated: BahanBaku) => void;
 }) {
   const [subOriginalBahan, setSubOriginalBahan] = useState('');
-  const [substituteName, setSubstituteName] = useState('');
+  const [substituteQty, setSubstituteQty] = useState('');
   const [substitutePrice, setSubstitutePrice] = useState('');
 
   const subOriginal = bahanBaku.find(b => b.nama === subOriginalBahan);
   const substituteUnitPrice = parseFloat(substitutePrice) || 0;
+  const substitutePackQty = parseFloat(substituteQty) || (subOriginal?.isiKemasan || 1000);
   const subAffected = subOriginal ? detailResep.filter(r => r.namaBahan.toLowerCase().trim() === subOriginal.nama.toLowerCase().trim()) : [];
+
+  // Hitung harga satuan baru dari pengganti
+  const newSatuanPrice = substituteUnitPrice / substitutePackQty;
+  const oldSatuanPrice = subOriginal?.hargaSatuan || 0;
 
   const subResults = subAffected.map(r => {
     const product = calculatedProducts.find(p => p.namaProduk === r.namaProduk);
@@ -620,24 +628,40 @@ function SubstitusiSection({ bahanBaku, detailResep, calculatedProducts, formatC
     const ingInCalc = product.bahanList.find(b => b.namaBahan.toLowerCase().trim() === subOriginal?.nama.toLowerCase().trim());
     if (!ingInCalc) return null;
     const oldIngCost = ingInCalc.totalBiayaBahan;
-    const newIngCost = substituteUnitPrice * r.takaran;
+    const newIngCost = newSatuanPrice * r.takaran;
     const costDiff = newIngCost - oldIngCost;
     const newHpp = Math.max(0, product.hppPerPorsi + costDiff);
     const newMargin = product.hargaJualPerPorsi > 0 ? ((product.hargaJualPerPorsi - newHpp) / product.hargaJualPerPorsi) * 100 : 0;
     return { namaProduk: r.namaProduk, oldHpp: product.hppPerPorsi, newHpp, oldMargin: product.marginPersen, newMargin, costDiff, takaran: r.takaran };
   }).filter(Boolean);
 
+  const handleApplySubstitution = () => {
+    if (!subOriginal || substituteUnitPrice <= 0) return;
+    if (!window.confirm(`Terapkan perubahan harga untuk "${subOriginal.nama}"?\n\nHarga Satuan: ${formatCurrency(oldSatuanPrice)} → ${formatCurrency(newSatuanPrice)}\nKemasan: ${subOriginal.isiKemasan} → ${substitutePackQty}\n\n${subAffected.length} produk akan terdampak.`)) return;
+
+    if (onEditMaterial) {
+      const updated: BahanBaku = {
+        ...subOriginal,
+        isiKemasan: substitutePackQty,
+        hargaBeli: substituteUnitPrice,
+        hargaBeliReal: substituteUnitPrice,
+        hargaSatuan: newSatuanPrice,
+      };
+      onEditMaterial(subOriginal.nama, updated);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
       <div className="lg:col-span-5 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
         <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
-          <Shuffle className="w-4 h-4 text-emerald-600" /> Simulasi Substitusi
+          <Shuffle className="w-4 h-4 text-emerald-600" /> Substitusi Bahan — Update Harga Real
         </h3>
-        <p className="text-xs text-gray-500">Simulasi dampak pergantian bahan terhadap HPP & margin semua produk terdampak.</p>
+        <p className="text-xs text-gray-500">Ubah harga & qty kemasan bahan baku, lihat dampak ke HPP/margin, lalu terapkan perubahan nyata.</p>
         <div className="space-y-3 text-xs">
           <div>
             <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Bahan Asli</label>
-            <select value={subOriginalBahan} onChange={(e) => setSubOriginalBahan(e.target.value)}
+            <select value={subOriginalBahan} onChange={(e) => { setSubOriginalBahan(e.target.value); setSubstituteQty(''); setSubstitutePrice(''); }}
               className="w-full border border-gray-200 rounded-lg p-2.5 bg-white">
               <option value="">-- Pilih Bahan --</option>
               {bahanBaku.map(b => (<option key={b.nama} value={b.nama}>{b.nama} ({formatCurrency(b.hargaSatuan)}/{b.satuan})</option>))}
@@ -645,24 +669,32 @@ function SubstitusiSection({ bahanBaku, detailResep, calculatedProducts, formatC
           </div>
           {subOriginal && (
             <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
-              <span className="font-bold text-blue-800">Harga Asli: {formatCurrency(subOriginal.hargaSatuan)}/{subOriginal.satuan}</span>
-              <span className="text-blue-600 block text-[10px] mt-0.5">{subAffected.length} produk terdampak</span>
+              <span className="font-bold text-blue-800">Saat Ini: {formatCurrency(oldSatuanPrice)}/{subOriginal.satuan}</span>
+              <span className="text-blue-600 block text-[10px] mt-0.5">Kemasan: {subOriginal.isiKemasan} {subOriginal.satuan} | Beli: {formatCurrency(subOriginal.hargaBeli)}</span>
+              <span className="text-blue-600 block text-[10px]">{subAffected.length} produk terdampak</span>
             </div>
           )}
           <div className="border-t border-gray-100 pt-3">
-            <span className="block text-[10px] uppercase font-bold text-gray-500 mb-2">Bahan Pengganti</span>
+            <span className="block text-[10px] uppercase font-bold text-gray-500 mb-2">Data Baru</span>
             <div className="grid grid-cols-2 gap-2">
-              <input type="text" value={substituteName} onChange={(e) => setSubstituteName(e.target.value)}
-                placeholder="Nama pengganti" className="w-full border border-gray-200 rounded-lg p-2.5" />
-              <input type="number" value={substitutePrice} onChange={(e) => setSubstitutePrice(e.target.value)}
-                placeholder="Harga satuan" className="w-full border border-gray-200 rounded-lg p-2.5 font-mono" />
+              <div>
+                <label className="block text-[9px] uppercase font-bold text-gray-400 mb-0.5">Qty Kemasan Baru</label>
+                <input type="number" value={substituteQty} onChange={(e) => setSubstituteQty(e.target.value)}
+                  placeholder={String(subOriginal?.isiKemasan || 1000)}
+                  className="w-full border border-gray-200 rounded-lg p-2.5 font-mono" />
+              </div>
+              <div>
+                <label className="block text-[9px] uppercase font-bold text-gray-400 mb-0.5">Harga Beli Baru (Rp)</label>
+                <input type="number" value={substitutePrice} onChange={(e) => setSubstitutePrice(e.target.value)}
+                  placeholder="0" className="w-full border border-gray-200 rounded-lg p-2.5 font-mono" />
+              </div>
             </div>
           </div>
           <div className={`p-3 rounded-xl border text-xs ${subResults.length === 0 ? 'bg-gray-50 text-gray-400' : ''}`}>
             {subResults.length === 0 ? (
-              <p>Pilih bahan asli dan masukkan data pengganti untuk melihat hasil simulasi.</p>
+              <p>Pilih bahan asli dan masukkan qty & harga baru untuk melihat dampak.</p>
             ) : (
-              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              <div className="space-y-2 max-h-[240px] overflow-y-auto">
                 {subResults.map((r: any) => (
                   <div key={r.namaProduk} className={`p-3 rounded-xl border text-xs ${r.costDiff > 0 ? 'bg-red-50 border-red-200' : r.costDiff < 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-150'}`}>
                     <div className="flex justify-between items-center mb-1">
@@ -682,23 +714,43 @@ function SubstitusiSection({ bahanBaku, detailResep, calculatedProducts, formatC
               </div>
             )}
           </div>
+
+          {/* TOMBOL APPLY */}
+          {subResults.length > 0 && substituteUnitPrice > 0 && (
+            <button onClick={handleApplySubstitution}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white font-bold text-xs py-2.5 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4" /> Terapkan Perubahan Harga & Qty
+            </button>
+          )}
         </div>
       </div>
       <div className="lg:col-span-7 bg-gradient-to-br from-blue-50 to-emerald-50 p-6 rounded-2xl border border-emerald-100 flex flex-col items-center justify-center text-center">
         <Shuffle className="w-12 h-12 text-emerald-400 stroke-1 mb-3" />
-        <h3 className="text-sm font-bold text-gray-900 mb-1">Substitusi Bahan Baku</h3>
-        <p className="text-xs text-gray-500 max-w-md">Pilih bahan asli di kiri, masukkan harga bahan pengganti, dan lihat bagaimana perubahan HPP & margin semua produk yang menggunakan bahan tersebut. Cari alternatif lebih murah atau kualitas lebih baik.</p>
+        <h3 className="text-sm font-bold text-gray-900 mb-1">Substitusi Bahan — Update Real</h3>
+        <p className="text-xs text-gray-500 max-w-md">Pilih bahan asli, masukkan qty kemasan baru & harga beli baru. Sistem akan menghitung ulang harga satuan, menampilkan dampak ke semua produk, lalu Anda bisa terapkan perubahan nyata ke database.</p>
         {subOriginal && (
-          <div className="mt-4 w-full max-w-md bg-white p-3 rounded-xl border border-gray-100 text-xs">
-            <Package className="w-4 h-4 inline text-emerald-600 mr-1" />
-            <span className="font-bold">{subOriginal.nama}</span> digunakan di <span className="font-bold">{subAffected.length} produk</span>.
+          <div className="mt-4 w-full max-w-md space-y-2">
+            <div className="bg-white p-3 rounded-xl border border-gray-100 text-xs">
+              <Package className="w-4 h-4 inline text-emerald-600 mr-1" />
+              <span className="font-bold">{subOriginal.nama}</span> digunakan di <strong>{subAffected.length} produk</strong>.
+            </div>
             {substituteUnitPrice > 0 && (
-              <span className="block mt-1">
-                Selisih harga: <span className={`font-bold ${subOriginal.hargaSatuan - substituteUnitPrice > 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                  {formatCurrency(Math.abs(subOriginal.hargaSatuan - substituteUnitPrice))}
-                  {subOriginal.hargaSatuan > substituteUnitPrice ? ' lebih murah' : ' lebih mahal'}
-                </span>
-              </span>
+              <div className={`p-3 rounded-xl border text-xs ${newSatuanPrice < oldSatuanPrice ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Harga Satuan Lama:</span>
+                  <span className="font-mono font-bold">{formatCurrency(oldSatuanPrice)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Harga Satuan Baru:</span>
+                  <span className={`font-mono font-bold ${newSatuanPrice < oldSatuanPrice ? 'text-emerald-700' : 'text-red-700'}`}>{formatCurrency(newSatuanPrice)}</span>
+                </div>
+                <div className="flex justify-between border-t border-gray-200 pt-1 mt-1">
+                  <span className="text-gray-600">Selisih:</span>
+                  <span className={`font-mono font-bold ${newSatuanPrice < oldSatuanPrice ? 'text-emerald-700' : 'text-red-700'}`}>
+                    {newSatuanPrice < oldSatuanPrice ? '✅ Lebih Murah' : '❌ Lebih Mahal'}
+                  </span>
+                </div>
+              </div>
             )}
           </div>
         )}
