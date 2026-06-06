@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { BarChart3, Info, TrendingDown, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { BarChart3, Info, TrendingDown, CheckCircle2, Plus, Trash2 } from 'lucide-react';
 import { CalculationResult, WasteLog } from '../types';
 
 interface BepTabProps {
@@ -7,12 +7,34 @@ interface BepTabProps {
 }
 
 export default function BepTab({ calculatedProducts }: BepTabProps) {
-  const [monthlyOverhead, setMonthlyOverhead] = useState(0);
-  const [gajiKaryawan, setGajiKaryawan] = useState(0);
-  const [sewaRuko, setSewaRuko] = useState(0);
-  const [listrikGas, setListrikGas] = useState(0);
+  // Biaya tetap — dinamis (bisa tambah/hapus)
+  const [fixedCosts, setFixedCosts] = useState<{ id: string; label: string; amount: number }[]>(() => {
+    const saved = localStorage.getItem('bep_fixed_costs');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [newLabel, setNewLabel] = useState('');
+  const [newAmount, setNewAmount] = useState('');
 
-  const totalFixedCosts = [monthlyOverhead, gajiKaryawan, sewaRuko, listrikGas].reduce((a, b) => a + b, 0);
+  useEffect(() => { localStorage.setItem('bep_fixed_costs', JSON.stringify(fixedCosts)); }, [fixedCosts]);
+
+  const addFixedCost = () => {
+    if (!newLabel.trim() || !newAmount) return;
+    setFixedCosts(prev => [...prev, { id: `fc-${Date.now()}`, label: newLabel.trim(), amount: parseInt(newAmount) || 0 }]);
+    setNewLabel('');
+    setNewAmount('');
+  };
+
+  const deleteFixedCost = (id: string) => {
+    if (window.confirm('Hapus biaya tetap ini?')) {
+      setFixedCosts(prev => prev.filter(item => item.id !== id));
+    }
+  };
+
+  const updateFixedCost = (id: string, amount: number) => {
+    setFixedCosts(prev => prev.map(item => item.id === id ? { ...item, amount } : item));
+  };
+
+  const totalFixedCosts = fixedCosts.reduce((sum, item) => sum + item.amount, 0);
 
   // Data REAL dari calculatedProducts
   const validProducts = calculatedProducts.filter(p => p.hppPerPorsi > 0 && p.hargaJualPerPorsi > 0);
@@ -56,28 +78,42 @@ export default function BepTab({ calculatedProducts }: BepTabProps) {
         <div className="lg:col-span-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
           <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-50 pb-2">Biaya Tetap Bulanan (Fixed Costs)</h3>
           
-          <div className="space-y-3 text-xs">
-            <div>
-              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Sewa Ruko/Tempat</label>
-              <input type="number" value={sewaRuko} onChange={(e) => setSewaRuko(parseInt(e.target.value) || 0)}
-                className="w-full border border-gray-200 rounded-lg p-2.5 font-mono font-bold" />
+          <div className="space-y-2 text-xs">
+            {fixedCosts.length === 0 ? (
+              <div className="text-center py-4 text-gray-400">Belum ada biaya tetap. Tambah di bawah.</div>
+            ) : (
+              <div className="space-y-2">
+                {fixedCosts.map(item => (
+                  <div key={item.id} className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-150">
+                    <span className="font-bold text-gray-700 flex-1 text-xs truncate">{item.label}</span>
+                    <div className="relative w-28">
+                      <span className="absolute inset-y-0 left-0 pl-2 flex items-center text-gray-400 font-bold text-[9px]">Rp</span>
+                      <input type="number" value={item.amount}
+                        onChange={(e) => updateFixedCost(item.id, parseInt(e.target.value) || 0)}
+                        className="w-full pl-7 pr-2 py-1 bg-white border border-gray-200 rounded-lg font-mono font-bold text-xs" />
+                    </div>
+                    <button onClick={() => deleteFixedCost(item.id)}
+                      className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Form tambah */}
+            <div className="flex items-center gap-2 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
+              <input type="text" value={newLabel} onChange={e => setNewLabel(e.target.value)}
+                placeholder="Nama biaya..." className="flex-1 border border-emerald-200 rounded-lg p-1.5 text-xs font-semibold" />
+              <div className="relative w-24">
+                <span className="absolute inset-y-0 left-0 pl-2 flex items-center text-gray-400 font-bold text-[9px]">Rp</span>
+                <input type="number" value={newAmount} onChange={e => setNewAmount(e.target.value)}
+                  placeholder="0" className="w-full pl-7 pr-2 py-1.5 border border-emerald-200 rounded-lg font-mono font-bold text-xs" />
+              </div>
+              <button onClick={addFixedCost} disabled={!newLabel.trim() || !newAmount}
+                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-[10px] font-bold rounded-lg transition cursor-pointer disabled:cursor-not-allowed flex items-center gap-1">
+                <Plus className="w-3 h-3" /> Tambah
+              </button>
             </div>
-            <div>
-              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Gaji Karyawan</label>
-              <input type="number" value={gajiKaryawan} onChange={(e) => setGajiKaryawan(parseInt(e.target.value) || 0)}
-                className="w-full border border-gray-200 rounded-lg p-2.5 font-mono font-bold" />
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Listrik & Gas</label>
-              <input type="number" value={listrikGas} onChange={(e) => setListrikGas(parseInt(e.target.value) || 0)}
-                className="w-full border border-gray-200 rounded-lg p-2.5 font-mono font-bold" />
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Biaya Ops Lainnya</label>
-              <input type="number" value={monthlyOverhead} onChange={(e) => setMonthlyOverhead(parseInt(e.target.value) || 0)}
-                className="w-full border border-gray-200 rounded-lg p-2.5 font-mono font-bold" />
-            </div>
-
             <div className="bg-slate-50 p-3 rounded-xl border border-gray-100">
               <div className="flex justify-between font-bold text-gray-900">
                 <span>Total Fixed Cost/Bulan</span>

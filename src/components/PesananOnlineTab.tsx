@@ -47,41 +47,6 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
-  const handleSimulateDeliveryOrder = (platform: 'GoFood' | 'GrabFood' | 'ShopeeFood') => {
-    const plat = platforms.find(p => p.platform === platform);
-    if (!plat?.key) {
-      alert(`⚠️ API Key ${platform} belum diisi!\n\nSilakan atur API Key di panel "Pengaturan API" terlebih dahulu.\n\nUntuk sekarang, Anda bisa menggunakan mode simulasi.`);
-      // Still allow simulation
-    }
-
-    const pName = calculatedProducts.length > 0
-      ? calculatedProducts[Math.floor(Math.random() * calculatedProducts.length)].namaProduk
-      : 'Roti Manis';
-    const prodInfo = calculatedProducts.find(p => p.namaProduk === pName);
-    const unitPrice = prodInfo ? prodInfo.hargaJualPerPorsi : 19000;
-    const qty = Math.floor(Math.random() * 3) + 1;
-    const items = `${qty} pcs ${pName}`;
-    const txId = `TX-${Math.floor(1000 + Math.random() * 9005)}`;
-
-    if (onCompletePOSSale) onCompletePOSSale(pName, qty, unitPrice * qty, platform);
-
-    // Also queue WhatsApp notification
-    try {
-      const notifQueue = JSON.parse(localStorage.getItem('wa_notification_queue') || '[]');
-      notifQueue.push({
-        id: `notif-${Date.now()}`,
-        type: 'order_masuk',
-        platform: platform,
-        message: `🛎️ ORDER ${platform} MASUK!\nNo: ${txId}\nPesanan: ${items}\nTotal: ${formatCurrency(unitPrice * qty)}`,
-        time: new Date().toISOString(),
-        sent: false,
-      });
-      localStorage.setItem('wa_notification_queue', JSON.stringify(notifQueue));
-    } catch (e) { /* silent */ }
-
-    alert(`🛎️ ${platform} ORDER MASUK!\nNo: ${txId}\nPesanan: ${items}\nTotal: ${formatCurrency(unitPrice * qty)}\nStok bahan baku otomatis terpotong.\n\nNotifikasi sudah masuk ke antrian WhatsApp.`);
-  };
-
   const handleSaveApiKey = (platform: string) => {
     setPlatforms(prev => prev.map(p =>
       p.platform === platform
@@ -208,11 +173,11 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
         </div>
       )}
 
-      {/* PLATFORM CARDS */}
+      {/* PLATFORM CARDS — tanpa simulasi */}
       <div className="bg-slate-900 text-slate-100 p-6 rounded-2xl border border-slate-800 shadow-xs space-y-5">
         <div className="flex items-center justify-between">
           <p className="text-[11px] text-slate-400">
-            Hubungkan menu Near Bakery dengan dashboard mitra online. Setiap order otomatis mengurangi stok bahan baku.
+            Kelola koneksi API platform order online. Setiap pesanan dari platform otomatis mengurangi stok bahan baku dan mencatat revenue.
           </p>
           <span className="text-[10px] text-slate-500 bg-slate-950 px-2 py-1 rounded-lg font-mono">
             {connectedCount}/3 platform
@@ -234,10 +199,11 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
                 <span className="text-[9px] text-red-400 font-bold">🔴 No API Key</span>
               )}
             </div>
-            <button onClick={() => handleSimulateDeliveryOrder('GoFood')}
-              className="w-full py-2 bg-rose-900/40 hover:bg-rose-900/60 text-rose-200 text-xs font-bold uppercase rounded border border-rose-800/50 cursor-pointer transition">
-              Simulasi Order GoFood
-            </button>
+            <div className="text-[10px] text-slate-500 text-center py-4">
+              {platforms.find(p => p.platform === 'GoFood')?.isConnected
+                ? '✅ Terhubung — pesanan akan otomatis masuk.'
+                : '🔑 Atur API Key untuk menghubungkan GoFood.'}
+            </div>
           </div>
 
           {/* GrabFood */}
@@ -254,10 +220,11 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
                 <span className="text-[9px] text-red-400 font-bold">🔴 No API Key</span>
               )}
             </div>
-            <button onClick={() => handleSimulateDeliveryOrder('GrabFood')}
-              className="w-full py-2 bg-emerald-950/40 hover:bg-emerald-950/60 text-emerald-300 text-xs font-bold uppercase rounded border border-emerald-800/50 cursor-pointer transition">
-              Simulasi Order GrabFood
-            </button>
+            <div className="text-[10px] text-slate-500 text-center py-4">
+              {platforms.find(p => p.platform === 'GrabFood')?.isConnected
+                ? '✅ Terhubung — pesanan akan otomatis masuk.'
+                : '🔑 Atur API Key untuk menghubungkan GrabFood.'}
+            </div>
           </div>
 
           {/* ShopeeFood */}
@@ -274,16 +241,17 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
                 <span className="text-[9px] text-red-400 font-bold">🔴 No API Key</span>
               )}
             </div>
-            <button onClick={() => handleSimulateDeliveryOrder('ShopeeFood')}
-              className="w-full py-2 bg-orange-950/40 hover:bg-orange-950/60 text-orange-400 text-xs font-bold uppercase rounded border border-orange-800/50 cursor-pointer transition">
-              Simulasi Order ShopeeFood
-            </button>
+            <div className="text-[10px] text-slate-500 text-center py-4">
+              {platforms.find(p => p.platform === 'ShopeeFood')?.isConnected
+                ? '✅ Terhubung — pesanan akan otomatis masuk.'
+                : '🔑 Atur API Key untuk menghubungkan ShopeeFood.'}
+            </div>
           </div>
         </div>
 
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs text-slate-400 flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>Tiap penjualan ojol otomatis memotong bahan baku di dapur pusat & mencatat revenue.</span>
+          <span>API Key disimpan lokal. Setiap penjualan ojol otomatis memotong bahan baku & mencatat revenue.</span>
         </div>
       </div>
     </div>

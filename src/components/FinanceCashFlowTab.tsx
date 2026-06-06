@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CalculationResult } from '../types';
-import { CircleDollarSign, Coins, RefreshCw, ShoppingCart } from 'lucide-react';
+import { CircleDollarSign, Coins, RefreshCw, ShoppingCart, Trash2, Plus } from 'lucide-react';
 
 interface RevenueTx {
   id: string;
@@ -42,11 +42,32 @@ export default function FinanceCashFlowTab({ calculatedProducts, wasteTotalLoss,
     return () => clearInterval(interval);
   }, []);
 
-  // OPEX — user editable, mulai dari 0 (tidak ada dummy)
-  const [rentOpex, setRentOpex] = useState(0);
-  const [wagesOpex, setWagesOpex] = useState(0);
-  const [utilityOpex, setUtilityOpex] = useState(0);
-  const [marketingOpex, setMarketingOpex] = useState(0);
+  // OPEX — dinamis, bisa tambah/hapus baris
+  const [opexItems, setOpexItems] = useState<{ id: string; label: string; amount: number }[]>(() => {
+    const saved = localStorage.getItem('opex_items_data');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [newOpexLabel, setNewOpexLabel] = useState('');
+  const [newOpexAmount, setNewOpexAmount] = useState('');
+
+  useEffect(() => { localStorage.setItem('opex_items_data', JSON.stringify(opexItems)); }, [opexItems]);
+
+  const addOpex = () => {
+    if (!newOpexLabel.trim() || !newOpexAmount) return;
+    setOpexItems(prev => [...prev, { id: `opex-${Date.now()}`, label: newOpexLabel.trim(), amount: parseInt(newOpexAmount) || 0 }]);
+    setNewOpexLabel('');
+    setNewOpexAmount('');
+  };
+
+  const deleteOpex = (id: string) => {
+    if (window.confirm('Hapus item OPEX ini?')) {
+      setOpexItems(prev => prev.filter(item => item.id !== id));
+    }
+  };
+
+  const updateOpex = (id: string, amount: number) => {
+    setOpexItems(prev => prev.map(item => item.id === id ? { ...item, amount } : item));
+  };
 
   // Hitung revenue dari data real
   const today = new Date().toISOString().substring(0, 10);
@@ -82,7 +103,7 @@ export default function FinanceCashFlowTab({ calculatedProducts, wasteTotalLoss,
     return sum + (avgHppCost * tx.qty);
   }, 0);
 
-  const totalOPEX = rentOpex + wagesOpex + utilityOpex + marketingOpex;
+  const totalOPEX = opexItems.reduce((sum, item) => sum + item.amount, 0);
   const actualNetIncome = monthlyRevenue - actualCOGS - totalOPEX - wasteTotalLoss - rdTotalCost;
   const netMarginPercent = monthlyRevenue > 0 ? (actualNetIncome / monthlyRevenue) * 100 : 0;
 
@@ -156,85 +177,83 @@ export default function FinanceCashFlowTab({ calculatedProducts, wasteTotalLoss,
         </div>
       </div>
 
-      {/* OPEX PARAMETERS */}
+      {/* OPEX PARAMETERS — DINAMIS */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-5 space-y-4">
         <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-50 pb-2">
-          <Coins className="w-4.5 h-4.5 text-emerald-600" /> Parameter Biaya Tetap (OPEX)
+          <Coins className="w-4.5 h-4.5 text-emerald-600" /> Parameter Biaya Tetap (OPEX) — Dinamis
         </h3>
-        <p className="text-[10px] text-gray-400 -mt-2">Isi biaya tetap bulanan Anda. Semua field mulai dari Rp 0 — tidak ada data dummy.</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs font-semibold">
-          <div className="space-y-3.5 bg-slate-50 p-4 rounded-xl border border-slate-150">
-            <h4 className="text-gray-800 uppercase tracking-widest font-extrabold">1. OPEX Grup A</h4>
-            <div>
-              <label className="block text-[10px] text-gray-500 uppercase tracking-wider mb-1">Gaji Staff</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 font-bold">Rp</span>
-                <input type="number" value={wagesOpex}
-                  onChange={(e) => setWagesOpex(Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-full pl-9 pr-3 py-1.5 bg-white border border-gray-200 rounded-lg font-mono font-bold" />
-              </div>
+        <p className="text-[10px] text-gray-400 -mt-2">Tambah, edit, atau hapus item biaya tetap bulanan. Semua mulai dari Rp 0.</p>
+
+        {/* Daftar OPEX */}
+        <div className="space-y-2">
+          {opexItems.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">Belum ada item OPEX. Tambah di bawah.</p>
+          ) : (
+            <div className="space-y-2">
+              {opexItems.map(item => (
+                <div key={item.id} className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-150">
+                  <span className="font-bold text-xs text-gray-700 flex-1">{item.label}</span>
+                  <div className="relative w-32">
+                    <span className="absolute inset-y-0 left-0 pl-2 flex items-center text-gray-400 font-bold text-xs">Rp</span>
+                    <input type="number" value={item.amount}
+                      onChange={(e) => updateOpex(item.id, parseInt(e.target.value) || 0)}
+                      className="w-full pl-7 pr-2 py-1.5 bg-white border border-gray-200 rounded-lg font-mono font-bold text-xs" />
+                  </div>
+                  <button onClick={() => deleteOpex(item.id)}
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
             </div>
-            <div>
-              <label className="block text-[10px] text-gray-500 uppercase tracking-wider mb-1">Sewa Toko</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 font-bold">Rp</span>
-                <input type="number" value={rentOpex}
-                  onChange={(e) => setRentOpex(Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-full pl-9 pr-3 py-1.5 bg-white border border-gray-200 rounded-lg font-mono font-bold" />
-              </div>
-            </div>
+          )}
+        </div>
+
+        {/* Form tambah OPEX baru */}
+        <div className="flex items-center gap-3 bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+          <input type="text" value={newOpexLabel} onChange={e => setNewOpexLabel(e.target.value)}
+            placeholder="Nama biaya..."
+            className="flex-1 border border-emerald-200 rounded-lg p-2 text-xs font-semibold" />
+          <div className="relative w-28">
+            <span className="absolute inset-y-0 left-0 pl-2 flex items-center text-gray-400 font-bold text-xs">Rp</span>
+            <input type="number" value={newOpexAmount} onChange={e => setNewOpexAmount(e.target.value)}
+              placeholder="0"
+              className="w-full pl-7 pr-2 py-1.5 border border-emerald-200 rounded-lg font-mono font-bold text-xs" />
           </div>
-          <div className="space-y-3.5 bg-slate-50 p-4 rounded-xl border border-slate-150">
-            <h4 className="text-gray-800 uppercase tracking-widest font-extrabold">2. OPEX Grup B</h4>
-            <div>
-              <label className="block text-[10px] text-gray-500 uppercase tracking-wider mb-1">Listrik & Gas Oven</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 font-bold">Rp</span>
-                <input type="number" value={utilityOpex}
-                  onChange={(e) => setUtilityOpex(Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-full pl-9 pr-3 py-1.5 bg-white border border-gray-200 rounded-lg font-mono font-bold" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-[10px] text-gray-500 uppercase tracking-wider mb-1">Marketing & Iklan</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 font-bold">Rp</span>
-                <input type="number" value={marketingOpex}
-                  onChange={(e) => setMarketingOpex(Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-full pl-9 pr-3 py-1.5 bg-white border border-gray-200 rounded-lg font-mono font-bold" />
-              </div>
-            </div>
+          <button onClick={addOpex} disabled={!newOpexLabel.trim() || !newOpexAmount}
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-xs font-bold rounded-lg transition cursor-pointer disabled:cursor-not-allowed flex items-center gap-1">
+            <Plus className="w-3.5 h-3.5" /> Tambah
+          </button>
+        </div>
+
+        {/* Ringkasan */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="p-3 rounded-lg border border-gray-200 bg-white space-y-1">
+            <span className="text-[10px] text-gray-500">Revenue Bulan Ini:</span>
+            <span className="block font-mono font-bold text-emerald-700">{formatCurrency(monthlyRevenue)}</span>
           </div>
-          <div className="space-y-3.5 bg-slate-50 p-4 rounded-xl border border-slate-150">
-            <h4 className="text-gray-800 uppercase tracking-widest font-extrabold">3. Ringkasan</h4>
-            <div className="p-3 rounded-lg border border-gray-200 bg-white space-y-1.5">
-              <div className="flex justify-between text-[10px]">
-                <span className="text-gray-500">Revenue Bulan Ini:</span>
-                <span className="font-mono font-bold text-emerald-700">{formatCurrency(monthlyRevenue)}</span>
-              </div>
-              <div className="flex justify-between text-[10px]">
-                <span className="text-gray-500">COGS (HPP Real):</span>
-                <span className="font-mono font-bold text-rose-600">{formatCurrency(actualCOGS)}</span>
-              </div>
-              <div className="flex justify-between text-[10px]">
-                <span className="text-gray-500">Total OPEX:</span>
-                <span className="font-mono font-bold text-rose-600">{formatCurrency(totalOPEX)}</span>
-              </div>
-              <div className="flex justify-between text-[10px] border-t border-gray-200 pt-1.5">
-                <span className="text-gray-700 font-bold">Laba Bersih:</span>
-                <span className={`font-mono font-bold ${actualNetIncome >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-                  {formatCurrency(actualNetIncome)}
-                </span>
-              </div>
-            </div>
-            {monthlyRevenue === 0 && (
-              <div className="text-[10px] text-amber-700 bg-amber-50 p-2 rounded-lg">
-                <ShoppingCart className="w-3 h-3 inline mr-1" />
-                Belum ada data revenue. Lakukan transaksi POS untuk melihat arus kas real.
-              </div>
-            )}
+          <div className="p-3 rounded-lg border border-gray-200 bg-white space-y-1">
+            <span className="text-[10px] text-gray-500">COGS (HPP Real):</span>
+            <span className="block font-mono font-bold text-rose-600">{formatCurrency(actualCOGS)}</span>
+          </div>
+          <div className="p-3 rounded-lg border border-gray-200 bg-white space-y-1">
+            <span className="text-[10px] text-gray-500">Total OPEX:</span>
+            <span className="block font-mono font-bold text-rose-600">{formatCurrency(totalOPEX)}</span>
+          </div>
+          <div className={`p-3 rounded-lg border space-y-1 ${actualNetIncome >= 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
+            <span className="text-[10px] text-gray-500">Laba Bersih:</span>
+            <span className={`block font-mono font-bold ${actualNetIncome >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+              {formatCurrency(actualNetIncome)}
+            </span>
           </div>
         </div>
+
+        {monthlyRevenue === 0 && (
+          <div className="text-[10px] text-amber-700 bg-amber-50 p-2 rounded-lg">
+            <ShoppingCart className="w-3 h-3 inline mr-1" />
+            Belum ada data revenue. Lakukan transaksi POS untuk melihat arus kas real.
+          </div>
+        )}
       </div>
     </div>
   );

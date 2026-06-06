@@ -35,7 +35,6 @@ import PosKasirTab from './components/PosKasirTab';
 import PesananOnlineTab from './components/PesananOnlineTab';
 import CrmMarketingTab from './components/CrmMarketingTab';
 import BomTab from './components/BomTab';
-import MpsTab from './components/MpsTab';
 import FefoExpiryTab from './components/FefoExpiryTab';
 
 import BudgetTab from './components/BudgetTab';
@@ -46,8 +45,9 @@ import BepTab from './components/BepTab';
 import DoughTemperatureTab from './components/DoughTemperatureTab';
 import ImageGeneratorTab from './components/ImageGeneratorTab';
 import ProfitDistribusiTab from './components/ProfitDistribusiTab';
-import AlertSystemTab from './components/AlertSystemTab';
 import BackupSystemTab from './components/BackupSystemTab';
+import RekapBahanTab from './components/RekapBahanTab';
+import PembukuanTab from './components/PembukuanTab';
 
 // Production Center
 import ProductionCenterTab from './components/ProductionCenterTab';
@@ -85,7 +85,6 @@ import {
   PanelRightOpen,
   Image,
   PieChart,
-  Bell,
   Cloud,
   Building2,
 } from 'lucide-react';
@@ -198,7 +197,6 @@ export default function App() {
     | 'erp_waste'
     | 'erp_rd'
     | 'erp_bom'
-    | 'erp_mps'
     | 'erp_fefo_expiry'
     | 'erp_pos'
     | 'erp_online'
@@ -213,9 +211,10 @@ export default function App() {
     | 'erp_dough_temp'
     | 'erp_image_gen'
     | 'erp_profit_distribusi'
-    | 'erp_alert_system'
     | 'erp_backup'
     | 'erp_production_center'
+    | 'erp_rekap_bahan'
+    | 'erp_pembukuan'
   >('dashboard');
 
   // --- Lifted States with persistent syncing back to localStorage ---
@@ -920,7 +919,7 @@ export default function App() {
 
         setTimeout(() => {
           const todayName = new Date().toLocaleDateString('id-ID', { weekday: 'long' });
-          showToast(`📅 Hari ${todayName} — Jangan lupa cek Jadwal MPS & Work Order untuk produksi hari ini!`, 'info');
+          showToast(`📅 Hari ${todayName} — Jangan lupa cek Work Order untuk produksi hari ini!`, 'info');
         }, 5000);
       }
     }
@@ -1212,9 +1211,6 @@ export default function App() {
                 bahanBaku={bahanBaku}
               />
             )}
-            {activeTab === 'erp_mps' && (
-              <MpsTab productHpp={productHpp} detailResep={detailResep} bahanBaku={bahanBaku} />
-            )}
             {activeTab === 'erp_fefo_expiry' && (
               <FefoExpiryTab bahanBaku={bahanBaku} productHpp={productHpp} onAddWasteLog={handleAddWasteLog} />
             )}
@@ -1280,20 +1276,23 @@ export default function App() {
             {activeTab === 'erp_profit_distribusi' && (
               <ProfitDistribusiTab />
             )}
-            {activeTab === 'erp_alert_system' && (
-              <AlertSystemTab
-                calculatedProducts={calculatedProducts}
-                bahanBaku={bahanBaku}
-                hasUnsavedChanges={hasUnsavedChanges}
-                spreadsheetId={spreadsheetId}
-              />
-            )}
             {activeTab === 'erp_backup' && (
               <BackupSystemTab
                 bahanBaku={bahanBaku}
                 productHpp={productHpp}
                 detailResep={detailResep}
                 calculatedProducts={calculatedProducts}
+              />
+            )}
+            {activeTab === 'erp_rekap_bahan' && (
+              <RekapBahanTab bahanBaku={bahanBaku} />
+            )}
+            {activeTab === 'erp_pembukuan' && (
+              <PembukuanTab
+                calculatedProducts={calculatedProducts}
+                bahanBaku={bahanBaku}
+                wasteTotalLoss={wasteTotalLoss}
+                rdTotalCost={rdTotalCost}
               />
             )}
           </div>
@@ -1445,32 +1444,37 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
         </div>
       </div>
 
-      {/* NAVIGATION */}
+      {/* NAVIGATION — Urutan dari Ringkasan sampai Backup */}
       <nav className="flex-1 overflow-y-auto p-4 space-y-5 select-none scrollbar-thin">
         <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">① Master Data</span>
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">① Ringkasan & Dashboard</span>
+          {sidebarBtn('dashboard', <LineChart className="w-4 h-4" />, '👋 Ringkasan')}
+          {sidebarBtn('erp_bi', <TrendingUp className="w-4 h-4" />, '📊 Laporan P&L')}
+          {sidebarBtn('erp_pembukuan', <Layers className="w-4 h-4" />, '📒 Pembukuan')}
+        </div>
+        <div className="space-y-1">
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">② Master Data</span>
           {sidebarBtn('data_pusat', <Building2 className="w-4 h-4" />, '🏛️ Data Pusat')}
           {sidebarBtn('materials', <Package className="w-4 h-4" />, '📦 Bahan Baku')}
           {sidebarBtn('recipes', <FolderTree className="w-4 h-4" />, '📝 Formulasi Resep')}
         </div>
         <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">② Inventory & Produksi</span>
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">③ Inventory & Produksi</span>
           {sidebarBtn('erp_fefo_expiry', <ShieldAlert className="w-4 h-4" />, '📋 FEFO & Expiry')}
           {sidebarBtn('erp_bom', <Layers className="w-4 h-4" />, '🔧 BOM & Yield')}
+          {sidebarBtn('erp_rekap_bahan', <Package className="w-4 h-4" />, '📋 Rekap Bahan')}
           {sidebarBtn('erp_production_center', <ClipboardList className="w-4 h-4" />, '🏭 Prod. Center')}
           {sidebarBtn('erp_baker_pct', <Percent className="w-4 h-4" />, "🍞 Baker's %")}
           {sidebarBtn('erp_dough_temp', <Thermometer className="w-4 h-4" />, '🌡️ Suhu Adonan')}
         </div>
         <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">③ Kasir & Penjualan</span>
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">④ Kasir & Penjualan</span>
           {sidebarBtn('erp_pos', <ShoppingCart className="w-4 h-4" />, '🛒 POS Kasir')}
           {sidebarBtn('erp_online', <Users className="w-4 h-4" />, '📱 Pesanan Online')}
           {sidebarBtn('erp_crm', <TrendingUp className="w-4 h-4" />, '📈 CRM Marketing')}
         </div>
         <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">④ Keuangan</span>
-          {sidebarBtn('dashboard', <LineChart className="w-4 h-4" />, '👋 Ringkasan')}
-          {sidebarBtn('erp_bi', <TrendingUp className="w-4 h-4" />, '📊 Laporan P&L')}
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑤ Keuangan</span>
           {sidebarBtn('erp_cash_flow', <Coins className="w-4 h-4" />, '💵 Arus Kas')}
           {sidebarBtn('erp_profit_distribusi', <PieChart className="w-4 h-4" />, '🎯 Alokasi Laba')}
           {sidebarBtn('erp_bep', <BarChart3 className="w-4 h-4" />, '🧮 BEP & Balance')}
@@ -1478,19 +1482,15 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
           {sidebarBtn('hpp', <TrendingUp className="w-4 h-4" />, '📈 Harga & HPP')}
         </div>
         <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑤ Operasional & Waste</span>
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑥ Operasional & Tools</span>
           {sidebarBtn('erp_waste', <X className="w-4 h-4" />, '🗑️ Manajemen Waste')}
           {sidebarBtn('erp_rd', <FlaskConical className="w-4 h-4" />, '🔬 Sandbox R&D')}
           {sidebarBtn('erp_compliance', <ShieldAlert className="w-4 h-4" />, '🧊 Recall Pangan')}
           {sidebarBtn('erp_iot', <Cpu className="w-4 h-4" />, '🤖 Smart IoT')}
-        </div>
-        <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑥ Tools</span>
           {sidebarBtn('erp_image_gen', <Image className="w-4 h-4" />, '🎨 Image Gen')}
-          {sidebarBtn('erp_alert_system', <Bell className="w-4 h-4" />, '🔔 Monitoring & Alert')}
         </div>
         <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑧ Backup</span>
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑦ Backup</span>
           {sidebarBtn('erp_backup', <Cloud className="w-4 h-4" />, '💾 Backup & Restore')}
         </div>
       </nav>
@@ -1523,4 +1523,3 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
     </>
   );
 }
-

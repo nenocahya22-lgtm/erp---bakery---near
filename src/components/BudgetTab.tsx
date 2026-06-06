@@ -1,5 +1,5 @@
-import React from 'react';
-import { Sliders, CheckCircle2, AlertTriangle, Coins } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Sliders, CheckCircle2, AlertTriangle, Coins, Trash2, Plus } from 'lucide-react';
 import { CalculationResult } from '../types';
 
 interface BudgetTabProps {
@@ -9,25 +9,64 @@ interface BudgetTabProps {
 }
 
 export default function BudgetTab({ calculatedProducts, wasteTotalLoss, rdTotalCost }: BudgetTabProps) {
-  const [budgetWastePct, setBudgetWastePct] = React.useState(3.5);
-  const [budgetRdPct, setBudgetRdPct] = React.useState(5.0);
-  const [budgetOpsPct, setBudgetOpsPct] = React.useState(15.0);
-  const [budgetSdmPct, setBudgetSdmPct] = React.useState(25.0);
-
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
+
+  // Budget items — dinamis CRUD
+  const [budgetItems, setBudgetItems] = useState<{ id: string; label: string; budgetPct: number; actualValue: number }[]>(() => {
+    const saved = localStorage.getItem('budget_items_data');
+    if (saved) return JSON.parse(saved);
+    return [
+      { id: 'bgt-1', label: 'Waste (Limbah)', budgetPct: 3.5, actualValue: wasteTotalLoss },
+      { id: 'bgt-2', label: 'R&D (Litbang)', budgetPct: 5.0, actualValue: rdTotalCost },
+      { id: 'bgt-3', label: 'Operasional', budgetPct: 15.0, actualValue: 0 },
+      { id: 'bgt-4', label: 'SDM (Gaji)', budgetPct: 25.0, actualValue: 0 },
+    ];
+  });
+  const [newLabel, setNewLabel] = useState('');
+  const [newBudgetPct, setNewBudgetPct] = useState('5');
+
+  useEffect(() => { localStorage.setItem('budget_items_data', JSON.stringify(budgetItems)); }, [budgetItems]);
+
+  const addBudgetItem = () => {
+    if (!newLabel.trim() || !newBudgetPct) return;
+    setBudgetItems(prev => [...prev, { id: `bgt-${Date.now()}`, label: newLabel.trim(), budgetPct: parseFloat(newBudgetPct) || 0, actualValue: 0 }]);
+    setNewLabel('');
+    setNewBudgetPct('5');
+  };
+
+  const deleteBudgetItem = (id: string) => {
+    if (window.confirm('Hapus item anggaran ini?')) {
+      setBudgetItems(prev => prev.filter(item => item.id !== id));
+    }
+  };
+
+  const updateBudgetPct = (id: string, pct: number) => {
+    setBudgetItems(prev => prev.map(item => item.id === id ? { ...item, budgetPct: pct } : item));
+  };
+
+  const updateActualValue = (id: string, val: number) => {
+    setBudgetItems(prev => prev.map(item => item.id === id ? { ...item, actualValue: val } : item));
+  };
+
+  // Update waste & rd actual values from props
+  useEffect(() => {
+    setBudgetItems(prev => prev.map(item => {
+      if (item.label.toLowerCase().includes('waste')) return { ...item, actualValue: wasteTotalLoss };
+      if (item.label.toLowerCase().includes('rd') || item.label.toLowerCase().includes('litbang')) return { ...item, actualValue: rdTotalCost };
+      return item;
+    }));
+  }, [wasteTotalLoss, rdTotalCost]);
 
   const totalRevenue = calculatedProducts.length > 0
     ? calculatedProducts.reduce((s, p) => s + p.hargaJual, 0) * 100
     : 10000000;
 
-  const actualWastePct = totalRevenue > 0 ? (wasteTotalLoss / totalRevenue) * 100 : 0;
-  const actualRdPct = totalRevenue > 0 ? (rdTotalCost / totalRevenue) * 100 : 0;
-  const actualOpsPct = budgetOpsPct; // Simplified placeholder
-  const actualSdmPct = budgetSdmPct;
-
-  const isWasteOver = actualWastePct > budgetWastePct;
-  const isRdOver = actualRdPct > budgetRdPct;
+  const totalBudgetPct = budgetItems.reduce((sum, item) => sum + item.budgetPct, 0);
+  const itemsOverBudget = budgetItems.filter(item => {
+    const actualPct = totalRevenue > 0 ? (item.actualValue / totalRevenue) * 100 : 0;
+    return actualPct > item.budgetPct;
+  });
 
   return (
     <div className="space-y-6">
@@ -38,17 +77,72 @@ export default function BudgetTab({ calculatedProducts, wasteTotalLoss, rdTotalC
         <p className="text-xs text-gray-500 mt-1">Tetapkan batas persentase anggaran untuk Waste, R&D, SDM, dan Operasional.</p>
       </div>
 
+      {/* BUDGET DINAMIS CRUD */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* BUDGET SETTINGS */}
-        <div className="lg:col-span-6 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-5">
+        {/* BUDGET SETTINGS — DINAMIS */}
+        <div className="lg:col-span-6 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
           <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-50 pb-2">
-            <Sliders className="w-4 h-4 text-emerald-600" /> Target Limit Anggaran (%)
+            <Sliders className="w-4 h-4 text-emerald-600" /> Items Anggaran — Dinamis
           </h3>
+          
+          {budgetItems.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">Belum ada item anggaran. Tambah di bawah.</p>
+          ) : (
+            <div className="space-y-3">
+              {budgetItems.map(item => {
+                const actualPct = totalRevenue > 0 ? (item.actualValue / totalRevenue) * 100 : 0;
+                const isOver = actualPct > item.budgetPct;
+                return (
+                  <div key={item.id} className="p-3 bg-slate-50 rounded-xl border border-slate-150 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-gray-700">{item.label}</span>
+                      <button onClick={() => deleteBudgetItem(item.id)}
+                        className="p-0.5 text-gray-400 hover:text-red-600 transition cursor-pointer">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-gray-500 shrink-0">Limit:</span>
+                      <input type="range" min={0.5} max={45} step={0.5} value={item.budgetPct}
+                        onChange={(e) => updateBudgetPct(item.id, parseFloat(e.target.value))}
+                        className="flex-1 accent-emerald-600" />
+                      <span className="text-xs font-mono font-bold text-emerald-700 w-12 text-right">{item.budgetPct.toFixed(1)}%</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px]">
+                      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${isOver ? 'bg-red-500' : 'bg-emerald-500'}`}
+                          style={{ width: `${Math.min(100, (actualPct / item.budgetPct) * 100)}%` }} />
+                      </div>
+                      <span className={`font-mono font-bold ${isOver ? 'text-red-600' : 'text-emerald-700'}`}>
+                        {actualPct.toFixed(1)}% / {item.budgetPct.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
-          <BudgetSlider label="Waste (Limbah)" value={budgetWastePct} onChange={setBudgetWastePct} min={0.5} max={15} step={0.5} />
-          <BudgetSlider label="R&D (Litbang)" value={budgetRdPct} onChange={setBudgetRdPct} min={1} max={20} step={0.5} />
-          <BudgetSlider label="Operasional (Sewa+Utilitas)" value={budgetOpsPct} onChange={setBudgetOpsPct} min={5} max={40} step={1} />
-          <BudgetSlider label="SDM (Gaji Staf)" value={budgetSdmPct} onChange={setBudgetSdmPct} min={10} max={45} step={1} />
+          {/* Form tambah */}
+          <div className="flex items-center gap-2 bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+            <input type="text" value={newLabel} onChange={e => setNewLabel(e.target.value)}
+              placeholder="Nama anggaran..." className="flex-1 border border-emerald-200 rounded-lg p-1.5 text-xs font-semibold" />
+            <input type="number" value={newBudgetPct} onChange={e => setNewBudgetPct(e.target.value)}
+              placeholder="%" className="w-16 border border-emerald-200 rounded-lg p-1.5 text-xs font-mono font-bold" />
+            <button onClick={addBudgetItem} disabled={!newLabel.trim() || !newBudgetPct}
+              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-[10px] font-bold rounded-lg transition cursor-pointer disabled:cursor-not-allowed flex items-center gap-1">
+              <Plus className="w-3 h-3" /> Tambah
+            </button>
+          </div>
+
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-150 text-xs">
+            <div className="flex justify-between font-bold">
+              <span>Total Alokasi Anggaran:</span>
+              <span className={`font-mono ${totalBudgetPct > 100 ? 'text-red-600' : 'text-emerald-700'}`}>
+                {totalBudgetPct.toFixed(1)}%{totalBudgetPct > 100 ? ' ⚠️ OVER!' : ''}
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* COMPLIANCE MONITOR */}
@@ -57,59 +151,40 @@ export default function BudgetTab({ calculatedProducts, wasteTotalLoss, rdTotalC
             <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Kepatuhan Real-time
           </h3>
 
-          <ComplianceBar label="Waste" actual={actualWastePct} limit={budgetWastePct} loss={wasteTotalLoss} isOver={isWasteOver} />
-          <ComplianceBar label="R&D" actual={actualRdPct} limit={budgetRdPct} loss={rdTotalCost} isOver={isRdOver} />
+          {budgetItems.map(item => {
+            const actualPct = totalRevenue > 0 ? (item.actualValue / totalRevenue) * 100 : 0;
+            const isOver = actualPct > item.budgetPct;
+            return (
+              <div key={item.id} className="space-y-1.5">
+                <div className="flex justify-between text-xs font-bold">
+                  <span className="text-gray-800">{item.label}</span>
+                  <span className={`font-mono ${isOver ? 'text-red-600' : 'text-emerald-700'}`}>
+                    {actualPct.toFixed(2)}% / {item.budgetPct.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all ${isOver ? 'bg-red-500' : 'bg-emerald-500'}`}
+                    style={{ width: `${Math.min(100, (actualPct / (item.budgetPct || 1)) * 100)}%` }} />
+                </div>
+                <div className="flex justify-between text-[10px] text-gray-400">
+                  <span>Nilai: {item.actualValue.toLocaleString('id-ID')}</span>
+                  <span className={isOver ? 'text-red-600 font-bold' : 'text-emerald-700'}>{isOver ? '⚠️ OVER!' : '✓ OK'}</span>
+                </div>
+              </div>
+            );
+          })}
 
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-150 text-xs">
             <span className="font-bold text-gray-900 flex items-center gap-1">
               <AlertTriangle className="w-4 h-4 text-amber-500" /> Saran:
             </span>
             <p className="text-gray-500 text-[11px] mt-1">
-              {(isWasteOver || isRdOver)
-                ? 'Pengeluaran melebihi batas aman! Kurangi waste dan biaya trial.'
+              {itemsOverBudget.length > 0
+                ? `${itemsOverBudget.length} item melebihi batas anggaran! Evaluasi pengeluaran.`
                 : 'Rasio keuangan sesuai anggaran. Pertahankan performa.'}
             </p>
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function BudgetSlider({ label, value, onChange, min, max, step }: {
-  label: string; value: number; onChange: (v: number) => void; min: number; max: number; step: number;
-}) {
-  return (
-    <div className="space-y-1.5 p-3.5 bg-slate-50 rounded-xl border border-slate-150">
-      <div className="flex justify-between text-xs font-bold text-gray-700">
-        <span>{label}</span>
-        <span className="text-emerald-700 font-mono">{value.toFixed(1)}%</span>
-      </div>
-      <input type="range" min={min} max={max} step={step} value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full accent-emerald-600 cursor-pointer" />
-    </div>
-  );
-}
-
-function ComplianceBar({ label, actual, limit, loss, isOver }: {
-  label: string; actual: number; limit: number; loss: number; isOver: boolean;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <div className="flex justify-between text-xs font-bold">
-        <span className="text-gray-800">{label}</span>
-        <span className={`font-mono ${isOver ? 'text-red-600' : 'text-emerald-700'}`}>
-          {actual.toFixed(2)}% / {limit.toFixed(1)}%
-        </span>
-      </div>
-      <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all ${isOver ? 'bg-red-500' : 'bg-emerald-500'}`}
-          style={{ width: `${Math.min(100, (actual / (limit || 1)) * 100)}%` }} />
-      </div>
-      <div className="flex justify-between text-[10px] text-gray-400">
-        <span>Loss: {loss.toLocaleString('id-ID')}</span>
-        <span className={isOver ? 'text-red-600 font-bold' : 'text-emerald-700'}>{isOver ? '⚠️ OVER!' : '✓ OK'}</span>
       </div>
     </div>
   );

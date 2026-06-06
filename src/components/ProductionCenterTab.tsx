@@ -16,7 +16,7 @@ interface ProductionCenterTabProps {
 export default function ProductionCenterTab({
   productHpp, detailResep, calculatedProducts, bahanBaku
 }: ProductionCenterTabProps) {
-  const [activeSection, setActiveSection] = useState<'calendar' | 'mps' | 'planner' | 'workorder' | 'sop'>('calendar');
+  const [activeSection, setActiveSection] = useState<'calendar' | 'baking_control' | 'planner' | 'workorder' | 'sop'>('calendar');
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
@@ -70,54 +70,6 @@ export default function ProductionCenterTab({
     blue: 'bg-blue-100 text-blue-800 border-blue-200',
     red: 'bg-red-100 text-red-800 border-red-200',
     purple: 'bg-purple-100 text-purple-800 border-purple-200',
-  };
-
-  // ─── MPS STATE ───
-  const [preOrders, setPreOrders] = useState<Record<string, number>>({});
-  const [displayStock, setDisplayStock] = useState<Record<string, number>>({});
-  const [showMpsModal, setShowMpsModal] = useState(false);
-  const [mpsProduct, setMpsProduct] = useState('');
-  const [mpsPreOrder, setMpsPreOrder] = useState('0');
-  const [mpsStock, setMpsStock] = useState('0');
-  const [mpsQty, setMpsQty] = useState('0');
-
-  const getBakingRec = (prodName: string) => {
-    const orders = preOrders[prodName] || 0;
-    const stock = displayStock[prodName] || 0;
-    return Math.max(0, orders - stock + 10);
-  };
-
-  const openMpsModal = (prodName: string) => {
-    setMpsProduct(prodName);
-    setMpsPreOrder(String(preOrders[prodName] || 0));
-    setMpsStock(String(displayStock[prodName] || 0));
-    setMpsQty('0');
-    setShowMpsModal(true);
-  };
-
-  const handleMpsSubmit = () => {
-    setPreOrders(pv => ({ ...pv, [mpsProduct]: parseInt(mpsPreOrder) || 0 }));
-    setDisplayStock(pv => ({ ...pv, [mpsProduct]: parseInt(mpsStock) || 0 }));
-    setShowMpsModal(false);
-  };
-
-  const handleMpsAuto = () => {
-    const qty = parseInt(mpsQty) || 0;
-    if (qty <= 0) return;
-    setMpsPreOrder(String(qty));
-    setMpsStock('0');
-  };
-
-  const calcMatNeeds = (prodName: string, targetQty: number) => {
-    const resep = detailResep.filter(r => r.namaProduk === prodName);
-    const needs: Record<string, number> = {};
-    resep.forEach(r => {
-      if (!needs[r.namaBahan]) needs[r.namaBahan] = 0;
-      const prodInfo = productHpp.find(p => p.namaProduk === prodName);
-      const yieldPorsi = prodInfo?.porsiJual || 1;
-      needs[r.namaBahan] += (r.takaran / yieldPorsi) * targetQty;
-    });
-    return needs;
   };
 
   // ─── PLANNER STATE ───
@@ -184,6 +136,55 @@ export default function ProductionCenterTab({
       }`}>{icon} {label}</button>
   );
 
+  // ─── DOUGH TEMPERATURE CALCULATOR (inline) ───
+  function DoughTempCalculator() {
+    const [roomTemp, setRoomTemp] = useState(28);
+    const [flourTemp, setFlourTemp] = useState(26);
+    const [mixerFriction, setMixerFriction] = useState(12);
+    const [targetDoughTemp, setTargetDoughTemp] = useState(26);
+
+    const desiredWaterTemp = (targetDoughTemp * 3) - (roomTemp + flourTemp + mixerFriction);
+    const needsIce = desiredWaterTemp < 2;
+    const needsWarmWater = desiredWaterTemp > 40;
+    const totalLiquid = 1000;
+    const icePercent = needsIce ? Math.min(0.5, Math.max(0, (2 - desiredWaterTemp) / 20)) : 0;
+    const iceAmount = Math.round(totalLiquid * icePercent);
+    const coldWaterAmount = totalLiquid - iceAmount;
+
+    return (
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            {l:'Suhu Ruangan', v:roomTemp, s:setRoomTemp, min:15, max:40, cls:'accent-blue-600'},
+            {l:'Suhu Tepung', v:flourTemp, s:setFlourTemp, min:15, max:40, cls:'accent-amber-600'},
+            {l:'Friction Mixer', v:mixerFriction, s:setMixerFriction, min:0, max:30, cls:'accent-purple-600'},
+            {l:'Target Adonan', v:targetDoughTemp, s:setTargetDoughTemp, min:20, max:32, cls:'accent-emerald-600'},
+          ].map((item,i) => (
+            <div key={i} className="text-xs">
+              <div className="flex justify-between font-semibold mb-0.5">
+                <span className="text-gray-600">{item.l}</span>
+                <span className="font-mono font-bold">{item.v}°C</span>
+              </div>
+              <input type="range" min={item.min} max={item.max} step="0.5" value={item.v}
+                onChange={e => item.s(parseFloat(e.target.value))}
+                className={`w-full ${item.cls}`} />
+            </div>
+          ))}
+        </div>
+        <div className={`p-3 rounded-lg border text-xs font-semibold ${
+          needsIce ? 'bg-blue-50 border-blue-200 text-blue-800' :
+          needsWarmWater ? 'bg-orange-50 border-orange-200 text-orange-800' :
+          'bg-emerald-50 border-emerald-200 text-emerald-800'
+        }`}>
+          <span className="font-bold">Suhu Air Ideal: {desiredWaterTemp.toFixed(1)}°C</span>
+          {needsIce && <span className="block text-[10px] mt-1">❄️ Campur {iceAmount}g es + {coldWaterAmount}ml air</span>}
+          {needsWarmWater && <span className="block text-[10px] mt-1">🔥 Hangatkan air hingga {desiredWaterTemp.toFixed(1)}°C</span>}
+          {!needsIce && !needsWarmWater && <span className="block text-[10px] mt-1">✅ Air biasa tanpa es/pemanasan</span>}
+        </div>
+      </div>
+    );
+  }
+
   // ─── RENDER ───
   return (
     <div className="space-y-6">
@@ -198,7 +199,7 @@ export default function ProductionCenterTab({
         </div>
         <div className="flex flex-wrap gap-2">
           {sectionBtn('calendar', 'Kalender', <Calendar className="w-3.5 h-3.5" />)}
-          {sectionBtn('mps', 'MPS', <Clock className="w-3.5 h-3.5" />)}
+          {sectionBtn('baking_control', 'Baking Control', <Flame className="w-3.5 h-3.5" />)}
           {sectionBtn('planner', 'Planner', <ShoppingCart className="w-3.5 h-3.5" />)}
           {sectionBtn('workorder', 'Work Order', <FileText className="w-3.5 h-3.5" />)}
           {sectionBtn('sop', 'SOP Resep', <CheckCircle2 className="w-3.5 h-3.5" />)}
@@ -252,55 +253,98 @@ export default function ProductionCenterTab({
         </div>
       )}
 
-      {/* ─── MPS ─── */}
-      {activeSection === 'mps' && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-5">
-            <div className="flex items-center gap-2 bg-amber-50 p-3 rounded-xl border border-amber-100 text-xs text-amber-900 mb-4">
-              <Flame className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>Rencana produksi harian — masukkan pre-order & stok toko untuk hitung rekomendasi oven.</span>
-            </div>
-            <div className="space-y-3">
-              {productHpp.map(p => {
-                const rec = getBakingRec(p.namaProduk);
-                return (
-                  <div key={p.namaProduk} className="p-4 bg-gray-50 border border-gray-150 rounded-xl space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-bold text-gray-900">{p.namaProduk}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded font-mono font-bold">
-                          Stok: {displayStock[p.namaProduk] || 0} pcs
-                        </span>
-                        <button onClick={() => openMpsModal(p.namaProduk)}
-                          className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer">
-                          <Plus className="w-3 h-3 inline" /> Atur
-                        </button>
+      {/* ─── BAKING CONTROL (Baker% + Suhu Adonan) ─── */}
+      {activeSection === 'baking_control' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* LEFT: Baker's Percentage */}
+          <div className="lg:col-span-6 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-50 pb-2 flex items-center gap-1.5">
+              <Percent className="w-4 h-4 text-emerald-600" /> Baker's Percentage
+            </h3>
+            <p className="text-xs text-gray-500">
+              Persentase setiap bahan terhadap total tepung. Tepung = 100%.
+            </p>
+            {productHpp.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-8">Belum ada produk.</p>
+            ) : (
+              <div className="space-y-3">
+                {productHpp.map(p => {
+                  const resep = detailResep.filter(r => r.namaProduk === p.namaProduk);
+                  const tepungResep = resep.find(r => 
+                    r.namaBahan.toLowerCase().includes('tepung') ||
+                    r.namaBahan.toLowerCase().includes('terigu')
+                  );
+                  if (resep.length === 0) return null;
+                  return (
+                    <details key={p.namaProduk} className="border border-gray-200 rounded-xl overflow-hidden group">
+                      <summary className="p-3 bg-gray-50 hover:bg-gray-100 cursor-pointer text-xs font-bold text-gray-900 flex items-center gap-2">
+                        <ChevronRight className="w-3 h-3 text-gray-400 group-open:rotate-90 transition-transform" />
+                        {p.namaProduk}
+                      </summary>
+                      <div className="p-3 border-t border-gray-100 space-y-2">
+                        {resep.map((r, i) => {
+                          const pct = tepungResep && tepungResep.takaran > 0
+                            ? ((r.takaran / tepungResep.takaran) * 100).toFixed(1)
+                            : '—';
+                          const bi = bahanBaku.find(b => b.nama === r.namaBahan);
+                          return (
+                            <div key={i} className="flex items-center justify-between text-xs">
+                              <span className="text-gray-700">{r.namaBahan}</span>
+                              <div className="flex items-center gap-3">
+                                <span className="font-mono text-gray-500 w-16 text-right">{r.takaran}{bi?.satuan||'gr'}</span>
+                                <div className="w-24 bg-gray-100 rounded-full h-2 overflow-hidden">
+                                  <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${Math.min(100, parseFloat(pct) || 0)}%` }} />
+                                </div>
+                                <span className="font-mono font-bold w-14 text-right text-emerald-700">{pct === '—' ? '—' : `${pct}%`}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    </div>
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-gray-500">
-                        Pre-Order: <strong className="font-mono text-gray-800">{preOrders[p.namaProduk] || 0}</strong>
-                        <span className="mx-1 text-gray-300">|</span>
-                        Stok: <strong className="font-mono text-gray-800">{displayStock[p.namaProduk] || 0}</strong>
-                      </span>
-                      <span className="text-emerald-700 font-mono font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-150">
-                        🔥 {rec} porsi
-                      </span>
-                    </div>
-                    {/* Recipe quick view */}
-                    {detailResep.filter(r => r.namaProduk === p.namaProduk).slice(0, 3).map((r, i) => {
-                      const bi = bahanBaku.find(b => b.nama === r.namaBahan);
-                      return <span key={i} className="text-[9px] bg-white border border-gray-200 rounded px-1.5 py-0.5 text-gray-500 inline-block mr-1">{r.namaBahan}: {r.takaran}{bi?.satuan||'gr'}</span>;
-                    })}
-                  </div>
-                );
-              })}
-              {productHpp.length === 0 && <p className="text-xs text-gray-400 text-center py-8">Belum ada produk.</p>}
+                    </details>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT: Suhu & Waktu Adonan + Dough Temperature Calculator */}
+          <div className="lg:col-span-6 space-y-4">
+            {/* Suhu Adonan Reference */}
+            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-3">
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-50 pb-2 flex items-center gap-1.5">
+                <Thermometer className="w-4 h-4 text-amber-600" /> Suhu & Waktu Adonan
+              </h3>
+              <div className="grid grid-cols-1 gap-2 text-xs">
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-100">
+                  <h4 className="font-bold text-amber-800 mb-1">🌡️ Suhu Panggang</h4>
+                  <ul className="list-disc list-inside space-y-0.5 text-amber-700">
+                    <li>Roti Sobek: 180°C — 25-30 menit (api atas-bawah)</li>
+                    <li>Donat: 170°C — 15-20 menit (deep fry 170°C)</li>
+                    <li>Kue: 160°C — 35-45 menit (api bawah)</li>
+                    <li>Cookies: 165°C — 12-15 menit (api atas-bawah)</li>
+                    <li>Croissant: 190°C — 18-22 menit</li>
+                  </ul>
+                </div>
+                <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+                  <h4 className="font-bold text-blue-800 mb-1">🧊 Suhu Adonan Ideal</h4>
+                  <ul className="list-disc list-inside space-y-0.5 text-blue-700">
+                    <li>Adonan roti: 24-26°C (suhu akhir mixing)</li>
+                    <li>Adonan donat: 24-26°C</li>
+                    <li>Adonan Danish/Puff: 24°C (jangan terlalu panas)</li>
+                    <li>Adonan Sponge: 22-24°C</li>
+                  </ul>
+                </div>
+              </div>
             </div>
-            <button onClick={() => alert('Work order dapur berhasil dirilis!')}
-              className="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 rounded-xl transition cursor-pointer">
-              Rilis Lembar Kerja Dapur
-            </button>
+
+            {/* Dough Temperature Calculator (from DoughTemperatureTab) */}
+            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-3">
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-50 pb-2 flex items-center gap-1.5">
+                <Thermometer className="w-4 h-4 text-blue-600" /> Kalkulator Suhu Adonan
+              </h3>
+              <DoughTempCalculator />
+            </div>
           </div>
         </div>
       )}
@@ -714,66 +758,6 @@ export default function ProductionCenterTab({
         </div>
       )}
 
-      {/* ─── MODAL MPS ─── */}
-      {showMpsModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl border border-gray-100 overflow-hidden">
-            <div className="px-6 py-4.5 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
-              <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-emerald-600" /> Atur Produksi: {mpsProduct}
-              </h3>
-              <button onClick={() => setShowMpsModal(false)} className="text-gray-400 hover:text-gray-600 p-1 cursor-pointer"><X className="w-5 h-5" /></button>
-            </div>
-            <div className="p-6 space-y-4">
-              {detailResep.filter(r => r.namaProduk === mpsProduct).length > 0 && (
-                <div className="bg-gray-50 p-3 rounded-xl border border-gray-200">
-                  <span className="text-[10px] uppercase font-bold text-gray-500 mb-1.5 block">Komposisi Resep</span>
-                  {detailResep.filter(r => r.namaProduk === mpsProduct).map((r, i) => {
-                    const bi = bahanBaku.find(b => b.nama === r.namaBahan);
-                    return <div key={i} className="flex justify-between text-xs py-0.5"><span className="text-gray-600">{r.namaBahan}</span><span className="font-mono text-gray-800">{r.takaran}{bi?.satuan||'gr'}</span></div>;
-                  })}
-                </div>
-              )}
-              <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
-                <label className="block text-[10px] uppercase font-bold text-emerald-800 mb-1.5">Produksi Cepat</label>
-                <div className="flex gap-2">
-                  <input type="number" min="1" value={mpsQty} onChange={e => setMpsQty(e.target.value)}
-                    placeholder="Jumlah porsi" className="flex-1 border border-emerald-200 rounded-lg p-2.5 text-sm font-mono font-bold bg-white" />
-                  <button onClick={handleMpsAuto}
-                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition cursor-pointer">
-                    <ShoppingCart className="w-4 h-4 inline" /> Atur Otomatis
-                  </button>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase">Pre-Order</label>
-                  <input type="number" min="0" value={mpsPreOrder} onChange={e => setMpsPreOrder(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg p-2.5 font-mono font-bold text-center" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase">Stok Toko</label>
-                  <input type="number" min="0" value={mpsStock} onChange={e => setMpsStock(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg p-2.5 font-mono font-bold text-center" />
-                </div>
-              </div>
-              {(() => { const po = parseInt(mpsPreOrder)||0; const st = parseInt(mpsStock)||0; const r = po-st+10; return (
-                <div className={`p-3 rounded-xl border text-xs ${r>0?'bg-amber-50 border-amber-200':'bg-green-50 border-green-200'}`}>
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-gray-700">Rekomendasi Oven:</span>
-                    <span className={`font-mono font-black text-lg ${r>0?'text-amber-700':'text-emerald-700'}`}>{r>0?r:0} porsi</span>
-                  </div>
-                  <p className="text-[10px] text-gray-500 mt-0.5">{po} - {st} + 10 = {r>0?r:0}</p>
-                </div>
-              );})()}
-              <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
-                <button onClick={() => setShowMpsModal(false)} className="px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 rounded-xl cursor-pointer">Batal</button>
-                <button onClick={handleMpsSubmit} className="px-4 py-2 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl cursor-pointer">Simpan</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

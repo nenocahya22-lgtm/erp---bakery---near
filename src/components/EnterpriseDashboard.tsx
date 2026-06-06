@@ -20,56 +20,95 @@ interface EnterpriseDashboardProps {
 }
 
 export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDashboardProps) {
-  const [laborMonthlyCost, setLaborMonthlyCost] = useState(12000000);
-  const [electricityMonthlyCost, setElectricityMonthlyCost] = useState(3500000);
-  const [packagingCostPerPiece, setPackagingCostPerPiece] = useState(1200);
-  const [simulatedMonthlySalesCount, setSimulatedMonthlySalesCount] = useState(2400);
+  const [laborMonthlyCost, setLaborMonthlyCost] = useState(0);
+  const [electricityMonthlyCost, setElectricityMonthlyCost] = useState(0);
+  const [packagingCostPerPiece, setPackagingCostPerPiece] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
-  const estimatedPiecePriceAvg = calculatedProducts.length > 0
-    ? calculatedProducts.reduce((acc, curr) => acc + curr.hargaJualPerPorsi, 0) / calculatedProducts.length
-    : 0;
+  // Baca data revenue REAL dari localStorage
+  const getRevenueData = () => {
+    const saved = localStorage.getItem('revenue_tracker_data');
+    return saved ? JSON.parse(saved) : { transactions: [], dailyTotals: {} };
+  };
+  const [revenueData, setRevenueData] = useState(getRevenueData);
 
-  const estimatedPieceHppAvg = calculatedProducts.length > 0
-    ? calculatedProducts.reduce((acc, curr) => acc + curr.hppPerPorsi, 0) / calculatedProducts.length
-    : 0;
+  React.useEffect(() => {
+    const interval = setInterval(() => setRevenueData(getRevenueData()), 5000);
+    return () => clearInterval(interval);
+  }, []);
 
-  const grossMonthlyRevenue = estimatedPiecePriceAvg * simulatedMonthlySalesCount;
-  const rawMaterialMonthlyCost = estimatedPieceHppAvg * simulatedMonthlySalesCount;
-  const packagingMonthlyCost = packagingCostPerPiece * simulatedMonthlySalesCount;
-  const totalOperatingCosts = laborMonthlyCost + electricityMonthlyCost;
-  const grossMonthlyProfit = Math.max(0, grossMonthlyRevenue - rawMaterialMonthlyCost - packagingMonthlyCost);
-  const netMonthlyIncome = grossMonthlyProfit - totalOperatingCosts;
+  // Hitung revenue real-time
+  const today = new Date().toISOString().substring(0, 10);
+  const todayRevenue = revenueData.dailyTotals[today]?.total || 0;
+  const monthAgo = new Date();
+  monthAgo.setDate(monthAgo.getDate() - 30);
+  const monthStart = monthAgo.toISOString().substring(0, 10);
+  const monthlyTransactions = revenueData.transactions.filter((tx: any) => tx.date >= monthStart);
+  const monthlyRevenue = monthlyTransactions.reduce((sum: number, tx: any) => sum + tx.amount, 0);
+  const monthlyQty = monthlyTransactions.reduce((sum: number, tx: any) => sum + tx.qty, 0);
 
+  // Data dari calculatedProducts untuk referensi
   const avgMargin = calculatedProducts.length > 0
     ? calculatedProducts.reduce((acc, curr) => acc + curr.marginPersen, 0) / calculatedProducts.length
     : 0;
+  const avgHpp = calculatedProducts.length > 0
+    ? calculatedProducts.reduce((acc, curr) => acc + curr.hppPerPorsi, 0) / calculatedProducts.length
+    : 0;
+  const avgPrice = calculatedProducts.length > 0
+    ? calculatedProducts.reduce((acc, curr) => acc + curr.hargaJualPerPorsi, 0) / calculatedProducts.length
+    : 0;
 
-  const basePriceAvg = estimatedPiecePriceAvg > 0 ? estimatedPiecePriceAvg : 18500;
-  const baseHppAvg = estimatedPieceHppAvg > 0 ? estimatedPieceHppAvg : 9800;
+  // Estimasi dari data real
+  const rawMaterialMonthlyCost = monthlyTransactions.reduce((sum: number, tx: any) => {
+    const prod = calculatedProducts.find(p => p.namaProduk.toLowerCase().trim() === tx.product.toLowerCase().trim());
+    return sum + (prod ? prod.hppPerPorsi * tx.qty : avgHpp * tx.qty);
+  }, 0);
+  const packagingMonthlyCost = packagingCostPerPiece * monthlyQty;
+  const totalOperatingCosts = laborMonthlyCost + electricityMonthlyCost;
+  const grossMonthlyProfit = Math.max(0, monthlyRevenue - rawMaterialMonthlyCost - packagingMonthlyCost);
+  const netMonthlyIncome = grossMonthlyProfit - totalOperatingCosts;
 
-  const chartData = [
-    { label: 'Jan 2026', mult: 0.82 },
-    { label: 'Feb 2026', mult: 0.90 },
-    { label: 'Mar 2026', mult: 1.05 },
-    { label: 'Apr 2026', mult: 1.35 },
-    { label: 'Mei 2026', mult: 1.00 },
-    { label: 'Jun 2026', mult: 1.10 },
-  ].map((m) => {
-    const monthlySales = Math.round(simulatedMonthlySalesCount * m.mult);
-    const revenue = basePriceAvg * monthlySales;
-    const cogs = (baseHppAvg + packagingCostPerPiece) * monthlySales;
-    return {
-      name: m.label,
-      'Pendapatan (Revenue)': Math.round(revenue),
-      'HPP Terpadu (COGS)': Math.round(cogs),
-      'Laba Kotor (Gross Profit)': Math.max(0, Math.round(revenue - cogs)),
-    };
-  });
+  // Chart data dari transaksi real per bulan (6 bulan terakhir)
+  const getMonthlyData = () => {
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const startDate = sixMonthsAgo.toISOString().substring(0, 7);
+    
+    const monthMap: Record<string, { revenue: number; cogs: number }> = {};
+    revenueData.transactions.forEach((tx: any) => {
+      const month = tx.date?.substring(0, 7) || today.substring(0, 7);
+      if (month >= startDate) {
+        if (!monthMap[month]) monthMap[month] = { revenue: 0, cogs: 0 };
+        monthMap[month].revenue += tx.amount || 0;
+        const prod = calculatedProducts.find(p => p.namaProduk.toLowerCase().trim() === (tx.product || '').toLowerCase().trim());
+        monthMap[month].cogs += (prod ? prod.hppPerPorsi * (tx.qty || 1) : avgHpp * (tx.qty || 1)) || 0;
+      }
+    });
+
+    const months = Object.keys(monthMap).sort();
+    if (months.length === 0) {
+      // Fallback: show current month with real data
+      return [{
+        name: new Date().toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }),
+        'Pendapatan (Revenue)': Math.round(monthlyRevenue) || 0,
+        'HPP Terpadu (COGS)': Math.round(rawMaterialMonthlyCost) || 0,
+        'Laba Kotor (Gross Profit)': Math.max(0, Math.round(monthlyRevenue - rawMaterialMonthlyCost)) || 0,
+      }];
+    }
+
+    return months.map(m => ({
+      name: new Date(m + '-01').toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }),
+      'Pendapatan (Revenue)': Math.round(monthMap[m].revenue),
+      'HPP Terpadu (COGS)': Math.round(monthMap[m].cogs),
+      'Laba Kotor (Gross Profit)': Math.max(0, Math.round(monthMap[m].revenue - monthMap[m].cogs)),
+    }));
+  };
+
+  const chartData = getMonthlyData();
 
   const CustomChartTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -113,7 +152,7 @@ export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDa
       doc.text('1. PARAMETER OPERASIONAL', 10, 30);
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(8.5);
-      doc.text(`Volume Jual: ${simulatedMonthlySalesCount} pcs/bln`, 12, 36);
+      doc.text(`Volume Jual Real: ${monthlyQty} pcs`, 12, 36);
       doc.text(`Gaji: ${formatCurrency(laborMonthlyCost)}`, 110, 36);
       doc.text(`Listrik: ${formatCurrency(electricityMonthlyCost)}`, 110, 41);
       doc.text(`Kemasan: ${formatCurrency(packagingCostPerPiece)}/pcs`, 110, 46);
@@ -135,7 +174,7 @@ export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDa
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(9.5);
       doc.setTextColor(16, 185, 129);
-      doc.text(formatCurrency(grossMonthlyRevenue), 15, 72);
+      doc.text(formatCurrency(monthlyRevenue), 15, 72);
       doc.setTextColor(239, 68, 68);
       doc.text(formatCurrency(rawMaterialMonthlyCost + packagingMonthlyCost), 62, 72);
       doc.setTextColor(55, 65, 81);
@@ -237,10 +276,11 @@ export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDa
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-semibold text-gray-700">
           <div>
-            <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Volume Jual</label>
-            <input type="number" value={simulatedMonthlySalesCount}
-              onChange={(e) => setSimulatedMonthlySalesCount(parseInt(e.target.value) || 100)}
-              className="w-full bg-white border border-gray-200 rounded p-1.5 font-bold font-mono" />
+            <div>
+              <span className="text-[10px] uppercase font-bold text-gray-400 mb-1 block">Revenue Bulan Ini</span>
+              <span className="block text-lg font-black font-mono text-emerald-700">{formatCurrency(monthlyRevenue)}</span>
+              <span className="text-[9px] text-gray-400">{monthlyQty} pcs terjual</span>
+            </div>
           </div>
           <div>
             <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Gaji Staff</label>
@@ -269,8 +309,8 @@ export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDa
           </div>
           <div className="divide-y divide-gray-100 px-3 py-1 bg-white font-medium">
             <div className="py-2.5 flex justify-between">
-              <span>Omzet Pendapatan (Revenue)</span>
-              <span className="font-mono font-bold">{formatCurrency(grossMonthlyRevenue)}</span>
+              <span>Omzet Pendapatan (Revenue Real)</span>
+              <span className="font-mono font-bold">{formatCurrency(monthlyRevenue)}</span>
             </div>
             <div className="py-2.5 flex justify-between text-red-600">
               <span>(-) HPP Bahan Baku</span>
