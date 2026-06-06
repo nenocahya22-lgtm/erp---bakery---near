@@ -1010,7 +1010,7 @@ export default function App() {
   }
 
   return (
-    <div id="application-layout" className="min-h-screen bg-slate-100 font-sans text-gray-800 flex">
+    <div id="application-layout" className="h-screen bg-slate-100 font-sans text-gray-800 flex overflow-hidden">
       
       {/* MOBILE OVERLAY BACKDROP — when sidebar is open on mobile */}
       {isSidebarOpen && (
@@ -1040,7 +1040,7 @@ export default function App() {
       </aside>
 
       {/* ─── DESKTOP SIDEBAR (push layout, width-based) ─── */}
-      <aside className="hidden md:flex flex-shrink-0 bg-slate-900 text-slate-300 border-r border-slate-800 flex-col shadow-2xl transition-all duration-300 ease-in-out overflow-hidden"
+      <aside className="hidden md:flex flex-shrink-0 bg-slate-900 text-slate-300 border-r border-slate-800 flex-col shadow-2xl transition-all duration-300 ease-in-out overflow-hidden h-full"
         style={{ width: isSidebarOpen ? 288 : 0 }}>
         <div style={{ width: 288 }} className="flex flex-col h-full">
           <SidebarContent isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} activeTab={activeTab} setActiveTab={setActiveTab} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} setSpreadsheetTitle={setSpreadsheetTitle} showToast={showToast} initiateGoogleConnect={initiateGoogleConnect} handleOwnerLogout={handleOwnerLogout} />
