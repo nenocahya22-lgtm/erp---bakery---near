@@ -777,15 +777,28 @@ export default function DataPusatTab({
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Qty</label>
-                  <input type="number" min="0" placeholder="0" value={poQty}
-                    onChange={e => setPoQty(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg p-2.5 font-mono" />
+                  <div className="flex items-center gap-1">
+                    <input type="number" min="0" placeholder="0" value={poQty}
+                      onChange={e => setPoQty(e.target.value)}
+                      className="flex-1 border border-gray-200 rounded-lg p-2.5 font-mono" />
+                    <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2.5 py-2 rounded-lg min-w-[40px] text-center">
+                      {poBahan ? (bahanBaku.find(b => b.nama === poBahan)?.satuan || 'pcs') : '—'}
+                    </span>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Harga Satuan</label>
-                  <input type="number" min="0" placeholder="0" value={poHarga}
-                    onChange={e => setPoHarga(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg p-2.5 font-mono" />
+                  <div className="flex items-center gap-1">
+                    <div className="relative flex-1">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">Rp</span>
+                      <input type="number" min="0" placeholder="0" value={poHarga}
+                        onChange={e => setPoHarga(e.target.value)}
+                        className="w-full pl-8 border border-gray-200 rounded-lg p-2.5 font-mono" />
+                    </div>
+                    <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2.5 py-2 rounded-lg min-w-[40px] text-center">
+                      /{poBahan ? (bahanBaku.find(b => b.nama === poBahan)?.satuan || 'pcs') : '—'}
+                    </span>
+                  </div>
                 </div>
               </div>
               <button onClick={handleCreatePO}
