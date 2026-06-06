@@ -186,8 +186,6 @@ export default function App() {
     }, ...prev]);
   };
 
-  useEffect(() => { localStorage.setItem('surat_orders_data', JSON.stringify(suratOrders)); }, [suratOrders]);
-
   // Tabs layout — satu modul satu fitur
   const [activeTab, setActiveTab] = useState<
     | 'dashboard'
@@ -1144,6 +1142,7 @@ export default function App() {
                 bahanBaku={bahanBaku}
                 cabangList={cabangList}
                 cabangStok={cabangStok}
+                suratOrders={suratOrders}
               />
             )}
             {activeTab === 'dashboard' && (
@@ -1488,9 +1487,6 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
         <div className="space-y-1">
           <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑥ Tools</span>
           {sidebarBtn('erp_image_gen', <Image className="w-4 h-4" />, '🎨 Image Gen')}
-        </div>
-        <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑦ Monitoring</span>
           {sidebarBtn('erp_alert_system', <Bell className="w-4 h-4" />, '🔔 Monitoring & Alert')}
         </div>
         <div className="space-y-1">

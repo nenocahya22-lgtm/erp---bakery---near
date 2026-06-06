@@ -29,7 +29,7 @@ export default function DataPusatTab({
   suratOrders, onAddSuratOrder, onUpdateSuratOrder,
   cabangStok, branchTransactions, wasteLogs,
 }: DataPusatTabProps) {
-  const [activeSection, setActiveSection] = useState<'cabang' | 'bahan' | 'stok' | 'sod' | 'stok_cabang' | 'supplier' | 'logistik'>('cabang');
+  const [activeSection, setActiveSection] = useState<'cabang' | 'bahan' | 'stok' | 'sod' | 'stok_cabang' | 'supplier' | 'logistik' | 'stok_opname'>('cabang');
 
   // ─── CABANG STATE ───
   const [showCabangModal, setShowCabangModal] = useState(false);
@@ -40,9 +40,6 @@ export default function DataPusatTab({
   const [cabangPassword, setCabangPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [cabangSearch, setCabangSearch] = useState('');
-
-  // ─── BAHAN STATE ───
-  const [bahanSearch, setBahanSearch] = useState('');
 
   // ─── SURAT ORDER STATE ───
   const [showSOModal, setShowSOModal] = useState(false);
@@ -145,6 +142,140 @@ export default function DataPusatTab({
   const [poQty, setPoQty] = useState('');
   const [poHarga, setPoHarga] = useState('');
   const [poSearch, setPoSearch] = useState('');
+  const [stokOpnameFilter, setStokOpnameFilter] = useState<string>('all');
+
+  // ─── BAHAN MODAL STATE ───
+  const [bahanSearch, setBahanSearch] = useState('');
+  const [showBahanModal, setShowBahanModal] = useState(false);
+  const [editingBahan, setEditingBahan] = useState<BahanBaku | null>(null);
+  const [bahanForm, setBahanForm] = useState({kode:'',nama:'',satuan:'gr',isiKemasan:1000,hargaBeliReal:0,markupPercent:25,kategori:''});
+
+  // ─── TEMPLATE CETAK ───
+  const cetakLaporanHtml = (judul: string, headers: string[], rows: string[][], footer?: string): string => {
+    return `
+      <html><head>
+        <title>${judul} - Near Bakery</title>
+        <style>
+          body{font-family:'Segoe UI',Arial,sans-serif;max-width:800px;margin:0 auto;padding:40px;color:#1f2937;}
+          h1{font-size:20px;color:#065f46;border-bottom:2px solid #065f46;padding-bottom:8px;}
+          .meta{font-size:11px;color:#6b7280;margin-bottom:20px;}
+          table{width:100%;border-collapse:collapse;margin:16px 0;}
+          th{background:#f3f4f6;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;}
+          td{padding:8px 10px;border-bottom:1px solid #e5e7eb;font-size:11px;}
+          tr:hover{background:#f9fafb;}
+          .footer{margin-top:30px;border-top:2px solid #d1d5db;padding-top:16px;font-size:11px;}
+          .sign{margin-top:50px;display:flex;justify-content:space-between;font-size:10px;}
+          @media print{body{padding:20px;}@page{margin:15mm;}}
+        </style>
+      </head><body>
+        <h1>📋 ${judul}</h1>
+        <div class="meta">Near Bakery & Co. — Dicetak: ${new Date().toLocaleDateString('id-ID',{year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+        <table>
+          <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+          <tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>
+        ${footer ? `<div class="footer">${footer}</div>` : ''}
+        <div class="sign"><div>_____________<br>Pembuat</div><div>_____________<br>Mengetahui</div></div>
+        <p style="margin-top:40px;text-align:center;color:#9ca3af;font-size:9px;">Near Bakery & Co. ERP — ${judul}</p>
+        <script>window.print();setTimeout(()=>window.close(),500);<\/script>
+      </body></html>`;
+  };
+
+  const exportPdfLaporan = async (judul: string, headers: string[], rows: string[][], footer?: string) => {
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      const doc = new jsPDF('p','mm','a4');
+      doc.setFont('Helvetica','bold');
+      doc.setFontSize(14);
+      doc.text(judul,14,20);
+      doc.setFont('Helvetica','normal');
+      doc.setFontSize(8);
+      doc.text(`Near Bakery & Co. — ${new Date().toLocaleDateString('id-ID',{year:'numeric',month:'long',day:'numeric'})}`,14,26);
+      doc.setDrawColor(6,95,70);
+      doc.line(14,28,196,28);
+      let y=34;
+      const colW = (180-((headers.length-1)*2))/headers.length;
+      doc.setFont('Helvetica','bold');
+      doc.setFontSize(7);
+      doc.setFillColor(243,244,246);
+      headers.forEach((h,i)=>{
+        const x=14+i*(colW+2);
+        doc.rect(x,y-2,colW,6,'F');
+        doc.text(h,x+1,y+1.5);
+      });
+      y+=7;
+      doc.setFont('Helvetica','normal');
+      doc.setFontSize(7);
+      for(const row of rows){
+        if(y>280){doc.addPage();y=14;}
+        row.forEach((c,i)=>{
+          const x=14+i*(colW+2);
+          doc.text(c.substring(0,Math.floor(colW/1.5)),x+1,y);
+        });
+        y+=5;
+      }
+      if(footer){
+        y+=5;
+        doc.setFontSize(7);
+        doc.text(footer,14,y);
+      }
+      doc.save(`${judul.replace(/[^a-zA-Z0-9]/g,'_')}.pdf`);
+      alert('✅ PDF berhasil didownload!');
+    }catch(e:any){
+      alert('Gagal export PDF: '+e.message+'\nGunakan Cetak (Ctrl+P) sebagai alternatif.');
+    }
+  };
+
+  const handleCetakLaporanPO = () => {
+    const filtered = purchaseOrders.filter(po =>
+      poSearch===''||po.poNo.toLowerCase().includes(poSearch.toLowerCase())||po.vendorName.toLowerCase().includes(poSearch.toLowerCase())
+    );
+    const headers = ['No PO','Tanggal','Supplier','Bahan','Qty','Total','Status'];
+    const rows = filtered.map(po => [po.poNo, po.tanggalOrder, po.vendorName, po.bahanNama, `${po.qty} ${po.satuan}`, formatCurrency(po.totalCost), po.status]);
+    cetakDokumen('Laporan_PO', cetakLaporanHtml('LAPORAN PURCHASE ORDER', headers, rows,
+      `Total PO: ${filtered.length} | Total Nilai: ${formatCurrency(filtered.reduce((s,p)=>s+p.totalCost,0))}`
+    ));
+  };
+
+  const handleExportPDFPO = () => {
+    const filtered = purchaseOrders.filter(po =>
+      poSearch===''||po.poNo.toLowerCase().includes(poSearch.toLowerCase())||po.vendorName.toLowerCase().includes(poSearch.toLowerCase())
+    );
+    const headers = ['No PO','Tanggal','Supplier','Bahan','Qty','Total','Status'];
+    const rows = filtered.map(po => [po.poNo, po.tanggalOrder, po.vendorName, po.bahanNama, `${po.qty} ${po.satuan}`, formatCurrency(po.totalCost), po.status]);
+    exportPdfLaporan('LAPORAN PURCHASE ORDER', headers, rows,
+      `Total PO: ${filtered.length} | Total Nilai: ${formatCurrency(filtered.reduce((s,p)=>s+p.totalCost,0))}`
+    );
+  };
+
+  const handleCetakLaporanLogistik = () => {
+    const headers = ['Tanggal','No SO','Tujuan','Item','Status'];
+    const rows = suratOrders.map(so => [
+      new Date(so.tanggalKirim).toLocaleDateString('id-ID'),
+      so.id.substring(0,10)+'...',
+      so.cabangNama,
+      so.items.map(i=>`${i.bahanNama}:${i.qty}`).join(', '),
+      so.status==='diterima'?'✅ Sampai':so.status==='dikirim'?'📦 Dikirim':'🕐 Minta'
+    ]);
+    cetakDokumen('Laporan_Logistik', cetakLaporanHtml('LAPORAN LOGISTIK & PENGIRIMAN', headers, rows,
+      `Total Pengiriman: ${suratOrders.length} | Sampai: ${suratOrders.filter(s=>s.status==='diterima').length} | Dalam Perjalanan: ${suratOrders.filter(s=>s.status==='dikirim').length}`
+    ));
+  };
+
+  const handleExportPDFLogistik = () => {
+    const headers = ['Tanggal','No SO','Tujuan','Item','Status'];
+    const rows = suratOrders.map(so => [
+      new Date(so.tanggalKirim).toLocaleDateString('id-ID'),
+      so.id.substring(0,10)+'...',
+      so.cabangNama,
+      so.items.map(i=>`${i.bahanNama}:${i.qty}`).join(', '),
+      so.status==='diterima'?'✅ Sampai':so.status==='dikirim'?'📦 Dikirim':'🕐 Minta'
+    ]);
+    exportPdfLaporan('LAPORAN LOGISTIK & PENGIRIMAN', headers, rows,
+      `Total Pengiriman: ${suratOrders.length} | Sampai: ${suratOrders.filter(s=>s.status==='diterima').length} | Dalam Perjalanan: ${suratOrders.filter(s=>s.status==='dikirim').length}`
+    );
+  };
+
 
   useEffect(() => { localStorage.setItem('pusat_purchase_orders', JSON.stringify(purchaseOrders)); }, [purchaseOrders]);
   useEffect(() => { localStorage.setItem('pusat_suppliers', JSON.stringify(suppliers)); }, [suppliers]);
@@ -366,6 +497,7 @@ export default function DataPusatTab({
           {sectionBtn('stok_cabang', 'Stok Cabang', <BarChart3 className="w-3.5 h-3.5 inline" />)}
           {sectionBtn('supplier', 'Supplier & PO', <Star className="w-3.5 h-3.5 inline" />)}
           {sectionBtn('logistik', 'Logistik', <Truck className="w-3.5 h-3.5 inline" />)}
+          {sectionBtn('stok_opname', 'Stok Opname', <ClipboardCheck className="w-3.5 h-3.5 inline" />)}
           {sectionBtn('sod', `SO (${suratOrders.length})`, <ClipboardCheck className="w-3.5 h-3.5 inline" />)}
         </div>
       </div>
@@ -449,13 +581,17 @@ export default function DataPusatTab({
       {/* ─── SECTION: BAHAN BAKU ─── */}
       {activeSection === 'bahan' && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-gray-100">
+          <div className="p-4 border-b border-gray-100 flex justify-between items-center">
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
               <input type="text" placeholder="Cari bahan..." value={bahanSearch}
                 onChange={e => setBahanSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500" />
             </div>
+            <button onClick={() => { setEditingBahan(null); setBahanForm({kode:'',nama:'',satuan:'gr',isiKemasan:1000,hargaBeliReal:0,markupPercent:25,kategori:''}); setShowBahanModal(true); }}
+              className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer">
+              <Plus className="w-3.5 h-3.5" /> Tambah Bahan Baru
+            </button>
           </div>
           {bahanBaku.length === 0 ? (
             <p className="text-xs text-gray-400 text-center py-8">Belum ada bahan terdaftar.</p>
@@ -466,25 +602,50 @@ export default function DataPusatTab({
                   <tr className="border-b bg-gray-50 text-[10px] font-bold text-gray-500 uppercase">
                     <th className="px-4 py-3">Kode</th>
                     <th className="px-4 py-3">Nama Bahan</th>
+                    <th className="px-4 py-3">Kemasan</th>
                     <th className="px-4 py-3">Satuan</th>
-                    <th className="px-4 py-3 text-right">Harga Markup</th>
+                    <th className="px-4 py-3 text-right">Harga Beli (Real)</th>
+                    <th className="px-4 py-3 text-right">Markup</th>
+                    <th className="px-4 py-3 text-right">Harga Jual/Kemasan</th>
                     <th className="px-4 py-3 text-right">Harga Satuan</th>
+                    <th className="px-4 py-3 text-center">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {bahanBaku.filter(b => b.nama.toLowerCase().includes(bahanSearch.toLowerCase())).map((b, idx) => (
-                    <tr key={b.nama} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-mono text-gray-500">{b.kode || `BB-${String(idx + 1).padStart(3, '0')}`}</td>
-                      <td className="px-4 py-3 font-semibold text-gray-900">{b.nama}</td>
-                      <td className="px-4 py-3">{b.isiKemasan} {b.satuan}</td>
-                      <td className="px-4 py-3 text-right font-mono font-bold text-emerald-700">{formatCurrency(b.hargaBeli)}</td>
-                      <td className="px-4 py-3 text-right font-mono text-gray-500">{formatCurrency(b.hargaSatuan)}/{b.satuan}</td>
-                    </tr>
-                  ))}
+                  {bahanBaku.filter(b => b.nama.toLowerCase().includes(bahanSearch.toLowerCase())).map((b, idx) => {
+                    const hargaMarkup = b.hargaBeliReal > 0 ? b.hargaBeliReal * (1 + (b.markupPercent||25)/100) : b.hargaBeli;
+                    return (
+                      <tr key={b.nama} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-mono text-gray-500">{b.kode || `BB-${String(idx + 1).padStart(3, '0')}`}</td>
+                        <td className="px-4 py-3 font-semibold text-gray-900">{b.nama}</td>
+                        <td className="px-4 py-3 font-mono">{b.isiKemasan}</td>
+                        <td className="px-4 py-3">{b.satuan}</td>
+                        <td className="px-4 py-3 text-right font-mono">{b.hargaBeliReal > 0 ? formatCurrency(b.hargaBeliReal) : formatCurrency(b.hargaBeli)}</td>
+                        <td className="px-4 py-3 text-right font-mono font-bold text-amber-700">{b.markupPercent||25}%</td>
+                        <td className="px-4 py-3 text-right font-mono font-bold text-emerald-700">{formatCurrency(Math.round(hargaMarkup))}</td>
+                        <td className="px-4 py-3 text-right font-mono text-gray-500">{formatCurrency(b.hargaSatuan)}/{b.satuan}</td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex justify-center gap-1">
+                            <button onClick={() => { setEditingBahan(b); setBahanForm({kode:b.kode||'',nama:b.nama,satuan:b.satuan,isiKemasan:b.isiKemasan,hargaBeliReal:b.hargaBeliReal||b.hargaBeli,markupPercent:b.markupPercent||25,kategori:b.kategori||''}); setShowBahanModal(true); }}
+                              className="p-1.5 text-gray-400 hover:text-emerald-600 rounded-lg hover:bg-gray-100 cursor-pointer" title="Edit">
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => { if(window.confirm(`Hapus bahan "${b.nama}"?`)) onDeleteMaterial(b.nama); }}
+                              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-gray-100 cursor-pointer" title="Hapus">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
+          <div className="p-3 bg-blue-50 border-t border-blue-100 text-[10px] text-blue-800">
+            <strong>💡 Markup Harga:</strong> Harga Beli (Real) × (1 + Markup%) = Harga Jual per Kemasan. <strong>Contoh:</strong> Rp10.000 × 25% markup = Rp12.500/kemasan.
+          </div>
         </div>
       )}
 
@@ -840,15 +1001,25 @@ export default function DataPusatTab({
 
             {/* PO List */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
-              <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+              <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-2 flex-wrap">
                 <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
                   Daftar PO ({purchaseOrders.length})
                 </h3>
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
-                  <input type="text" placeholder="Cari PO..." value={poSearch}
-                    onChange={e => setPoSearch(e.target.value)}
-                    className="w-44 pl-8 pr-3 py-1.5 text-[10px] border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                <div className="flex items-center gap-2">
+                  <button onClick={handleCetakLaporanPO}
+                    className="inline-flex items-center gap-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[9px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer">
+                    <Printer className="w-3 h-3" /> Cetak Laporan
+                  </button>
+                  <button onClick={handleExportPDFPO}
+                    className="inline-flex items-center gap-1 bg-blue-100 hover:bg-blue-200 text-blue-800 text-[9px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer">
+                    <FileText className="w-3 h-3" /> Export PDF
+                  </button>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+                    <input type="text" placeholder="Cari PO..." value={poSearch}
+                      onChange={e => setPoSearch(e.target.value)}
+                      className="w-36 pl-8 pr-3 py-1.5 text-[10px] border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                  </div>
                 </div>
               </div>
               {(purchaseOrders.filter(po =>
@@ -937,9 +1108,19 @@ export default function DataPusatTab({
           <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-5">
             <div className="flex items-center gap-2.5 mb-4">
               <Truck className="w-5 h-5 text-emerald-600" />
-              <div>
+              <div className="flex-1">
                 <h3 className="text-sm font-bold text-gray-900">🚚 Logistik & Surat Jalan</h3>
                 <p className="text-[10px] text-gray-500">Cetak surat jalan untuk SO, tracking pengiriman ke cabang.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={handleCetakLaporanLogistik}
+                  className="inline-flex items-center gap-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[9px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer">
+                  <Printer className="w-3 h-3" /> Cetak Laporan
+                </button>
+                <button onClick={handleExportPDFLogistik}
+                  className="inline-flex items-center gap-1 bg-blue-100 hover:bg-blue-200 text-blue-800 text-[9px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer">
+                  <FileText className="w-3 h-3" /> Export PDF
+                </button>
               </div>
             </div>
 
@@ -1094,6 +1275,120 @@ export default function DataPusatTab({
         </div>
       )}
 
+      {/* ─── SECTION: STOK OPNAME PER CABANG ─── */}
+      {activeSection === 'stok_opname' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-5">
+            <div className="flex items-center gap-2.5 mb-4">
+              <ClipboardCheck className="w-5 h-5 text-emerald-600" />
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">📋 Stok Opname Cabang</h3>
+                <p className="text-[10px] text-gray-500">Rekap stok opname per cabang — bandingkan stok teoritis vs fisik, lihat selisih minus/plus.</p>
+              </div>
+            </div>
+
+            {/* Filter tabs per cabang */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              <button onClick={() => setStokOpnameFilter('all')}
+                className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition cursor-pointer ${
+                  stokOpnameFilter === 'all' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}>Semua Cabang</button>
+              {cabangList.filter(c=>c.isActive).map(c => (
+                <button key={c.id} onClick={() => setStokOpnameFilter(c.id)}
+                  className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition cursor-pointer ${
+                    stokOpnameFilter === c.id ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}>{c.nama}</button>
+              ))}
+            </div>
+
+            {cabangList.filter(c => c.isActive && (stokOpnameFilter === 'all' || stokOpnameFilter === c.id)).length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-8">Belum ada cabang aktif. Daftarkan cabang dulu.</p>
+            ) : (
+              <div className="space-y-4">
+                {cabangList.filter(c => c.isActive && (stokOpnameFilter === 'all' || stokOpnameFilter === c.id)).map(cabang => {
+                  const cabangStockItems = cabangStok.filter(s => s.cabangId === cabang.id);
+                  const totalSelisih = cabangStockItems.reduce((sum, s) => sum + (s.stokTeoritis - s.stokFisik), 0);
+                  return (
+                    <div key={cabang.id} className="border border-gray-200 rounded-xl overflow-hidden">
+                      <div className="flex items-center justify-between p-3 bg-gradient-to-r from-emerald-50 to-slate-50 border-b border-gray-100">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-emerald-600" />
+                          <span className="text-sm font-bold text-gray-900">{cabang.nama}</span>
+                          <span className="text-[10px] text-gray-500">{cabangStockItems.length} bahan</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px]">
+                          <span className={`font-mono font-bold px-2 py-0.5 rounded-full ${
+                            totalSelisih === 0 ? 'bg-emerald-100 text-emerald-800' :
+                            totalSelisih > 0 ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {totalSelisih === 0 ? '✅ Balance' : totalSelisih > 0 ? `🔵 Plus ${totalSelisih}` : `🔴 Minus ${Math.abs(totalSelisih)}`}
+                          </span>
+                        </div>
+                      </div>
+
+                      {cabangStockItems.length === 0 ? (
+                        <div className="p-4">
+                          <p className="text-xs text-gray-400">Belum ada data stok opname. Staff cabang bisa melakukan stok opname dari dashboard masing-masing.</p>
+                          <div className="mt-2 p-2 bg-amber-50 border border-amber-100 rounded-lg text-[10px] text-amber-800">
+                            <strong>Alur:</strong> SO → Dikirim dari Pusat → Cabang Terima → Stok Teoritis Otomatis → Cabang Lakukan Stok Opname (input fisik) → Data Tampil di Sini.
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-4">
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50">
+                                <th className="px-3 py-2 rounded-l-lg">Bahan</th>
+                                <th className="px-3 py-2 text-right">Stok Teoritis</th>
+                                <th className="px-3 py-2 text-right">Stok Fisik</th>
+                                <th className="px-3 py-2 text-right">Selisih</th>
+                                <th className="px-3 py-2 text-center rounded-r-lg">Analisa</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {cabangStockItems.map(item => {
+                                const selisih = item.stokTeoritis - item.stokFisik;
+                                return (
+                                  <tr key={`${item.cabangId}-${item.bahanNama}`} className={`hover:bg-gray-50 ${selisih !== 0 ? 'bg-amber-50/30' : ''}`}>
+                                    <td className="px-3 py-2.5 font-semibold text-gray-900">{item.bahanNama}</td>
+                                    <td className="px-3 py-2.5 text-right font-mono">{item.stokTeoritis} {item.satuan}</td>
+                                    <td className="px-3 py-2.5 text-right font-mono">{item.stokFisik} {item.satuan}</td>
+                                    <td className={`px-3 py-2.5 text-right font-mono font-bold ${
+                                      selisih === 0 ? 'text-emerald-600' : selisih > 0 ? 'text-blue-600' : 'text-red-600'
+                                    }`}>{selisih > 0 ? `+${selisih}` : selisih}</td>
+                                    <td className="px-3 py-2.5 text-center">
+                                      {selisih === 0 ? (
+                                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">✅ Aman</span>
+                                      ) : selisih > 0 ? (
+                                        <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold" title="Stok fisik > teoritis">🔵 Plus</span>
+                                      ) : (
+                                        <span className="text-[10px] bg-red-100 text-red-800 px-2 py-0.5 rounded-full font-bold" title="Stok fisik < teoritis — kemungkinan waste atau salah catat">🔴 Minus</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-xl text-[10px] text-blue-800">
+              <strong>📊 Interpretasi:</strong><br />
+              • <strong>✅ Aman</strong> = Stok fisik sesuai catatan (balance)<br />
+              • <strong>🔵 Plus</strong> = Stok fisik lebih besar dari teoritis — kemungkinan kelebihan kiriman atau salah catat penerimaan<br />
+              • <strong>🔴 Minus</strong> = Stok fisik kurang dari teoritis — cek waste, penjualan tak tercatat, atau kemungkinan pencurian<br />
+              <span className="text-blue-600 font-semibold">Data stok opname berasal dari input staff cabang via form Stock Opname masing-masing.</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── MODAL CABANG ─── */}
       {showCabangModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
@@ -1156,6 +1451,139 @@ export default function DataPusatTab({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL BAHAN (ADD/EDIT) ─── */}
+      {showBahanModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl border border-gray-100 overflow-hidden">
+            <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <Package className="w-4 h-4 text-emerald-600" /> {editingBahan ? 'Edit Bahan' : 'Tambah Bahan Baru'}
+              </h3>
+              <button onClick={() => setShowBahanModal(false)} className="text-gray-400 hover:text-gray-600 p-1 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Kode (opsional)</label>
+                  <input type="text" placeholder="BB-001" value={bahanForm.kode}
+                    onChange={e => setBahanForm(f => ({...f, kode: e.target.value}))}
+                    className="w-full text-xs border border-gray-200 rounded-xl p-2.5" />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Kategori (opsional)</label>
+                  <input type="text" placeholder="Roti, Cake, dll" value={bahanForm.kategori}
+                    onChange={e => setBahanForm(f => ({...f, kategori: e.target.value}))}
+                    className="w-full text-xs border border-gray-200 rounded-xl p-2.5" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Nama Bahan *</label>
+                <input type="text" required placeholder="Contoh: Tepung Terigu Protein Tinggi" value={bahanForm.nama}
+                  onChange={e => setBahanForm(f => ({...f, nama: e.target.value}))}
+                  className="w-full text-xs border border-gray-200 rounded-xl p-2.5" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Kemasan (isi)</label>
+                  <input type="number" min="1" value={bahanForm.isiKemasan}
+                    onChange={e => setBahanForm(f => ({...f, isiKemasan: parseInt(e.target.value)||0}))}
+                    className="w-full text-xs border border-gray-200 rounded-xl p-2.5 font-mono" />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Satuan</label>
+                  <select value={bahanForm.satuan}
+                    onChange={e => setBahanForm(f => ({...f, satuan: e.target.value}))}
+                    className="w-full text-xs border border-gray-200 rounded-xl p-2.5">
+                    <option value="gr">gr (gram)</option>
+                    <option value="kg">kg (kilogram)</option>
+                    <option value="ml">ml (mililiter)</option>
+                    <option value="liter">liter</option>
+                    <option value="pcs">pcs (pieces)</option>
+                    <option value="pack">pack</option>
+                    <option value="sdt">sdt (sendok teh)</option>
+                    <option value="sdm">sdm (sendok makan)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Harga Beli (Real) *</label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">Rp</span>
+                    <input type="number" min="0" placeholder="10000" value={bahanForm.hargaBeliReal}
+                      onChange={e => setBahanForm(f => ({...f, hargaBeliReal: parseInt(e.target.value)||0}))}
+                      className="w-full pl-8 text-xs border border-gray-200 rounded-xl p-2.5 font-mono" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Markup (%)</label>
+                  <div className="relative">
+                    <input type="number" min="0" max="1000" value={bahanForm.markupPercent}
+                      onChange={e => setBahanForm(f => ({...f, markupPercent: parseInt(e.target.value)||0}))}
+                      className="w-full text-xs border border-gray-200 rounded-xl p-2.5 font-mono font-bold text-emerald-700" />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-emerald-600 font-bold">%</span>
+                  </div>
+                </div>
+              </div>
+              {/* Preview harga */}
+              {bahanForm.hargaBeliReal > 0 && (
+                <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-xs space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Harga Beli (Real):</span>
+                    <span className="font-mono font-bold">{formatCurrency(bahanForm.hargaBeliReal)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Markup {bahanForm.markupPercent}%:</span>
+                    <span className="font-mono font-bold text-amber-700">+{formatCurrency(Math.round(bahanForm.hargaBeliReal * bahanForm.markupPercent / 100))}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-emerald-200 pt-1">
+                    <span className="font-bold text-emerald-800">Harga Jual per Kemasan:</span>
+                    <span className="font-mono font-black text-emerald-800">{formatCurrency(Math.round(bahanForm.hargaBeliReal * (1 + bahanForm.markupPercent/100)))}</span>
+                  </div>
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-gray-500">Harga Satuan per {bahanForm.satuan}:</span>
+                    <span className="font-mono text-gray-600">{formatCurrency(Math.round(bahanForm.hargaBeliReal * (1 + bahanForm.markupPercent/100) / bahanForm.isiKemasan))}/{bahanForm.satuan}</span>
+                  </div>
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button onClick={() => setShowBahanModal(false)}
+                  className="px-4 py-2 text-xs font-medium text-gray-500 hover:bg-gray-100 rounded-xl cursor-pointer">Batal</button>
+                <button onClick={() => {
+                  if (!bahanForm.nama.trim()) return;
+                  const hargaJualKemasan = Math.round(bahanForm.hargaBeliReal * (1 + bahanForm.markupPercent/100));
+                  const hargaSatuan = bahanForm.isiKemasan > 0 ? Math.round(hargaJualKemasan / bahanForm.isiKemasan) : 0;
+                  const newBahan: BahanBaku = {
+                    kode: bahanForm.kode || undefined,
+                    nama: bahanForm.nama.trim(),
+                    kategori: bahanForm.kategori || undefined,
+                    satuan: bahanForm.satuan,
+                    isiKemasan: bahanForm.isiKemasan,
+                    hargaBeli: hargaJualKemasan, // Harga after markup (harga jual per kemasan)
+                    hargaSatuan: hargaSatuan, // Per unit
+                    hargaBeliReal: bahanForm.hargaBeliReal, // Harga beli real
+                    hargaSatuanReal: bahanForm.isiKemasan > 0 ? Math.round(bahanForm.hargaBeliReal / bahanForm.isiKemasan) : 0,
+                    markupPercent: bahanForm.markupPercent,
+                  };
+                  if (editingBahan) {
+                    onEditMaterial(editingBahan.nama, newBahan);
+                  } else {
+                    onAddMaterial(newBahan);
+                  }
+                  setShowBahanModal(false);
+                }}
+                  disabled={!bahanForm.nama.trim() || bahanForm.hargaBeliReal <= 0 || bahanForm.isiKemasan <= 0}
+                  className="px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white rounded-xl cursor-pointer disabled:cursor-not-allowed">
+                  {editingBahan ? 'Simpan Perubahan' : 'Tambah Bahan'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
