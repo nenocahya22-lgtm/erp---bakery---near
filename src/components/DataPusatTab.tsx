@@ -191,12 +191,31 @@ export default function DataPusatTab({
     if (window.confirm('Hapus PO ini?')) setPurchaseOrders(prev => prev.filter(p => p.id !== id));
   };
 
-  const handleCetakSuratJalan = (so: SuratOrder) => {
+  /** Helper: cetak dokumen ke window baru + fallback download HTML kalau popup diblokir */
+  const cetakDokumen = (judul: string, html: string) => {
     const pw = window.open('', '_blank');
-    if (!pw) return;
-    pw.document.write(`
+    if (!pw) {
+      // Popup blocker terdeteksi — fallback: download file HTML
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${judul.replace(/[^a-zA-Z0-9]/g, '_')}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      alert('📄 Popup terblokir! File HTML berhasil di-download.\n\n🔹 Buka file tersebut di browser\n🔹 Tekan Ctrl+P atau klik menu File → Print\n🔹 Pilih "Save as PDF" sebagai printer\n🔹 Klik Simpan untuk menyimpan sebagai PDF.');
+      return;
+    }
+    pw.document.write(html);
+    pw.document.close();
+  };
+
+  const handleCetakSuratJalan = (so: SuratOrder) => {
+    const html = `
       <html><head>
-        <title>Surat Jalan - SO ${so.id}</title>
+        <title>Surat Jalan - ${so.id}</title>
         <style>
           body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 40px; color: #1f2937; }
           h1 { font-size: 22px; color: #065f46; }
@@ -246,16 +265,14 @@ export default function DataPusatTab({
           <div>_____________<br>Mengetahui<br>(Supervisor)</div>
         </div>
         <p style="margin-top:40px;text-align:center;color:#9ca3af;font-size:10px;">Near Bakery & Co. ERP — Logistik & Distribusi</p>
-        <script>window.print();<\/script>
+        <script>window.print(); setTimeout(() => window.close(), 1000);</script>
       </body></html>
-    `);
-    pw.document.close();
+    `;
+    cetakDokumen('Surat_Jalan_' + so.id, html);
   };
 
   const handleCetakPO = (po: PurchaseOrder) => {
-    const pw = window.open('', '_blank');
-    if (!pw) return;
-    pw.document.write(`
+    const html = `
       <html><head>
         <title>PO - ${po.poNo}</title>
         <style>
@@ -297,10 +314,10 @@ export default function DataPusatTab({
           <div>_____________<br>Pembeli</div>
           <div>_____________<br>Supplier</div>
         </div>
-        <script>window.print();<\/script>
+        <script>window.print(); setTimeout(() => window.close(), 1000);</script>
       </body></html>
-    `);
-    pw.document.close();
+    `;
+    cetakDokumen('PO_' + po.poNo, html);
   };
 
   // ─── RENDER BADGE ───
