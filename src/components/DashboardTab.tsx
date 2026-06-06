@@ -1,7 +1,24 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { CalculationResult, BahanBaku } from '../types';
-import { TrendingUp, FolderTree, Package, DollarSign, AlertCircle, Sparkles, AlertTriangle, Lightbulb, RefreshCw, Copy, Check, FileDown, Rocket, ArrowRight } from 'lucide-react';
+import { TrendingUp, FolderTree, Package, DollarSign, AlertCircle, Sparkles, AlertTriangle, Lightbulb, RefreshCw, Copy, Check, FileDown, Rocket, ArrowRight, Bell, X, Trash2, MessageSquare, Send, Settings } from 'lucide-react';
 import { jsPDF } from 'jspdf';
+
+interface AlertItem {
+  id: string;
+  type: 'margin_danger' | 'margin_warning' | 'margin_high' | 'stock_critical' | 'stock_low' | 'system_error' | 'info';
+  message: string;
+  timestamp: string;
+  dismissed: boolean;
+}
+
+interface WaNotification {
+  id: string;
+  type: string;
+  platform: string;
+  message: string;
+  time: string;
+  sent: boolean;
+}
 
 interface DashboardTabProps {
   calculatedProducts: CalculationResult[];
@@ -14,6 +31,66 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, onWipeAllD
   const [analysisResult, setAnalysisResult] = React.useState<string>('');
   const [loading, setLoading] = React.useState<boolean>(false);
   const [copied, setCopied] = React.useState<boolean>(false);
+
+  // ─── MONITORING & ALERT SYSTEM ───
+  const [showAlerts, setShowAlerts] = useState(false);
+  const [alerts, setAlerts] = useState<AlertItem[]>(() => {
+    const saved = localStorage.getItem('system_alerts_data');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [waNotifications, setWaNotifications] = useState<WaNotification[]>(() => {
+    const saved = localStorage.getItem('wa_notification_queue');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => { localStorage.setItem('system_alerts_data', JSON.stringify(alerts)); }, [alerts]);
+  useEffect(() => { localStorage.setItem('wa_notification_queue', JSON.stringify(waNotifications)); }, [waNotifications]);
+
+  // Auto-generate alerts from system state every 30s
+  useEffect(() => {
+    const checkAlerts = () => {
+      const newAlerts: AlertItem[] = [];
+      const now = new Date().toISOString();
+      calculatedProducts.forEach(p => {
+        if (p.marginPersen < 0) {
+          newAlerts.push({ id: `mg-neg-${Date.now()}`, type: 'margin_danger', message: `🔴 MARGIN NEGATIF! "${p.namaProduk}" rugi ${Math.abs(p.marginPersen).toFixed(1)}%`, timestamp: now, dismissed: false });
+        } else if (p.marginPersen < 5) {
+          newAlerts.push({ id: `mg-low-${Date.now()}`, type: 'margin_danger', message: `⚠️ MARGIN KRITIS! "${p.namaProduk}" hanya ${p.marginPersen.toFixed(1)}%`, timestamp: now, dismissed: false });
+        } else if (p.marginPersen < 15) {
+          newAlerts.push({ id: `mg-warn-${Date.now()}`, type: 'margin_warning', message: `📉 Margin "${p.namaProduk}" ${p.marginPersen.toFixed(1)}% — di bawah 15%`, timestamp: now, dismissed: false });
+        }
+      });
+      bahanBaku.filter(b => b.isiKemasan < 50).forEach(b => {
+        newAlerts.push({ id: `stk-${Date.now()}`, type: 'stock_critical', message: `📦 STOK KRITIS! "${b.nama}" sisa ${b.isiKemasan} ${b.satuan}`, timestamp: now, dismissed: false });
+      });
+      bahanBaku.filter(b => b.isiKemasan >= 50 && b.isiKemasan < 200).forEach(b => {
+        newAlerts.push({ id: `stk-lw-${Date.now()}`, type: 'stock_low', message: `📦 Stok "${b.nama}" ${b.isiKemasan} ${b.satuan} — menipis`, timestamp: now, dismissed: false });
+      });
+      setAlerts(prev => {
+        const existingIds = new Set(prev.filter(a => !a.dismissed).map(a => a.id));
+        const uniqueNew = newAlerts.filter(a => !Array.from(existingIds).some(eid => eid.split('-').slice(0,-1).join('-') === a.id.split('-').slice(0,-1).join('-')));
+        return uniqueNew.length === 0 ? prev : [...uniqueNew, ...prev].slice(0, 50);
+      });
+    };
+    checkAlerts();
+    const interval = setInterval(checkAlerts, 30000);
+    return () => clearInterval(interval);
+  }, [calculatedProducts, bahanBaku]);
+
+  const dismissAlert = (id: string) => setAlerts(prev => prev.map(a => a.id === id ? { ...a, dismissed: true } : a));
+  const activeAlerts = alerts.filter(a => !a.dismissed);
+  const dangerAlerts = activeAlerts.filter(a => a.type === 'margin_danger' || a.type === 'stock_critical');
+
+  // Pick WA notifications from localStorage (POS orders queue)
+  useEffect(() => {
+    const saved = localStorage.getItem('wa_notification_queue');
+    if (saved) setWaNotifications(JSON.parse(saved));
+    const interval = setInterval(() => {
+      const s = localStorage.getItem('wa_notification_queue');
+      if (s) setWaNotifications(JSON.parse(s));
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   // 1. Calculate Metrics
   const totalBahan = bahanBaku.length;
@@ -43,11 +120,28 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, onWipeAllD
         jumlahBahan: p.bahanList.length
       }));
 
+      // ─── ANALISIS BAHAN BAKU — fluktuasi harga ───
+      const bahanAnalysis = bahanBaku.map(b => ({
+        nama: b.nama,
+        satuan: b.satuan,
+        hargaBeliReal: b.hargaBeliReal || b.hargaBeli,
+        hargaJualKemasan: Math.round((b.hargaBeliReal || b.hargaBeli) * (1 + (b.markupPercent || 25) / 100)),
+        markupPercent: b.markupPercent || 25,
+        stokPusat: b.isiKemasan,
+      }));
+
+      // Identifikasi bahan dengan harga tinggi (potential margin problem)
+      const bahanMahal = bahanAnalysis.filter(b => b.hargaBeliReal > 50000).sort((a, b) => b.hargaBeliReal - a.hargaBeliReal);
+      const bahanStokKritis = bahanAnalysis.filter(b => b.stokPusat < 50);
+
       const summaryStats = {
         totalBahan,
         totalProduk,
         avgMargin: Math.round(avgMargin),
-        totalProfitBatches
+        totalProfitBatches,
+        bahanMahal: bahanMahal.slice(0, 5),
+        bahanStokKritis: bahanStokKritis.slice(0, 5),
+        totalBahanStokKritis: bahanStokKritis.length,
       };
 
       const res = await fetch('/api/marketing/assistant-auto', {
@@ -67,41 +161,93 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, onWipeAllD
       }
     } catch (err: any) {
       console.error(err);
-      // Fallback lokal jika server tidak tersedia
-      let localResult = '📋 **ANALISIS LOKAL — SARAN MARKETING**\n';
-      localResult += '━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
-      localResult += `📊 **RINGKASAN DATA:**\n`;
+      // Fallback lokal yang lebih kritis — analisis bahan baku + margin
+      let localResult = '📋 **ANALISIS BISNIS KRITIS — INTELLIGENCE REPORT**\n';
+      localResult += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+      
+      // ─── RINGKASAN ───
+      localResult += '📊 **RINGKASAN BISNIS:**\n';
       localResult += `  • Total Bahan Baku: ${totalBahan}\n`;
       localResult += `  • Total Produk: ${totalProduk}\n`;
       localResult += `  • Rata-rata Margin: ${avgMargin.toFixed(1)}%\n`;
-      localResult += `  • Potensi Laba Kotor: ${formatCurrency(totalProfitBatches)}\n\n`;
+      localResult += `  • Potensi Laba Kotor: ${formatCurrency(totalProfitBatches)}\n`;
+      
+      // ─── ANALISIS BAHAN BAKU ───
+      const bahanMahal = bahanBaku.filter(b => (b.hargaBeliReal || b.hargaBeli) > 50000);
+      if (bahanMahal.length > 0) {
+        localResult += '\n🔥 **BAHAN BAKU PREMIUM (HARGA > Rp50.000):**\n';
+        bahanMahal.slice(0, 5).forEach(b => {
+          const hargaReal = b.hargaBeliReal || b.hargaBeli;
+          const markup = b.markupPercent || 25;
+          const hargaJual = Math.round(hargaReal * (1 + markup/100));
+          localResult += `  • ${b.nama}: Beli ${formatCurrency(hargaReal)} → Jual ${formatCurrency(hargaJual)} (markup ${markup}%)\n`;
+          
+          // Cari produk yang menggunakan bahan ini
+          const produkTerkena = calculatedProducts.filter(p => 
+            p.bahanList.some(bl => bl.namaBahan === b.nama)
+          );
+          if (produkTerkena.length > 0) {
+            localResult += `    ↳ Digunakan di: ${produkTerkena.slice(0, 3).map(p => `${p.namaProduk} (margin ${p.marginPersen.toFixed(0)}%)`).join(', ')}\n`;
+            // Saran margin
+            const avgMarginTerkena = produkTerkena.reduce((s, p) => s + p.marginPersen, 0) / produkTerkena.length;
+            if (avgMarginTerkena < 20) {
+              localResult += `    ⚠️ Rata-rata margin produk ini ${avgMarginTerkena.toFixed(1)}% — **pertimbangkan naikkan harga jual produk**\n`;
+            }
+          }
+        });
+      }
+
+      // ─── STOK KRITIS ───
+      const stokKritis = bahanBaku.filter(b => b.isiKemasan < 50);
+      if (stokKritis.length > 0) {
+        localResult += '\n🔴 **STOK KRITIS — SEGERA ORDER!**\n';
+        stokKritis.forEach(b => {
+          localResult += `  • ${b.nama}: sisa ${b.isiKemasan} ${b.satuan} — segera buat PO ke supplier!\n`;
+        });
+      }
+
+      // ─── MARGIN ───
       if (validProducts.length > 0) {
-        localResult += '📈 **PRODUK DENGAN MARGIN TERTINGGI:**\n';
+        localResult += '\n📈 **PRODUK MARGIN TERTINGGI (BENCHMARK):**\n';
         const topMargin = [...validProducts].sort((a, b) => b.marginPersen - a.marginPersen).slice(0, 3);
         topMargin.forEach(p => {
-          localResult += `  • ${p.namaProduk}: margin ${p.marginPersen.toFixed(1)}%\n`;
+          localResult += `  • ${p.namaProduk}: margin ${p.marginPersen.toFixed(1)}% — bisa jadi model strategi pricing\n`;
         });
-        localResult += '\n';
-        localResult += '📉 **PRODUK PERLU OPTIMASI (MARGIN < 20%):**\n';
+
+        localResult += '\n📉 **PRODUK PERLU OPTIMASI (MARGIN < 20%):**\n';
         const lowMargin = validProducts.filter(p => p.marginPersen < 20);
         if (lowMargin.length > 0) {
           lowMargin.forEach(p => {
             const targetPrice = Math.round(p.hppPerPorsi / 0.8);
             localResult += `  • ${p.namaProduk}: margin ${p.marginPersen.toFixed(1)}% → sarankan harga ${formatCurrency(targetPrice)} (margin 20%)\n`;
+            
+            // Cek apakah ada bahan mahal di produk ini
+            const bahanMahalDiProduk = p.bahanList.filter(bl => 
+              bahanBaku.some(b => b.nama === bl.namaBahan && (b.hargaBeliReal || b.hargaBeli) > 30000)
+            );
+            if (bahanMahalDiProduk.length > 0) {
+              localResult += `    → Bahan premium: ${bahanMahalDiProduk.map(b => b.namaBahan).join(', ')}\n`;
+            }
           });
         } else {
-          localResult += '  ✅ Semua produk punya margin sehat!\n';
+          localResult += '  ✅ Semua produk punya margin sehat di atas 20%!\n';
         }
-        localResult += '\n';
       }
-      localResult += '💡 **REKOMENDASI:**\n';
-      localResult += '  • Bundling produk margin tinggi + rendah untuk subsidi silang\n';
-      localResult += '  • Review harga jual produk dengan margin di bawah 20%\n';
-      localResult += '  • Optimalkan stok bahan baku untuk kurangi waste\n';
-      localResult += '  • Update foto produk untuk meningkatkan persepsi nilai\n\n';
-      localResult += '⚙️ **Catatan:** Untuk analisis AI yang lebih dalam, jalankan server backend:\n';
-      localResult += '  • `npm run dev` (start backend + frontend)\n';
-      localResult += '  • Pastikan file `.env` berisi `GEMINI_API_KEY=...`\n';
+
+      // ─── REKOMENDASI ───
+      localResult += '\n🎯 **REKOMENDASI STRATEGIS:**\n';
+      if (stokKritis.length > 0) {
+        localResult += `  🔴 Segera buat Purchase Order untuk ${stokKritis.length} bahan yang stoknya kritis\n`;
+      }
+      if (bahanMahal.length > 0) {
+        localResult += `  💰 Evaluasi markup ${bahanMahal.length} bahan premium — pastikan margin produk tetap sehat\n`;
+      }
+      localResult += '  📦 Bundling produk margin tinggi + rendah untuk subsidi silang\n';
+      localResult += '  📊 Review harga jual produk dengan margin di bawah 20%\n';
+      localResult += '  🗑️ Optimalkan stok bahan baku untuk kurangi waste (cek tab Manajemen Waste)\n';
+      localResult += '  📸 Update foto produk untuk meningkatkan persepsi nilai\n\n';
+      localResult += '⚙️ **Catatan:** Untuk analisis AI yang lebih dalam (Gemini), jalankan:\n';
+      localResult += '  • `npm run dev` — pastikan `.env` berisi `GEMINI_API_KEY`\n';
       setAnalysisResult(localResult);
     } finally {
       setLoading(false);
@@ -493,6 +639,79 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, onWipeAllD
             <p className="text-[10.5px] text-slate-400 leading-relaxed">
               <strong>Saran Penggunaan Bisnis:</strong> Asisten pemasaran menganalisis anomali pada margin menu rill Anda (seperti margin di bawah target/warning). Cukup klik tombol di atas untuk melihat draf WhatsApp blast diskon porsi rill, copy promosi, dan ide diskon happy hour yang sesuai dengan persediaan stok resep pusat Anda!
             </p>
+          </div>
+        )}
+      </div>
+
+      {/* ==================== MONITORING & ALERT SYSTEM ==================== */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+        <button onClick={() => setShowAlerts(!showAlerts)}
+          className="w-full p-5 flex items-center justify-between cursor-pointer hover:bg-gray-50/50 transition">
+          <div className="flex items-center gap-3">
+            <Bell className="w-5 h-5 text-amber-600" />
+            <div className="text-left">
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                🔔 Monitoring & Alert
+                {dangerAlerts.length > 0 && (
+                  <span className="px-1.5 py-0.5 bg-red-600 text-white text-[9px] font-bold rounded-lg animate-pulse">
+                    {dangerAlerts.length} KRITIS
+                  </span>
+                )}
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {activeAlerts.length} alert aktif — deteksi margin & stok otomatis
+              </p>
+            </div>
+          </div>
+          <span className={`text-xs text-gray-400 transition-transform ${showAlerts ? 'rotate-180' : ''}`}>▼</span>
+        </button>
+
+        {showAlerts && (
+          <div className="border-t border-gray-100">
+            {activeAlerts.length === 0 ? (
+              <div className="p-6 text-center">
+                <CheckCircle2 className="w-8 h-8 text-emerald-200 mx-auto mb-1" />
+                <p className="text-xs text-gray-500 font-semibold">✅ Semua Aman</p>
+                <p className="text-[10px] text-gray-400">Tidak ada alert aktif.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100 max-h-[300px] overflow-y-auto">
+                {activeAlerts.slice(0, 20).map(alert => (
+                  <div key={alert.id} className={`p-3 flex items-start gap-2.5 text-xs ${
+                    alert.type === 'margin_danger' || alert.type === 'stock_critical' ? 'bg-red-50/50' : ''
+                  }`}>
+                    <span>{alert.type === 'margin_danger' || alert.type === 'stock_critical' ? '🔴' : alert.type === 'stock_low' ? '🟡' : '💰'}</span>
+                    <p className="flex-1 text-gray-700">{alert.message}</p>
+                    <button onClick={() => dismissAlert(alert.id)}
+                      className="p-0.5 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-700 cursor-pointer shrink-0">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* WA Queue summary */}
+            {waNotifications.filter(n => !n.sent).length > 0 && (
+              <div className="p-3 bg-emerald-50 border-t border-emerald-100 flex items-center justify-between text-xs">
+                <span className="text-emerald-800 font-medium">
+                  <MessageSquare className="w-3.5 h-3.5 inline mr-1" />
+                  {waNotifications.filter(n => !n.sent).length} notifikasi WhatsApp antri
+                </span>
+                <button onClick={() => {
+                  localStorage.removeItem('wa_notification_queue');
+                  setWaNotifications([]);
+                }}
+                  className="text-[10px] text-red-500 hover:text-red-700 font-bold cursor-pointer">
+                  <Trash2 className="w-3 h-3 inline" /> Hapus
+                </button>
+              </div>
+            )}
+
+            <div className="p-3 bg-gray-50 text-[10px] text-gray-500 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Update otomatis setiap 30 detik — <strong>Kritis:</strong> margin &lt;5% atau stok &lt;50
+            </div>
           </div>
         )}
       </div>

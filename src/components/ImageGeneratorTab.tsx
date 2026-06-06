@@ -12,23 +12,37 @@ export default function ImageGeneratorTab() {
   });
   const [copied, setCopied] = useState(false);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!prompt.trim()) return;
     setIsGenerating(true);
 
-    // Simulasi proses generate dengan timeout biar ada feel loading
-    setTimeout(() => {
-      const url = getFoodImageForPrompt(prompt);
-      setGeneratedUrl(url);
-      saveRecipeImage(`generated_${Date.now()}`, url);
+    let finalUrl = getFoodImageForPrompt(prompt.trim());
 
-      // Simpan ke history
-      const newHistory = [`${prompt}|${url}`, ...history].slice(0, 20);
-      setHistory(newHistory);
-      localStorage.setItem('img_gen_history', JSON.stringify(newHistory));
+    try {
+      // Coba generate via Gemini API server
+      const res = await fetch('/api/marketing/generate-image-desc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: prompt.trim() })
+      });
 
-      setIsGenerating(false);
-    }, 800);
+      if (res.ok) {
+        const data = await res.json();
+        finalUrl = data.url || finalUrl;
+      }
+    } catch {
+      // Fallback: pakai keyword matching lokal (already set)
+    }
+
+    setGeneratedUrl(finalUrl);
+    saveRecipeImage(`generated_${Date.now()}`, finalUrl);
+
+    // Simpan ke history
+    const newHistory = [`${prompt.trim()}|${finalUrl}`, ...history].slice(0, 20);
+    setHistory(newHistory);
+    localStorage.setItem('img_gen_history', JSON.stringify(newHistory));
+
+    setIsGenerating(false);
   };
 
   const handleDownload = async () => {

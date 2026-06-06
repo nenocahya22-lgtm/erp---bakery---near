@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { BahanBaku, BranchStock, Cabang } from '../types';
-import { Package, Search, ClipboardList, Building2 } from 'lucide-react';
+import { BahanBaku, BranchStock, Cabang, SuratOrder } from '../types';
+import { Package, Search, ClipboardList, Building2, ShoppingCart, CheckCircle2, Truck, Clock } from 'lucide-react';
 
 interface MaterialsTabProps {
   bahanBaku: BahanBaku[];
   cabangList: Cabang[];
   cabangStok: BranchStock[];
+  suratOrders?: SuratOrder[];
 }
 
-export default function MaterialsTab({ bahanBaku, cabangList, cabangStok }: MaterialsTabProps) {
-  const [tab, setTab] = useState<'bahan' | 'stok_opname'>('bahan');
+export default function MaterialsTab({ bahanBaku, cabangList, cabangStok, suratOrders = [] }: MaterialsTabProps) {
+  const [tab, setTab] = useState<'bahan' | 'stok_opname' | 'po_cabang'>('bahan');
   const [search, setSearch] = useState('');
 
   const formatCurrency = (val: number) =>
@@ -26,7 +27,7 @@ export default function MaterialsTab({ bahanBaku, cabangList, cabangStok }: Mate
             <p className="text-xs text-gray-500">Daftar bahan baku, satuan, harga, dan stok opname cabang.</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button onClick={() => setTab('bahan')}
             className={`px-4 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
               tab === 'bahan' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -38,6 +39,12 @@ export default function MaterialsTab({ bahanBaku, cabangList, cabangStok }: Mate
               tab === 'stok_opname' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}>
             <ClipboardList className="w-3.5 h-3.5 inline mr-1" /> Stok Opname Cabang
+          </button>
+          <button onClick={() => setTab('po_cabang')}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
+              tab === 'po_cabang' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}>
+            <ShoppingCart className="w-3.5 h-3.5 inline mr-1" /> PO Cabang ({suratOrders.filter(s=>s.status==='minta').length})
           </button>
         </div>
       </div>
@@ -87,6 +94,59 @@ export default function MaterialsTab({ bahanBaku, cabangList, cabangStok }: Mate
           )}
           <div className="p-3 bg-blue-50 border-t border-blue-100 text-[10px] text-blue-800">
             <strong>Catatan:</strong> Data bahan baku dikelola dari <strong>🏛️ Data Pusat → Bahan</strong>. Modul ini hanya untuk lihat daftar & stok opname cabang.
+          </div>
+        </div>
+      )}
+
+      {/* Tab: PO Cabang */}
+      {tab === 'po_cabang' && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+          <div className="p-4 border-b border-gray-100">
+            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+              <ShoppingCart className="w-4 h-4 text-emerald-600" /> Permintaan PO dari Cabang
+            </h3>
+            <p className="text-xs text-gray-500 mt-1">
+              Daftar permintaan barang dari setiap cabang. Status <strong>"🕐 Minta"</strong> = perlu persetujuan owner di Data Pusat.
+            </p>
+          </div>
+          {suratOrders.filter(s => s.status === 'minta').length === 0 ? (
+            <div className="p-8 text-center">
+              <ShoppingCart className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+              <p className="text-xs text-gray-500 font-semibold">Belum ada permintaan PO</p>
+              <p className="text-[10px] text-gray-400 mt-1">Cabang bisa mengajukan permintaan barang dari dashboard cabang masing-masing.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {suratOrders.filter(s => s.status === 'minta').map(so => (
+                <div key={so.id} className="p-4 hover:bg-gray-50">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Building2 className="w-4 h-4 text-blue-600" />
+                      <span className="font-bold text-sm text-gray-900">{so.cabangNama}</span>
+                      <span className="text-[9px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                        <Clock className="w-2.5 h-2.5 inline" /> {new Date(so.tanggalKirim).toLocaleDateString('id-ID')}
+                      </span>
+                    </div>
+                    <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> Menunggu Persetujuan
+                    </span>
+                  </div>
+                  <div className="ml-6 flex flex-wrap gap-1.5">
+                    {so.items.map((item, idx) => (
+                      <span key={idx} className="text-[10px] bg-gray-100 border border-gray-200 rounded-lg px-2 py-1 font-mono">
+                        {item.bahanNama}: <strong className="text-emerald-700">{item.qty}</strong>
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-[9px] text-gray-400 mt-2 ml-6">
+                    ID: {so.id.substring(0, 12)}... — Proses di <strong>🏛️ Data Pusat → SO</strong>
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="p-3 bg-blue-50 border-t border-blue-100 text-[10px] text-blue-800">
+            <strong>💡 Alur:</strong> Cabang mengajukan permintaan → Owner setujui → Stok pusat berkurang → Surat Jalan dicetak → Barang dikirim.
           </div>
         </div>
       )}

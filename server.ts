@@ -119,6 +119,35 @@ app.post('/api/marketing/assistant-auto', async (req, res) => {
   }
 });
 
+// AI Image Description Generator API Route — Gemini generates desc, then fetch Unsplash
+app.post('/api/marketing/generate-image-desc', async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
+
+    const client = getAiClient();
+    const response = await client.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: `Generate a detailed English description for a food photograph based on this Indonesian description: "${prompt}". Return ONLY the English description, maximum 50 words, suitable for Unsplash search.`,
+    });
+
+    const englishDesc = response.text?.trim() || prompt;
+
+    // Fetch from Unsplash API (free tier, no key needed for basic search)
+    const searchQuery = encodeURIComponent(englishDesc.split(' ').slice(0, 5).join(' ') + ' food');
+    const unsplashUrl = `https://source.unsplash.com/600x400/?${searchQuery}`;
+
+    res.json({ desc: englishDesc, url: unsplashUrl });
+  } catch (error: any) {
+    console.error('Image desc error:', error);
+    // Fallback: return a default Unsplash food URL
+    res.json({ 
+      desc: req.body.prompt || 'Bakery food',
+      url: `https://source.unsplash.com/600x400/?${encodeURIComponent((req.body.prompt || 'bakery food').split(' ').slice(0, 5).join(' '))}`
+    });
+  }
+});
+
 // Backup Email API Route — Send backup data via SMTP using Nodemailer
 app.post('/api/backup/send', async (req, res) => {
   try {
