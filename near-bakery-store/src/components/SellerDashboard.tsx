@@ -200,6 +200,7 @@ export const SellerDashboard: React.FC = () => {
     }
   }, [chatMessages]);
 
+  // 5. Seed sample product helper
   // 5. Seed sample product helper removed
   const handleSeedSampleProducts = async () => {
     triggerToast('Fitur Dinonaktifkan', 'Fungsi seeding data contoh telah dinonaktifkan.');
