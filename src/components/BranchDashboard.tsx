@@ -102,13 +102,16 @@ export default function BranchDashboard({
 
   // ─── STOCK OPNAME ───
   const getStokTeoritis = (bahanNama: string) => {
+    const match = cabangStok.find(s => s.bahanNama.toLowerCase().trim() === bahanNama.toLowerCase().trim());
+    if (match) return match.stokTeoritis;
+
     const soItems = branchSOs
       .filter(s => s.status === 'diterima')
       .flatMap(s => s.items)
-      .filter(i => i.bahanNama === bahanNama)
+      .filter(i => i.bahanNama.toLowerCase().trim() === bahanNama.toLowerCase().trim())
       .reduce((acc, i) => acc + i.qty, 0);
     const wasteAmount = branchWasteLogs
-      .filter(w => w.bahanNama === bahanNama)
+      .filter(w => w.bahanNama.toLowerCase().trim() === bahanNama.toLowerCase().trim())
       .reduce((acc, w) => acc + w.qtyWasted, 0);
     return Math.max(0, soItems - wasteAmount);
   };
@@ -124,7 +127,8 @@ export default function BranchDashboard({
   const [plannerTargets, setPlannerTargets] = useState<Record<string, number>>({});
   const calcPlannerNeeds = () => {
     const needs: Record<string, { total: number; satuan: string; hargaTotal: number; perProduk: { nama: string; qty: number }[] }> = {};
-    Object.entries(plannerTargets).forEach(([prodName, prodQty]) => {
+    Object.entries(plannerTargets).forEach(([prodName, val]) => {
+      const prodQty = val as number;
       if (!prodQty || prodQty <= 0) return;
       const resep = detailResep.filter(r => r.namaProduk === prodName);
       resep.forEach(r => {
@@ -462,7 +466,7 @@ export default function BranchDashboard({
                 )}
               </div>
               {(() => {
-                const totalPcs = Object.values(plannerTargets).reduce((a, b) => a + b, 0);
+                const totalPcs = Object.values(plannerTargets).reduce((a, b) => (a as number) + (b as number), 0) as number;
                 const plannerNeeds = calcPlannerNeeds();
                 const totalPlannerHarga = Object.values(plannerNeeds).reduce((sum, n) => sum + n.hargaTotal, 0);
                 return totalPcs > 0 ? (

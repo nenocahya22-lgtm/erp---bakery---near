@@ -240,7 +240,7 @@ export default function ProfitDistribusiTab() {
                 {Object.entries(todayData.sources).map(([src, amt]) => (
                   <div key={src} className="text-xs font-bold text-white flex items-center gap-1 justify-end">
                     <span>{SOURCE_ICONS[src] || '💰'}</span>
-                    <span>{formatCurrency(amt)}</span>
+                    <span>{formatCurrency(amt as number)}</span>
                   </div>
                 ))}
               </div>

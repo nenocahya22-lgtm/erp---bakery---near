@@ -23,7 +23,7 @@ export default defineConfig(() => {
         },
       },
       // Minimalisir CSS & JS
-      minify: 'esbuild',
+      minify: 'esbuild' as const,
       cssMinify: true,
       // Hapus sourcemaps di production
       sourcemap: false,

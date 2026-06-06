@@ -133,9 +133,9 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
       qtyWasted: batch.qty,
       satuan: batch.satuan,
       lossValue: batch.qty * (bahanBaku.find(b => b.nama === batch.bahanNama)?.hargaSatuan || 0),
-      tanggal: new Date().toISOString().substring(0, 10),
-      penyebab: `Expired — Batch ${batch.batchNo}`,
-      kategori: 'expired',
+      location: 'Gudang Utama',
+      reason: `Expired — Batch ${batch.batchNo}`,
+      dateLogged: new Date().toISOString().substring(0, 10),
     };
     onAddWasteLog(wasteLog);
     handleDeleteBatch(batch.id);
@@ -465,7 +465,7 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
                   <div key={name} className="bg-red-50 p-3 rounded-lg border border-red-100 flex justify-between text-xs">
                     <span className="font-bold text-red-800">{name}</span>
                     <div className="text-right">
-                      <span className="font-mono text-red-600 font-bold block">{qty.toFixed(0)} {bahanBaku.find(b => b.nama === name)?.satuan || 'gr'}</span>
+                      <span className="font-mono text-red-600 font-bold block">{(qty as number).toFixed(0)} {bahanBaku.find(b => b.nama === name)?.satuan || 'gr'}</span>
                       <span className="text-[9px] text-red-500">Min: {safetyStock[name] || 500}</span>
                     </div>
                   </div>

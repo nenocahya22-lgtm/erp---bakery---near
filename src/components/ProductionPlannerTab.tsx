@@ -19,7 +19,8 @@ export default function ProductionPlannerTab({ productHpp, detailResep, calculat
   const calculateNeeds = () => {
     const needs: Record<string, { total: number; satuan: string; hargaTotal: number; perProduk: { nama: string; qty: number }[] }> = {};
 
-    Object.entries(targets).forEach(([prodName, prodQty]) => {
+    Object.entries(targets).forEach(([prodName, val]) => {
+      const prodQty = val as number;
       if (!prodQty || prodQty <= 0) return;
       const resep = detailResep.filter(r => r.namaProduk === prodName);
       const calcProd = calculatedProducts.find(p => p.namaProduk === prodName);
@@ -79,7 +80,7 @@ export default function ProductionPlannerTab({ productHpp, detailResep, calculat
             <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-xs space-y-1">
               <div className="flex justify-between font-bold text-emerald-800">
                 <span>Total Produk Diproduksi:</span>
-                <span>{Object.values(targets).reduce((a, b) => a + b, 0)} pcs</span>
+                <span>{Object.values(targets).reduce((a, b) => (a as number) + (b as number), 0)} pcs</span>
               </div>
               <div className="flex justify-between font-bold text-emerald-800">
                 <span>Estimasi Biaya Bahan:</span>

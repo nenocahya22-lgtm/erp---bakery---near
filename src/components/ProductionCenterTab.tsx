@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Calendar, ClipboardList, ShoppingCart, FileText, Printer,
   Plus, X, Scale, Package, AlertTriangle, CheckCircle2, Thermometer,
-  Clock, ChevronRight, Flame
+  Clock, ChevronRight, Flame, Percent
 } from 'lucide-react';
 import { ProductHpp, DetailResep, CalculationResult, BahanBaku, ProductionCalendarEntry } from '../types';
 
@@ -77,7 +77,8 @@ export default function ProductionCenterTab({
 
   const calcPlannerNeeds = () => {
     const needs: Record<string, { total: number; satuan: string; hargaTotal: number; perProduk: { nama: string; qty: number }[] }> = {};
-    Object.entries(plannerTargets).forEach(([prodName, prodQty]) => {
+    Object.entries(plannerTargets).forEach(([prodName, val]) => {
+      const prodQty = val as number;
       if (!prodQty || prodQty <= 0) return;
       const resep = detailResep.filter(r => r.namaProduk === prodName);
       resep.forEach(r => {
@@ -98,7 +99,7 @@ export default function ProductionCenterTab({
 
   const plannerNeeds = calcPlannerNeeds();
   const totalPlannerHarga = Object.values(plannerNeeds).reduce((sum, n) => sum + n.hargaTotal, 0);
-  const totalPlannerPcs = Object.values(plannerTargets).reduce((a, b) => a + b, 0);
+  const totalPlannerPcs = Object.values(plannerTargets).reduce((a, b) => (a as number) + (b as number), 0) as number;
 
   // ─── WORK ORDER STATE ───
   const [woProduct, setWoProduct] = useState('');

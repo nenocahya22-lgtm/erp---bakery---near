@@ -79,7 +79,7 @@ export default function FinanceCashFlowTab({ calculatedProducts, wasteTotalLoss,
   const monthStart = monthAgo.toISOString().substring(0, 10);
   const monthlyRevenue = Object.entries(revenueData.dailyTotals)
     .filter(([date]) => date >= monthStart)
-    .reduce((sum, [, data]) => sum + data.total, 0);
+    .reduce((sum, [, data]) => sum + (data as { total: number }).total, 0);
 
   // Volume penjualan dari transaksi real
   const monthlyTransactions = revenueData.transactions.filter(tx => tx.date >= monthStart);

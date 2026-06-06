@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CalculationResult, BahanBaku } from '../types';
-import { TrendingUp, FolderTree, Package, DollarSign, AlertCircle, Sparkles, AlertTriangle, Lightbulb, RefreshCw, Copy, Check, FileDown, Rocket, ArrowRight, Bell, X, Trash2, MessageSquare, Send, Settings } from 'lucide-react';
+import { TrendingUp, FolderTree, Package, DollarSign, AlertCircle, Sparkles, AlertTriangle, Lightbulb, RefreshCw, Copy, Check, FileDown, Rocket, ArrowRight, Bell, X, Trash2, MessageSquare, Send, Settings, CheckCircle2 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 
 interface AlertItem {
@@ -67,8 +67,8 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, onWipeAllD
         newAlerts.push({ id: `stk-lw-${Date.now()}`, type: 'stock_low', message: `📦 Stok "${b.nama}" ${b.isiKemasan} ${b.satuan} — menipis`, timestamp: now, dismissed: false });
       });
       setAlerts(prev => {
-        const existingIds = new Set(prev.filter(a => !a.dismissed).map(a => a.id));
-        const uniqueNew = newAlerts.filter(a => !Array.from(existingIds).some(eid => eid.split('-').slice(0,-1).join('-') === a.id.split('-').slice(0,-1).join('-')));
+        const existingIds = new Set<string>(prev.filter(a => !a.dismissed).map(a => a.id));
+        const uniqueNew = newAlerts.filter(a => !Array.from(existingIds).some(eid => (eid as string).split('-').slice(0,-1).join('-') === a.id.split('-').slice(0,-1).join('-')));
         return uniqueNew.length === 0 ? prev : [...uniqueNew, ...prev].slice(0, 50);
       });
     };

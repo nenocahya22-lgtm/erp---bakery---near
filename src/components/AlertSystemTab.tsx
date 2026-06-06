@@ -147,7 +147,7 @@ export default function AlertSystemTab({ calculatedProducts, bahanBaku, hasUnsav
 
       setAlerts(prev => {
         // Merge new alerts with existing ones, avoid duplicates for the same product
-        const existingIds = new Set(prev.filter(a => !a.dismissed).map(a => a.id));
+        const existingIds = new Set<string>(prev.filter(a => !a.dismissed).map(a => a.id));
         const uniqueNew = newAlerts.filter(a => {
           // Check if similar alert already exists
           const key = a.id.split('-').slice(0, -1).join('-');
