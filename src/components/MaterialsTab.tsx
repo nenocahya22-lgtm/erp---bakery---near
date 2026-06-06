@@ -190,7 +190,7 @@ export default function MaterialsTab({ bahanBaku, cabangList, cabangStok, suratO
                           </thead>
                           <tbody className="divide-y divide-gray-100">
                             {cabangStockItems.map(item => {
-                              const selisih = item.stokTeoritis - item.stokFisik;
+                              const selisih = item.stokFisik - item.stokTeoritis;
                               return (
                                 <tr key={`${item.cabangId}-${item.bahanNama}`} className={`hover:bg-gray-50 ${selisih !== 0 ? 'bg-amber-50/30' : ''}`}>
                                   <td className="px-3 py-2.5 font-semibold text-gray-900">{item.bahanNama}</td>

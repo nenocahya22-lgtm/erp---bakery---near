@@ -817,7 +817,7 @@ export default function DataPusatTab({
                           </thead>
                           <tbody className="divide-y divide-gray-100">
                             {cabangStockItems.map(item => {
-                              const selisih = item.stokTeoritis - item.stokFisik;
+                              const selisih = item.stokFisik - item.stokTeoritis;
                               const wasteQty = wasteLogs
                                 .filter(w => w.location === `Cabang ${cabang.nama}` && w.bahanNama === item.bahanNama)
                                 .reduce((acc, w) => acc + w.qtyWasted, 0);
@@ -1312,7 +1312,7 @@ export default function DataPusatTab({
               <div className="space-y-4">
                 {cabangList.filter(c => c.isActive && (stokOpnameFilter === 'all' || stokOpnameFilter === c.id)).map(cabang => {
                   const cabangStockItems = cabangStok.filter(s => s.cabangId === cabang.id);
-                  const totalSelisih = cabangStockItems.reduce((sum, s) => sum + (s.stokTeoritis - s.stokFisik), 0);
+                  const totalSelisih = cabangStockItems.reduce((sum, s) => sum + (s.stokFisik - s.stokTeoritis), 0);
                   return (
                     <div key={cabang.id} className="border border-gray-200 rounded-xl overflow-hidden">
                       <div className="flex items-center justify-between p-3 bg-gradient-to-r from-emerald-50 to-slate-50 border-b border-gray-100">
@@ -1352,7 +1352,7 @@ export default function DataPusatTab({
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                               {cabangStockItems.map(item => {
-                                const selisih = item.stokTeoritis - item.stokFisik;
+                                const selisih = item.stokFisik - item.stokTeoritis;
                                 return (
                                   <tr key={`${item.cabangId}-${item.bahanNama}`} className={`hover:bg-gray-50 ${selisih !== 0 ? 'bg-amber-50/30' : ''}`}>
                                     <td className="px-3 py-2.5 font-semibold text-gray-900">{item.bahanNama}</td>

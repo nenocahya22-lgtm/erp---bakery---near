@@ -354,7 +354,7 @@ export default function BranchDashboard({
                   {bahanBaku.map(b => {
                     const teoritis = getStokTeoritis(b.nama);
                     const fisik = stokOpname[b.nama] ?? teoritis;
-                    const selisih = teoritis - fisik;
+                    const selisih = fisik - teoritis;
                     return (
                       <tr key={b.nama} className={`hover:bg-gray-50 ${selisih !== 0 ? 'bg-amber-50/30' : ''}`}>
                         <td className="px-4 py-3 font-semibold text-gray-900">{b.nama}</td>
