@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { CalculationResult } from '../types';
-import { Megaphone, RefreshCw, Sparkles, Send, Users, Mail, Compass, Coins, TrendingUp, ShoppingCart, BarChart3, AlertTriangle, Star, Tag } from 'lucide-react';
+import { Megaphone, RefreshCw, Sparkles, Send, Users, Mail, Compass, TrendingUp, ShoppingCart, BarChart3, AlertTriangle, Star, Tag } from 'lucide-react';
 
 interface CrmMarketingTabProps {
   calculatedProducts: CalculationResult[];
@@ -156,16 +156,82 @@ export default function CrmMarketingTab({ calculatedProducts }: CrmMarketingTabP
   const handleConsultCmo = async () => {
     setMarketingLoading(true);
     setMarketingAdvice('');
+    setShowAutoAnalysis(false);
     try {
       const res = await fetch('/api/marketing/consult', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ salesDropReason, competitorFactor, costChanges, products: calculatedProducts.map(p => ({ name: p.namaProduk, margin: p.marginPersen, price: p.hargaJualPerPorsi })) })
+        body: JSON.stringify({
+          salesDropReason: salesDropReason || 'Tidak disebutkan',
+          competitorFactor: competitorFactor || 'Tidak disebutkan',
+          costChanges: costChanges || 'Tidak disebutkan',
+          productMetrics: calculatedProducts.map(p => ({ name: p.namaProduk, margin: p.marginPersen, price: p.hargaJualPerPorsi })),
+        })
       });
       const data = await res.json();
-      setMarketingAdvice(data.text || 'Gagal merumuskan strategi.');
+      if (data.text) {
+        setMarketingAdvice(data.text);
+      } else {
+        throw new Error('Empty response');
+      }
     } catch (err: any) {
-      setMarketingAdvice(`⚠️ Server AI tidak tersedia. Tapi saya analisis secara lokal:\n\n${autoAnalysis.suggestions.join('\n')}`);
+      // Fallback lokal: generate analisis berdasarkan input user
+      let localAdvice = '📋 **ANALISIS LOKAL — SARAN MARKETING**\n';
+      localAdvice += '━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+      localAdvice += `🔍 **Input Anda:**\n`;
+      if (salesDropReason) localAdvice += `  • Drop Penjualan: ${salesDropReason}\n`;
+      if (competitorFactor) localAdvice += `  • Faktor Kompetitor: ${competitorFactor}\n`;
+      if (costChanges) localAdvice += `  • Kenaikan Harga: ${costChanges}\n`;
+      localAdvice += '\n';
+
+      localAdvice += '📊 **DATA PENJUALAN REAL-TIME:**\n';
+      localAdvice += `  • Total Revenue: ${formatCurrency(autoAnalysis.totalRevenue)}\n`;
+      localAdvice += `  • Total Transaksi: ${autoAnalysis.totalOrders}\n`;
+      if (autoAnalysis.topProducts.length > 0) {
+        localAdvice += `  • Produk Terlaris: ${autoAnalysis.topProducts[0].name} (${formatCurrency(autoAnalysis.topProducts[0].revenue)})\n`;
+      }
+      localAdvice += '\n';
+
+      if (salesDropReason || competitorFactor || costChanges) {
+        localAdvice += '💡 **STRATEGI BERDASARKAN KONDISI ANDA:**\n';
+        if (salesDropReason) {
+          localAdvice += `\n📉 **Masalah: ${salesDropReason}**\n`;
+          localAdvice += `  • Lakukan survei singkat ke pelanggan: tanya langsung kenapa kurang suka\n`;
+          localAdvice += `  • Coba variasi baru: tambah topping atau ganti resep sedikit\n`;
+          localAdvice += `  • Bundling dengan produk best seller untuk perkenalkan lagi\n`;
+        }
+        if (competitorFactor) {
+          localAdvice += `\n🏪 **Masalah: ${competitorFactor}**\n`;
+          localAdvice += `  • Perkuat loyalitas: kartu member digital (setiap 10x beli gratis 1)\n`;
+          localAdvice += `  • Fokus ke kualitas & pelayanan: bedakan dari kompetitor\n`;
+          localAdvice += `  • Promo khusus pelanggan setia: diskon 15% untuk pembelian > 3 item\n`;
+        }
+        if (costChanges) {
+          localAdvice += `\n💰 **Masalah: ${costChanges}**\n`;
+          localAdvice += `  • Jangan naikkan harga langsung — kecilkan porsi 10% dulu (hidden调整)\n`;
+          localAdvice += `  • Cari supplier alternatif dengan harga lebih murah\n`;
+          localAdvice += `  • Bundling produk margin tinggi + rendah untuk subsidi silang\n`;
+        }
+        localAdvice += '\n';
+      }
+
+      localAdvice += '🎯 **REKOMENDASI PEMASARAN:**\n';
+      autoAnalysis.suggestions.forEach(s => {
+        localAdvice += `  • ${s}\n`;
+      });
+      localAdvice += '\n';
+
+      localAdvice += '📸 **TIPS REBRANDING:**\n';
+      localAdvice += `  • Ganti nama produk: tambahkan "Premium", "Signature", "Artisan"\n`;
+      localAdvice += `  • Update foto produk pakai AI Image Generator (sidebar → Tools)\n`;
+      localAdvice += `  • Tambah deskripsi menarik: ceritakan bahan premium yang dipakai\n`;
+      localAdvice += '\n';      
+      localAdvice += '⚙️ **Catatan:** Untuk analisis AI yang lebih dalam, jalankan server backend:\n';
+      localAdvice += '  • Buka terminal → `npm run dev` (start backend + frontend)\n';
+      localAdvice += '  • Pastikan file `.env` berisi `GEMINI_API_KEY=...`\n';
+      localAdvice += '  • Atau hubungi admin untuk setup server AI.\n';
+
+      setMarketingAdvice(localAdvice);
     } finally {
       setMarketingLoading(false);
     }

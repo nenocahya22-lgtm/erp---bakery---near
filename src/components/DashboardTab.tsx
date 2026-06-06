@@ -67,7 +67,42 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, onWipeAllD
       }
     } catch (err: any) {
       console.error(err);
-      setAnalysisResult(`Gagal terhubung ke modul AI: ${err.message || err}`);
+      // Fallback lokal jika server tidak tersedia
+      let localResult = '📋 **ANALISIS LOKAL — SARAN MARKETING**\n';
+      localResult += '━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+      localResult += `📊 **RINGKASAN DATA:**\n`;
+      localResult += `  • Total Bahan Baku: ${totalBahan}\n`;
+      localResult += `  • Total Produk: ${totalProduk}\n`;
+      localResult += `  • Rata-rata Margin: ${avgMargin.toFixed(1)}%\n`;
+      localResult += `  • Potensi Laba Kotor: ${formatCurrency(totalProfitBatches)}\n\n`;
+      if (validProducts.length > 0) {
+        localResult += '📈 **PRODUK DENGAN MARGIN TERTINGGI:**\n';
+        const topMargin = [...validProducts].sort((a, b) => b.marginPersen - a.marginPersen).slice(0, 3);
+        topMargin.forEach(p => {
+          localResult += `  • ${p.namaProduk}: margin ${p.marginPersen.toFixed(1)}%\n`;
+        });
+        localResult += '\n';
+        localResult += '📉 **PRODUK PERLU OPTIMASI (MARGIN < 20%):**\n';
+        const lowMargin = validProducts.filter(p => p.marginPersen < 20);
+        if (lowMargin.length > 0) {
+          lowMargin.forEach(p => {
+            const targetPrice = Math.round(p.hppPerPorsi / 0.8);
+            localResult += `  • ${p.namaProduk}: margin ${p.marginPersen.toFixed(1)}% → sarankan harga ${formatCurrency(targetPrice)} (margin 20%)\n`;
+          });
+        } else {
+          localResult += '  ✅ Semua produk punya margin sehat!\n';
+        }
+        localResult += '\n';
+      }
+      localResult += '💡 **REKOMENDASI:**\n';
+      localResult += '  • Bundling produk margin tinggi + rendah untuk subsidi silang\n';
+      localResult += '  • Review harga jual produk dengan margin di bawah 20%\n';
+      localResult += '  • Optimalkan stok bahan baku untuk kurangi waste\n';
+      localResult += '  • Update foto produk untuk meningkatkan persepsi nilai\n\n';
+      localResult += '⚙️ **Catatan:** Untuk analisis AI yang lebih dalam, jalankan server backend:\n';
+      localResult += '  • `npm run dev` (start backend + frontend)\n';
+      localResult += '  • Pastikan file `.env` berisi `GEMINI_API_KEY=...`\n';
+      setAnalysisResult(localResult);
     } finally {
       setLoading(false);
     }

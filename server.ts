@@ -62,7 +62,7 @@ app.post('/api/marketing/consult', async (req, res) => {
     `;
 
     const response = await client.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.0-flash",
       contents: prompt,
     });
 
@@ -108,7 +108,7 @@ app.post('/api/marketing/assistant-auto', async (req, res) => {
     `;
 
     const response = await client.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.0-flash",
       contents: prompt,
     });
 

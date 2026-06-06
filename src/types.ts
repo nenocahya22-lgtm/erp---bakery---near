@@ -186,11 +186,3 @@ export interface PurchaseOrder {
   status: 'Draft' | 'Disetujui' | 'Dikirim ke Supplier' | 'Diterima';
 }
 
-export interface StokCabang {
-  cabangId: string;
-  bahanNama: string;
-  stokTeoritis: number;
-  stokFisik: number;
-  satuan: string;
-  lastSO: string;
-}

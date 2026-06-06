@@ -70,7 +70,6 @@ import {
   Package,
   Cpu,
   ShieldAlert,
-  Truck,
   LineChart,
   Users,
   ShoppingCart,
@@ -460,11 +459,6 @@ export default function App() {
       setProductHpp(loaded.productHpp);
       setDetailResep(loaded.detailResep);
       setHasUnsavedChanges(false);
-
-      // Extract sheet title
-      const details = await loadProjectDataFromSheets(authToken, sId);
-      // Wait, we can set the spreadsheet title from the fetched spreadsheet
-      const spreadSheetMeta = await loadProjectDataFromSheets(authToken, sId); // Let's use the load output
       setSpreadsheetTitle('Data Resep & HPP Bisnis');
 
       // Check if template is needed

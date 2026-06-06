@@ -5,14 +5,10 @@ import { BahanBaku, ProductHpp, WasteLog } from '../types';
 interface BatchLog {
   id: string;
   batchNo: string;
-  materialName: string;
   bahanNama: string;
-  qtySecured: number;
   qty: number;
-  unit: string;
   satuan: string;
   supplier: string;
-  expDate: string;
   expiryDate: string;
   dateAdded: string;
 }
@@ -78,14 +74,10 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
       added.push({
         id: `batch-sync-${Date.now()}-${b.nama.replace(/\s/g, '-')}`,
         batchNo: `STK-${Date.now().toString().slice(-6)}`,
-        materialName: b.nama,
         bahanNama: b.nama,
-        qtySecured: b.isiKemasan,
         qty: b.isiKemasan,
-        unit: b.satuan,
         satuan: b.satuan,
         supplier: 'Dari Stok',
-        expDate: expStr,
         expiryDate: expStr,
         dateAdded: new Date().toISOString().substring(0, 10),
       });
@@ -114,14 +106,10 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
     const newBatch: BatchLog = {
       id: `batch-${Date.now()}`,
       batchNo: formBatch,
-      materialName: formBahan,
       bahanNama: formBahan,
-      qtySecured: qty,
       qty: qty,
-      unit: bahanInfo?.satuan || 'gr',
       satuan: bahanInfo?.satuan || 'gr',
       supplier: formSupplier,
-      expDate: formExpiry,
       expiryDate: formExpiry,
       dateAdded: new Date().toISOString().substring(0, 10),
     };
@@ -250,7 +238,7 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
               <h1>📋 LAPORAN BATCH & EXPIRY</h1>
               <p style="color:#6b7280;font-size:12px;">Tanggal Cetak: ${new Date().toLocaleDateString('id-ID', { year:'numeric',month:'long',day:'numeric' })}</p>
               <table><thead><tr><th>Batch</th><th>Bahan</th><th style="text-align:right;">Stok</th><th>Supplier</th><th style="text-align:right;">Expired</th><th style="text-align:center;">Status</th></tr></thead><tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:20px;">Belum ada batch.</td></tr>'}</tbody></table>
-              <script>window.print();<\\/script></body></html>
+              <script>window.print();<\/script></body></html>
             `);
             printWin.document.close();
           }} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1 shrink-0">

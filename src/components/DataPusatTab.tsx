@@ -144,6 +144,7 @@ export default function DataPusatTab({
   const [poBahan, setPoBahan] = useState('');
   const [poQty, setPoQty] = useState('');
   const [poHarga, setPoHarga] = useState('');
+  const [poSearch, setPoSearch] = useState('');
 
   useEffect(() => { localStorage.setItem('pusat_purchase_orders', JSON.stringify(purchaseOrders)); }, [purchaseOrders]);
   useEffect(() => { localStorage.setItem('pusat_suppliers', JSON.stringify(suppliers)); }, [suppliers]);
@@ -185,6 +186,14 @@ export default function DataPusatTab({
 
   const handleApprovePO = (id: string) => {
     setPurchaseOrders(prev => prev.map(p => p.id === id ? { ...p, status: 'Disetujui' as const } : p));
+  };
+
+  const handleTerimaPO = (id: string) => {
+    setPurchaseOrders(prev => prev.map(p => {
+      if (p.id !== id) return p;
+      // PO diterima → tambah stok pusat
+      return { ...p, status: 'Diterima' as const };
+    }));
   };
 
   const handleDeletePO = (id: string) => {
@@ -789,7 +798,7 @@ export default function DataPusatTab({
                   <select value={poBahan} onChange={e => setPoBahan(e.target.value)}
                     className="w-full border border-gray-200 rounded-lg p-2.5">
                     <option value="">— Pilih —</option>
-                    {bahanBaku.map(b => <option key={b.nama} value={b.nama}>{b.nama}</option>)}
+                    {bahanBaku.map(b => <option key={b.nama} value={b.nama}>{b.nama} ({b.satuan})</option>)}
                   </select>
                 </div>
                 <div>
@@ -827,13 +836,25 @@ export default function DataPusatTab({
 
             {/* PO List */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
-              <div className="p-4 border-b border-gray-100 bg-gray-50/50">
+              <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
                   Daftar PO ({purchaseOrders.length})
                 </h3>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+                  <input type="text" placeholder="Cari PO..." value={poSearch}
+                    onChange={e => setPoSearch(e.target.value)}
+                    className="w-44 pl-8 pr-3 py-1.5 text-[10px] border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                </div>
               </div>
-              {purchaseOrders.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-6">Belum ada PO.</p>
+              {(purchaseOrders.filter(po =>
+                poSearch === '' ||
+                po.poNo.toLowerCase().includes(poSearch.toLowerCase()) ||
+                po.vendorName.toLowerCase().includes(poSearch.toLowerCase()) ||
+                po.bahanNama.toLowerCase().includes(poSearch.toLowerCase()) ||
+                po.status.toLowerCase().includes(poSearch.toLowerCase())
+              ).length === 0) ? (
+                <p className="text-xs text-gray-400 text-center py-6">{poSearch ? 'Tidak ada PO yang cocok.' : 'Belum ada PO.'}</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
@@ -849,7 +870,13 @@ export default function DataPusatTab({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {purchaseOrders.map(po => (
+                      {purchaseOrders.filter(po =>
+                        poSearch === '' ||
+                        po.poNo.toLowerCase().includes(poSearch.toLowerCase()) ||
+                        po.vendorName.toLowerCase().includes(poSearch.toLowerCase()) ||
+                        po.bahanNama.toLowerCase().includes(poSearch.toLowerCase()) ||
+                        po.status.toLowerCase().includes(poSearch.toLowerCase())
+                      ).map(po => (
                         <tr key={po.id} className="hover:bg-gray-50">
                           <td className="px-3 py-2.5 font-mono font-bold text-gray-800">{po.poNo}</td>
                           <td className="px-3 py-2.5 text-gray-700">{po.vendorName}</td>
@@ -866,13 +893,21 @@ export default function DataPusatTab({
                           <td className="px-3 py-2.5 text-center">
                             <div className="flex justify-center gap-1">
                               <button onClick={() => handleCetakPO(po)}
-                                className="p-1 text-gray-400 hover:text-emerald-600 cursor-pointer" title="Cetak PO">
-                                <Printer className="w-3 h-3" />
+                                className="inline-flex items-center gap-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[9px] font-bold px-2 py-1 rounded-lg transition cursor-pointer"
+                                title="Cetak PO">
+                                <Printer className="w-3 h-3" /> Cetak PO
                               </button>
                               {po.status === 'Draft' && (
                                 <button onClick={() => handleApprovePO(po.id)}
                                   className="p-1 text-gray-400 hover:text-emerald-600 cursor-pointer" title="Setujui">
                                   <CheckCircle2 className="w-3 h-3" />
+                                </button>
+                              )}
+                              {po.status === 'Disetujui' && (
+                                <button onClick={() => handleTerimaPO(po.id)}
+                                  className="inline-flex items-center gap-1 bg-blue-100 hover:bg-blue-200 text-blue-800 text-[9px] font-bold px-2 py-1 rounded-lg transition cursor-pointer"
+                                  title="Barang Diterima">
+                                  <Package className="w-3 h-3" /> Terima
                                 </button>
                               )}
                               <button onClick={() => handleDeletePO(po.id)}
@@ -950,7 +985,7 @@ export default function DataPusatTab({
                           {so.status === 'dikirim' && (
                             <button onClick={() => handleCetakSuratJalan(so)}
                               className="inline-flex items-center gap-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[9px] font-bold px-2 py-1 rounded-lg transition cursor-pointer">
-                              <Printer className="w-3 h-3" /> Cetak SJ
+                              <Printer className="w-3 h-3" /> Cetak Surat Jalan
                             </button>
                           )}
                           {so.status === 'diterima' && (

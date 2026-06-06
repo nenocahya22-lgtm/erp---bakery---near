@@ -120,6 +120,29 @@ export default function BranchDashboard({
     showLocalToast(`Stok ${bahanNama} dicatat: ${fisik}`, 'info');
   };
 
+  // ─── PLANNER STATE (shared antara kiri & kanan) ───
+  const [plannerTargets, setPlannerTargets] = useState<Record<string, number>>({});
+  const calcPlannerNeeds = () => {
+    const needs: Record<string, { total: number; satuan: string; hargaTotal: number; perProduk: { nama: string; qty: number }[] }> = {};
+    Object.entries(plannerTargets).forEach(([prodName, prodQty]) => {
+      if (!prodQty || prodQty <= 0) return;
+      const resep = detailResep.filter(r => r.namaProduk === prodName);
+      resep.forEach(r => {
+        const totalQty = r.takaran * prodQty;
+        const bahanInfo = bahanBaku.find(b => b.nama.toLowerCase().trim() === r.namaBahan.toLowerCase().trim());
+        const hargaSatuan = bahanInfo?.hargaSatuan || 0;
+        if (!needs[r.namaBahan]) {
+          needs[r.namaBahan] = { total: 0, satuan: 'gr', hargaTotal: 0, perProduk: [] };
+        }
+        if (bahanInfo?.satuan) needs[r.namaBahan].satuan = bahanInfo.satuan;
+        needs[r.namaBahan].total += totalQty;
+        needs[r.namaBahan].hargaTotal += totalQty * hargaSatuan;
+        needs[r.namaBahan].perProduk.push({ nama: prodName, qty: Math.round(totalQty * 10) / 10 });
+      });
+    });
+    return needs;
+  };
+
   // ─── WASTE ───
   const handleAddWaste = () => {
     if (!wasteBahan || !wasteQty) return;
@@ -422,66 +445,38 @@ export default function BranchDashboard({
                 <ClipboardCheck className="w-4 h-4 inline text-emerald-600 mr-1" /> Target Produksi
               </h3>
               <p className="text-[10px] text-gray-400">Masukkan jumlah produksi yang direncanakan hari ini.</p>
+              <div className="space-y-3">
+                {productHpp.map(p => (
+                  <div key={p.namaProduk} className="flex items-center gap-3">
+                    <span className="text-xs font-semibold text-gray-700 flex-1 truncate">{p.namaProduk}</span>
+                    <input type="number" min="0"
+                      value={plannerTargets[p.namaProduk] || ''}
+                      onChange={e => setPlannerTargets(prev => ({ ...prev, [p.namaProduk]: parseInt(e.target.value) || 0 }))}
+                      className="w-20 border border-gray-200 rounded-lg p-2 text-xs font-mono font-bold text-center"
+                      placeholder="0" />
+                    <span className="text-[10px] text-gray-400 w-8">pcs</span>
+                  </div>
+                ))}
+                {productHpp.length === 0 && (
+                  <p className="text-xs text-gray-400 text-center py-4">Belum ada produk. Buat resep dulu.</p>
+                )}
+              </div>
               {(() => {
-                const [plannerTargets, setPlannerTargets] = React.useState<Record<string, number>>({});
-
-                const calcPlannerNeeds = () => {
-                  const needs: Record<string, { total: number; satuan: string; hargaTotal: number; perProduk: { nama: string; qty: number }[] }> = {};
-                  Object.entries(plannerTargets).forEach(([prodName, prodQty]) => {
-                    if (!prodQty || prodQty <= 0) return;
-                    const resep = detailResep.filter(r => r.namaProduk === prodName);
-                    resep.forEach(r => {
-                      const totalQty = r.takaran * prodQty;
-                      const bahanInfo = bahanBaku.find(b => b.nama.toLowerCase().trim() === r.namaBahan.toLowerCase().trim());
-                      const hargaSatuan = bahanInfo?.hargaSatuan || 0;
-                      if (!needs[r.namaBahan]) {
-                        needs[r.namaBahan] = { total: 0, satuan: 'gr', hargaTotal: 0, perProduk: [] };
-                      }
-                      if (bahanInfo?.satuan) needs[r.namaBahan].satuan = bahanInfo.satuan;
-                      needs[r.namaBahan].total += totalQty;
-                      needs[r.namaBahan].hargaTotal += totalQty * hargaSatuan;
-                      needs[r.namaBahan].perProduk.push({ nama: prodName, qty: Math.round(totalQty * 10) / 10 });
-                    });
-                  });
-                  return needs;
-                };
-
+                const totalPcs = Object.values(plannerTargets).reduce((a, b) => a + b, 0);
                 const plannerNeeds = calcPlannerNeeds();
                 const totalPlannerHarga = Object.values(plannerNeeds).reduce((sum, n) => sum + n.hargaTotal, 0);
-                const totalPcs = Object.values(plannerTargets).reduce((a, b) => a + b, 0);
-
-                return (
-                  <>
-                    <div className="space-y-3">
-                      {productHpp.map(p => (
-                        <div key={p.namaProduk} className="flex items-center gap-3">
-                          <span className="text-xs font-semibold text-gray-700 flex-1 truncate">{p.namaProduk}</span>
-                          <input type="number" min="0"
-                            value={plannerTargets[p.namaProduk] || ''}
-                            onChange={e => setPlannerTargets(prev => ({ ...prev, [p.namaProduk]: parseInt(e.target.value) || 0 }))}
-                            className="w-20 border border-gray-200 rounded-lg p-2 text-xs font-mono font-bold text-center"
-                            placeholder="0" />
-                          <span className="text-[10px] text-gray-400 w-8">pcs</span>
-                        </div>
-                      ))}
-                      {productHpp.length === 0 && (
-                        <p className="text-xs text-gray-400 text-center py-4">Belum ada produk. Buat resep dulu.</p>
-                      )}
+                return totalPcs > 0 ? (
+                  <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-xs space-y-1">
+                    <div className="flex justify-between font-bold text-emerald-800">
+                      <span>Total Produk:</span>
+                      <span>{totalPcs} pcs</span>
                     </div>
-                    {totalPcs > 0 && (
-                      <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-xs space-y-1">
-                        <div className="flex justify-between font-bold text-emerald-800">
-                          <span>Total Produk:</span>
-                          <span>{totalPcs} pcs</span>
-                        </div>
-                        <div className="flex justify-between font-bold text-emerald-800">
-                          <span>Est. Biaya Bahan:</span>
-                          <span className="font-mono">{formatCurrency(totalPlannerHarga)}</span>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                );
+                    <div className="flex justify-between font-bold text-emerald-800">
+                      <span>Est. Biaya Bahan:</span>
+                      <span className="font-mono">{formatCurrency(totalPlannerHarga)}</span>
+                    </div>
+                  </div>
+                ) : null;
               })()}
             </div>
 
@@ -491,37 +486,11 @@ export default function BranchDashboard({
                 <Package className="w-4 h-4 text-emerald-600" /> Daftar Belanja Bahan
               </h3>
               {(() => {
-                const [plannerTargets, setPlannerTargets] = React.useState<Record<string, number>>({});
-                // Sync with left panel via shared logic
-                // Use the same scope — we'll inline the calc
-                const calcPlannerNeeds = () => {
-                  const needs: Record<string, { total: number; satuan: string; hargaTotal: number; perProduk: { nama: string; qty: number }[] }> = {};
-                  Object.entries(plannerTargets).forEach(([prodName, prodQty]) => {
-                    if (!prodQty || prodQty <= 0) return;
-                    const resep = detailResep.filter(r => r.namaProduk === prodName);
-                    resep.forEach(r => {
-                      const totalQty = r.takaran * prodQty;
-                      const bahanInfo = bahanBaku.find(b => b.nama.toLowerCase().trim() === r.namaBahan.toLowerCase().trim());
-                      const hargaSatuan = bahanInfo?.hargaSatuan || 0;
-                      if (!needs[r.namaBahan]) {
-                        needs[r.namaBahan] = { total: 0, satuan: 'gr', hargaTotal: 0, perProduk: [] };
-                      }
-                      if (bahanInfo?.satuan) needs[r.namaBahan].satuan = bahanInfo.satuan;
-                      needs[r.namaBahan].total += totalQty;
-                      needs[r.namaBahan].hargaTotal += totalQty * hargaSatuan;
-                      needs[r.namaBahan].perProduk.push({ nama: prodName, qty: Math.round(totalQty * 10) / 10 });
-                    });
-                  });
-                  return needs;
-                };
-
                 const plannerNeeds = calcPlannerNeeds();
                 const totalPlannerHarga = Object.values(plannerNeeds).reduce((sum, n) => sum + n.hargaTotal, 0);
-
                 if (Object.keys(plannerNeeds).length === 0) {
                   return <p className="text-xs text-gray-400 text-center py-8">Masukkan target produksi di samping.</p>;
                 }
-
                 return (
                   <div className="space-y-3">
                     {Object.entries(plannerNeeds).sort(([, a], [, b]) => b.total - a.total).map(([bahan, data]) => {
