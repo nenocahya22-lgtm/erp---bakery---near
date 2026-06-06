@@ -11,6 +11,8 @@ interface RetailOrder {
   status: 'Queued' | 'Baking' | 'Completed' | 'Refunded';
   timeAgo: string;
   date: string;
+  catatan: string;
+  addOns: { nama: string; harga: number }[];
 }
 
 interface ShiftLog {
@@ -37,11 +39,26 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
   const [selectedProduct, setSelectedProduct] = useState('');
   const [orderQty, setOrderQty] = useState(1);
   const [orderSource, setOrderSource] = useState<RetailOrder['source']>('Walk-In POS');
+  const [orderNotes, setOrderNotes] = useState('');
+  const [orderAddOns, setOrderAddOns] = useState<{ nama: string; harga: number }[]>([]);
+  const [showAddOnPicker, setShowAddOnPicker] = useState(false);
 
   const [orders, setOrders] = useState<RetailOrder[]>(() => {
     const saved = localStorage.getItem('pos_orders_data');
     return saved ? JSON.parse(saved) : [];
   });
+
+  // Daftar add-on / topping yang tersedia
+  const availableAddOns = [
+    { nama: 'Extra Keju', harga: 5000 },
+    { nama: 'Coklat Meleleh', harga: 4000 },
+    { nama: 'Krim Vanilla', harga: 3000 },
+    { nama: 'Selai Stroberi', harga: 3000 },
+    { nama: 'Kacang Almond', harga: 6000 },
+    { nama: 'Sprinkle Pelangi', harga: 2000 },
+    { nama: 'Susu Kental Manis', harga: 2000 },
+    { nama: 'Meses Coklat', harga: 2000 },
+  ];
 
   const [shiftLogs, setShiftLogs] = useState<ShiftLog[]>(() => {
     const saved = localStorage.getItem('pos_shift_logs');
@@ -75,23 +92,30 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
     const totalRevenue = price * orderQty;
     const txId = `TX-${Date.now().toString().slice(-6)}`;
 
+    const addOnsTotal = orderAddOns.reduce((s, a) => s + a.harga, 0);
+    const grandTotal = totalRevenue + addOnsTotal;
+
     const newOrder: RetailOrder = {
       ordId: txId,
       source: orderSource,
       customerName: newCustName.trim() || 'Pelanggan POS',
       items: `${orderQty} pcs ${selectedProduct}`,
-      totalSum: totalRevenue,
+      totalSum: grandTotal,
       status: 'Queued',
       timeAgo: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
       date: today,
+      catatan: orderNotes.trim(),
+      addOns: orderAddOns,
     };
 
     setOrders(prev => [newOrder, ...prev]);
-    if (onCompletePOSSale) onCompletePOSSale(selectedProduct, orderQty, totalRevenue, orderSource);
+    if (onCompletePOSSale) onCompletePOSSale(selectedProduct, orderQty, grandTotal, orderSource);
 
     setNewCustName('');
     setSelectedProduct('');
     setOrderQty(1);
+    setOrderNotes('');
+    setOrderAddOns([]);
   };
 
   const handleUpdateOrderStatus = (ordId: string, newStatus: RetailOrder['status']) => {
@@ -223,7 +247,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
           Near Bakery & Co. ERP — Laporan Penjualan<br>
           Dicetak dari Sistem POS Kasir
         </div>
-        <script>window.print();<\/script>
+        <script>window.print(); setTimeout(() => window.close(), 1000);</script>
       </body></html>
     `);
     printWin.document.close();
@@ -233,6 +257,12 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
   const handlePrintThermalBill = (order: RetailOrder) => {
     const printWin = window.open('', '_blank');
     if (!printWin) return;
+    const addOnRows = order.addOns && order.addOns.length > 0
+      ? order.addOns.map(a => `<tr><td style="padding:1px 2px;font-size:9px;">  + ${a.nama}</td><td style="padding:1px 2px;text-align:right;font-size:9px;">${formatCurrency(a.harga)}</td></tr>`).join('')
+      : '';
+    const notesRow = order.catatan
+      ? `<p style="font-size:8px;margin:2px 0;">📝 ${order.catatan}</p>`
+      : '';
     printWin.document.write(`
       <html><head>
         <title>Bill - ${order.ordId}</title>
@@ -260,16 +290,27 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
         <div class="line"></div>
         <table>
           <tr><td colspan="2"><b>${order.items}</b></td></tr>
+          ${addOnRows}
         </table>
+        ${notesRow}
         <div class="line"></div>
         <table>
           <tr><td>TOTAL</td><td class="right total">${formatCurrency(order.totalSum)}</td></tr>
         </table>
         <p class="center" style="font-size:8px;margin-top:6px;">Terima kasih!</p>
-        <script>window.print();<\/script>
+        <script>window.print(); setTimeout(() => window.close(), 1000);</script>
       </body></html>
     `);
     printWin.document.close();
+  };
+
+  // Toggle add-on
+  const toggleAddOn = (item: { nama: string; harga: number }) => {
+    setOrderAddOns(prev => {
+      const exists = prev.find(a => a.nama === item.nama);
+      if (exists) return prev.filter(a => a.nama !== item.nama);
+      return [...prev, item];
+    });
   };
 
   return (
@@ -336,6 +377,50 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
               </div>
             </div>
 
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Catatan / Request</label>
+                <input type="text" placeholder="Req pelanggan..." value={orderNotes}
+                  onChange={(e) => setOrderNotes(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl p-2.5 bg-white focus:ring-1 focus:ring-emerald-500 focus:outline-none" />
+              </div>
+              <button type="button" onClick={() => setShowAddOnPicker(!showAddOnPicker)}
+                className={`mt-5 px-3 py-2.5 rounded-xl text-[10px] font-bold transition cursor-pointer flex items-center gap-1 shrink-0 ${
+                  orderAddOns.length > 0 ? 'bg-emerald-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                }`}>
+                🧀 Topping {orderAddOns.length > 0 && `(${orderAddOns.length})`}
+              </button>
+            </div>
+
+            {/* ADD-ON PICKER */}
+            {showAddOnPicker && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-1.5">
+                <p className="text-[9px] uppercase font-bold text-amber-800 mb-1">Pilih Topping / Add-on</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {availableAddOns.map(item => {
+                    const selected = orderAddOns.some(a => a.nama === item.nama);
+                    return (
+                      <button key={item.nama} type="button" onClick={() => toggleAddOn(item)}
+                        className={`text-[10px] px-2.5 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer flex justify-between items-center ${
+                          selected
+                            ? 'bg-emerald-600 text-white border-emerald-600'
+                            : 'bg-white text-gray-700 border-gray-200 hover:bg-amber-100'
+                        }`}>
+                        <span>{item.nama}</span>
+                        <span className="font-mono text-[9px]">+{formatCurrency(item.harga)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {orderAddOns.length > 0 && (
+                  <div className="mt-1.5 pt-1.5 border-t border-amber-200 flex justify-between text-xs font-bold text-amber-900">
+                    <span>Subtotal Add-on:</span>
+                    <span className="font-mono">+{formatCurrency(orderAddOns.reduce((s, a) => s + a.harga, 0))}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div>
               <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Pilih Produk</label>
               <select required value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)}
@@ -362,8 +447,11 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
               <div className="flex-1 text-right bg-emerald-50 p-2 rounded-xl border border-emerald-100">
                 <span className="text-[10px] text-gray-400 block uppercase font-bold">Total</span>
                 <span className="text-base font-black text-emerald-800 font-mono">
-                  {formatCurrency((calculatedProducts.find(p => p.namaProduk === selectedProduct)?.hargaJualPerPorsi || 19000) * orderQty)}
+                  {formatCurrency(((calculatedProducts.find(p => p.namaProduk === selectedProduct)?.hargaJualPerPorsi || 19000) * orderQty) + orderAddOns.reduce((s, a) => s + a.harga, 0))}
                 </span>
+                {orderAddOns.length > 0 && (
+                  <span className="text-[8px] text-amber-600 block font-normal">(+{formatCurrency(orderAddOns.reduce((s, a) => s + a.harga, 0))} add-on)</span>
+                )}
               </div>
             </div>
 
@@ -391,6 +479,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
                 <div className="space-y-1 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[10px] font-bold text-gray-400">#{o.ordId}</span>
+                    {o.catatan && <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">📝 {o.catatan}</span>}
                     <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded font-mono ${
                       o.source === 'Walk-In POS' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
                       'bg-purple-50 text-purple-700 border border-purple-200'
@@ -399,6 +488,11 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
                   </div>
                   <p className="font-bold text-gray-900">{o.customerName}</p>
                   <p className="text-[11px] text-gray-500">{o.items}</p>
+                  {o.addOns && o.addOns.length > 0 && (
+                    <p className="text-[9px] text-amber-700">
+                      🧀 {o.addOns.map(a => `${a.nama}+${formatCurrency(a.harga)}`).join(', ')}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3 shrink-0 border-t md:border-0 pt-2 md:pt-0 w-full md:w-auto justify-between">
@@ -641,6 +735,15 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
                   <span>{activeReceipt.items}</span>
                   <span className="font-mono">{formatCurrency(activeReceipt.totalSum)}</span>
                 </div>
+                {activeReceipt.addOns && activeReceipt.addOns.map(a => (
+                  <div key={a.nama} className="flex justify-between text-[10px] text-amber-700">
+                    <span className="ml-2">+ {a.nama}</span>
+                    <span className="font-mono">{formatCurrency(a.harga)}</span>
+                  </div>
+                ))}
+                {activeReceipt.catatan && (
+                  <p className="text-[9px] text-gray-500 italic mt-1">📝 {activeReceipt.catatan}</p>
+                )}
               </div>
               <div className="border-b border-dashed border-gray-300"></div>
               <p className="flex justify-between font-bold text-xs border-t border-dotted border-gray-200 pt-1.5 uppercase">
