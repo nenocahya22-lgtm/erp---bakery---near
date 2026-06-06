@@ -539,12 +539,15 @@ export default function BranchDashboard({
               </h3>
               <div className="space-y-2">
                 {productHpp.slice(0, 5).map(p => {
-                  const rec = Math.max(0, (preOrders[p.namaProduk] || 0) - (displayStock[p.namaProduk] || 0) + 10);
+                  const calcProd = calculatedProducts.find(c => c.namaProduk === p.namaProduk);
+                  const margin = calcProd?.marginPersen || 0;
                   return (
                     <div key={p.namaProduk} className="flex items-center justify-between p-3 border border-gray-100 rounded-xl">
                       <span className="text-xs font-semibold text-gray-900">{p.namaProduk}</span>
-                      <span className="text-xs font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg">
-                        🔥 {rec} porsi
+                      <span className={`text-xs font-mono font-bold px-2 py-1 rounded-lg ${
+                        margin >= 20 ? 'bg-emerald-50 text-emerald-700' : margin > 0 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'
+                      }`}>
+                        {margin.toFixed(0)}% margin
                       </span>
                     </div>
                   );
