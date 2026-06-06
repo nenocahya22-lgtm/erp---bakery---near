@@ -113,16 +113,9 @@ export default function MaterialsTab({ bahanBaku, cabangList, cabangStok }: Mate
                   </div>
                   <div className="p-4">
                     {cabangStockItems.length === 0 ? (
-                      <div className="space-y-2">
-                        {/* Show theoretically from SO sent */}
-                        {bahanBaku.map(b => {
-                          // This component is read-only, just display
-                          return null;
-                        })}
-                        <p className="text-xs text-gray-400 text-center py-4">
-                          Belum ada data stok opname. Silakan lakukan stok opname dari dashboard cabang masing-masing.
-                        </p>
-                      </div>
+                      <p className="text-xs text-gray-400 text-center py-4">
+                        Belum ada data stok opname. Silakan lakukan stok opname dari dashboard cabang masing-masing.
+                      </p>
                     ) : (
                       <div className="overflow-x-auto">
                         <table className="w-full text-left text-xs border-collapse">
