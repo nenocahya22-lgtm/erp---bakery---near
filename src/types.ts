@@ -1,6 +1,7 @@
 export interface BahanBaku {
   kode?: string; // Auto-generated kode like BB-001
   nama: string;
+  kategori?: string;
   satuan: string;
   hargaBeli: number; // Effective purchase price (marked up)
   isiKemasan: number;
@@ -157,6 +158,32 @@ export interface SuratOrder {
   tanggalKirim: string;
   status: 'minta' | 'dikirim' | 'diterima';
   items: { bahanNama: string; qty: number }[];
+}
+
+export interface StockOpname {
+  id: string;
+  bahanNama: string;
+  cabangId: string;
+  stokSatuan: number; // gram/ml/pcs hasil timbang langsung
+  packUtuh: number; // kemasan factory yang belum dibuka
+  packTerbuka: number; // kemasan yang sudah dibuka
+  sisaPackBuka: number; // sisa timbangan dari pack terbuka
+  petugas: string;
+  catatan: string;
+  tanggal: string;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  poNo: string;
+  vendorName: string;
+  bahanNama: string;
+  qty: number;
+  satuan: string;
+  hargaSatuan: number;
+  totalCost: number;
+  tanggalOrder: string;
+  status: 'Draft' | 'Disetujui' | 'Dikirim ke Supplier' | 'Diterima';
 }
 
 export interface StokCabang {

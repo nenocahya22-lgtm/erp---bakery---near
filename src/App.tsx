@@ -27,7 +27,6 @@ import EnterpriseDashboard from './components/EnterpriseDashboard';
 import FinanceCashFlowTab from './components/FinanceCashFlowTab';
 import WasteControlTab from './components/WasteControlTab';
 import RdSandboxTab, { RDExperiment } from './components/RdSandboxTab';
-import LogisticsTab from './components/LogisticsTab';
 import SmartKitchenTab from './components/SmartKitchenTab';
 import ComplianceSafetyTab from './components/ComplianceSafetyTab';
 
@@ -39,7 +38,6 @@ import BomTab from './components/BomTab';
 import MpsTab from './components/MpsTab';
 import StokGudangTab from './components/StokGudangTab';
 import FefoExpiryTab from './components/FefoExpiryTab';
-import SupplierTab from './components/SupplierTab';
 
 import BudgetTab from './components/BudgetTab';
 import ProductionPlannerTab from './components/ProductionPlannerTab';
@@ -85,7 +83,6 @@ import {
   Percent,
   BarChart3,
   Thermometer,
-  Calendar,
   PanelRightClose,
   PanelRightOpen,
   Image,
@@ -208,8 +205,6 @@ export default function App() {
     | 'erp_mps'
     | 'erp_stock'
     | 'erp_fefo_expiry'
-    | 'erp_supplier'
-    | 'erp_log'
     | 'erp_pos'
     | 'erp_online'
     | 'erp_crm'
@@ -1017,8 +1012,16 @@ export default function App() {
   }
 
   return (
-    <div id="application-layout" className="min-h-screen bg-slate-100 flex flex-col md:flex-row font-sans text-gray-800">
+    <div id="application-layout" className="min-h-screen bg-slate-100 font-sans text-gray-800 relative">
       
+      {/* OVERLAY BACKDROP — when sidebar is open on mobile */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/40 z-30 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* FLOATING SIDEBAR TOGGLE — when sidebar is closed */}
       {!isSidebarOpen && (
         <button
@@ -1030,12 +1033,12 @@ export default function App() {
         </button>
       )}
 
-      {/* LEFT SIDEBAR AREA — pushes content, does NOT cover it */}
-      <aside className={`bg-slate-900 text-slate-300 border-r border-slate-800 flex flex-col shrink-0 min-h-screen ${
-        isSidebarOpen ? 'flex w-72' : 'hidden'
+      {/* LEFT SIDEBAR — slides over content, does NOT push it */}
+      <aside className={`fixed top-0 left-0 z-40 h-full w-72 bg-slate-900 text-slate-300 border-r border-slate-800 flex flex-col shadow-2xl transition-all duration-300 ease-in-out ${
+        isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
       }`}>
         {/* LOGO BRAND BAR */}
-        <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+        <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-black shadow-md">
               <Layers className="w-5 h-5" />
@@ -1045,18 +1048,18 @@ export default function App() {
               <p className="text-[9px] text-emerald-400 font-bold tracking-widest uppercase">Owner Console</p>
             </div>
           </div>
-          {/* Close/Toggle button for sidebar — always visible */}
+          {/* Close/Toggle button for sidebar */}
           <button 
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            onClick={() => setIsSidebarOpen(false)}
             className="p-1 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg cursor-pointer"
-            title={isSidebarOpen ? 'Tutup Sidebar' : 'Buka Sidebar'}
+            title="Tutup Sidebar"
           >
-            {isSidebarOpen ? <PanelRightClose className="w-5 h-5" /> : <PanelRightOpen className="w-5 h-5" />}
+            <PanelRightClose className="w-5 h-5" />
           </button>
         </div>
 
         {/* LOGGED IN USER PROFILE INDICATOR */}
-        <div className="p-4 bg-slate-900/60 border-b border-slate-800 text-xs flex items-center justify-between">
+        <div className="p-4 bg-slate-900/60 border-b border-slate-800 text-xs flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-7.5 h-7.5 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-bold font-mono text-emerald-400">
               OW
@@ -1106,9 +1109,6 @@ export default function App() {
             <SidebarBtn tab="erp_fefo_expiry" active={activeTab} icon={<ShieldAlert className="w-4 h-4" />} label="📋 FEFO & Expiry" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_bom" active={activeTab} icon={<Layers className="w-4 h-4" />} label="🔧 BOM & Yield" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_production_center" active={activeTab} icon={<ClipboardList className="w-4 h-4" />} label="🏭 Prod. Center" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_mps" active={activeTab} icon={<Calendar className="w-4 h-4" />} label="📅 Jadwal MPS" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_work_order" active={activeTab} icon={<ClipboardList className="w-4 h-4" />} label="📄 Work Order" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_production_planner" active={activeTab} icon={<ShoppingCart className="w-4 h-4" />} label="📊 Prod. Planner" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_baker_pct" active={activeTab} icon={<Percent className="w-4 h-4" />} label="🍞 Baker's %" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_dough_temp" active={activeTab} icon={<Thermometer className="w-4 h-4" />} label="🌡️ Suhu Adonan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
           </div>
@@ -1116,8 +1116,7 @@ export default function App() {
           {/* 🤝 ③ PEMBELIAN & SUPPLIER — Vendor, PO, distribusi */}
           <div className="space-y-1">
             <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">③ Pembelian & Supplier</span>
-            <SidebarBtn tab="erp_supplier" active={activeTab} icon={<Coins className="w-4 h-4" />} label="🤝 Supplier & PO" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_log" active={activeTab} icon={<Truck className="w-4 h-4" />} label="🚚 Logistik" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <span className="px-3 text-[10px] text-gray-600 font-medium">✅ Ada di Data Pusat</span>
           </div>
 
           {/* 🛒 ④ KASIR & PENJUALAN — POS, online, marketing */}
@@ -1204,8 +1203,8 @@ export default function App() {
         </div>
       </aside>
 
-      {/* RIGHT SIDEBAR ACTIVE WORKSPACE PANEL AREA */}
-      <div id="erp-workspace-area" className="flex-1 flex flex-col h-screen overflow-hidden bg-slate-50 relative">
+      {/* MAIN WORKSPACE — always full width, unaffected by sidebar */}
+      <div id="erp-workspace-area" className="flex flex-col min-h-screen bg-slate-50">
         
         {/* TOP MOBILE TOGGLE & SYSTEM CLOCK CONTROL BAR */}
         <header className="bg-white border-b border-gray-150 h-16 py-3 px-4 sm:px-6 flex justify-between items-center shrink-0 shadow-xs z-30">
@@ -1312,6 +1311,7 @@ export default function App() {
             {activeTab === 'materials' && (
               <MaterialsTab
                 bahanBaku={bahanBaku}
+                cabangList={cabangList}
                 onAddMaterial={handleAddMaterial}
                 onEditMaterial={handleEditMaterial}
                 onDeleteMaterial={handleDeleteMaterial}
@@ -1385,12 +1385,6 @@ export default function App() {
             )}
             {activeTab === 'erp_fefo_expiry' && (
               <FefoExpiryTab bahanBaku={bahanBaku} productHpp={productHpp} onAddWasteLog={handleAddWasteLog} />
-            )}
-            {activeTab === 'erp_supplier' && (
-              <SupplierTab bahanBaku={bahanBaku} />
-            )}
-            {activeTab === 'erp_log' && (
-              <LogisticsTab />
             )}
             {activeTab === 'erp_pos' && (
               <PosKasirTab
