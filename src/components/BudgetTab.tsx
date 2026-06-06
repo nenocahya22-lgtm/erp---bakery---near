@@ -58,9 +58,22 @@ export default function BudgetTab({ calculatedProducts, wasteTotalLoss, rdTotalC
     }));
   }, [wasteTotalLoss, rdTotalCost]);
 
-  const totalRevenue = calculatedProducts.length > 0
-    ? calculatedProducts.reduce((s, p) => s + p.hargaJual, 0) * 100
-    : 10000000;
+  const totalRevenue = (() => {
+    try {
+      const saved = localStorage.getItem('revenue_tracker_data');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const txs = parsed.transactions || [];
+        const total = txs.reduce((sum: number, tx: any) => sum + (tx.amount || 0), 0);
+        if (total > 0) return total;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return calculatedProducts.length > 0
+      ? calculatedProducts.reduce((s, p) => s + p.hargaJual, 0) * 10
+      : 10000000;
+  })();
 
   const totalBudgetPct = budgetItems.reduce((sum, item) => sum + item.budgetPct, 0);
   const itemsOverBudget = budgetItems.filter(item => {

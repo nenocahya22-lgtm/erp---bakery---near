@@ -10,22 +10,24 @@ export default function DoughTemperatureTab() {
   // Desired Water Temperature = (Target Dough Temp × 3) - (Room Temp + Flour Temp + Mixer Friction)
   const desiredWaterTemp = (targetDoughTemp * 3) - (roomTemp + flourTemp + mixerFriction);
 
-  // If water temp is too hot/cold, suggest ice/heat
-  const needsIce = desiredWaterTemp < 2;
-  const needsWarmWater = desiredWaterTemp > 40;
+  // If water temp is below room temperature, we need ice to cool it down
+  const needsIce = desiredWaterTemp < roomTemp;
+  const needsWarmWater = desiredWaterTemp > roomTemp + 2;
 
-  // Ice calculation: 1/3 ice + 2/3 water for typical dough
+  // Ice calculation based on thermodynamic principles:
+  // Ratio of ice = (T_tap - T_water) / (80 + T_tap)
+  // Assume T_tap is roomTemp. Latent heat of fusion of ice is 80.
   const totalLiquid = 1000; // Assume 1L total water
-  const icePercent = needsIce ? Math.min(0.5, Math.max(0, (2 - desiredWaterTemp) / 20)) : 0;
+  const icePercent = needsIce ? Math.max(0, Math.min(0.6, (roomTemp - desiredWaterTemp) / (80 + roomTemp))) : 0;
   const iceAmount = Math.round(totalLiquid * icePercent);
   const coldWaterAmount = totalLiquid - iceAmount;
 
   const formatTemp = (t: number) => `${t.toFixed(1)}°C`;
 
   const getHydrationAdvice = () => {
-    if (desiredWaterTemp < 5) return '❄️ Gunakan ES BATU untuk menurunkan suhu air';
-    if (desiredWaterTemp > 45) return '🔥 Gunakan AIR HANGAT untuk menaikkan suhu air';
-    if (desiredWaterTemp >= 20 && desiredWaterTemp <= 28) return '✅ Suhu air ideal — gunakan air biasa';
+    if (desiredWaterTemp < roomTemp - 5) return '❄️ Gunakan ES BATU untuk menurunkan suhu air';
+    if (desiredWaterTemp > roomTemp + 2) return '🔥 Gunakan AIR HANGAT untuk menaikkan suhu air';
+    if (desiredWaterTemp >= roomTemp - 5 && desiredWaterTemp <= roomTemp + 2) return '✅ Suhu air ideal — gunakan air biasa';
     return '💧 Sesuaikan sedikit, masih dalam batas toleransi';
   };
 
