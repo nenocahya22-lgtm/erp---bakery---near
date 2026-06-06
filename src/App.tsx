@@ -14,13 +14,13 @@ import {
   loadRevenueFromSheets,
 } from './lib/sheets';
 import { calculateAllProducts } from './lib/calculations';
-import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, WasteLog } from './types';
+import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, WasteLog, Cabang, SuratOrder, BranchStock, BranchTransaction } from './types';
 
 import OwnerLogin from './components/OwnerLogin';
 import DashboardTab from './components/DashboardTab';
 import MaterialsTab from './components/MaterialsTab';
 import RecipesTab from './components/RecipesTab';
-import HppTab from './components/HppTab';
+import HargaHppTab from './components/HargaHppTab';
 
 // Advanced ERP Modules
 import EnterpriseDashboard from './components/EnterpriseDashboard';
@@ -40,7 +40,7 @@ import MpsTab from './components/MpsTab';
 import StokGudangTab from './components/StokGudangTab';
 import FefoExpiryTab from './components/FefoExpiryTab';
 import SupplierTab from './components/SupplierTab';
-import HargaPrediksiTab from './components/HargaPrediksiTab';
+
 import BudgetTab from './components/BudgetTab';
 import ProductionPlannerTab from './components/ProductionPlannerTab';
 import KitchenWorkOrderTab from './components/KitchenWorkOrderTab';
@@ -51,6 +51,14 @@ import ImageGeneratorTab from './components/ImageGeneratorTab';
 import ProfitDistribusiTab from './components/ProfitDistribusiTab';
 import AlertSystemTab from './components/AlertSystemTab';
 import BackupSystemTab from './components/BackupSystemTab';
+
+// Production Center
+import ProductionCenterTab from './components/ProductionCenterTab';
+
+// Multi-Cabang System
+import DataPusatTab from './components/DataPusatTab';
+import BranchLogin from './components/BranchLogin';
+import BranchDashboard from './components/BranchDashboard';
 
 import {
   AlertTriangle,
@@ -84,6 +92,7 @@ import {
   PieChart,
   Bell,
   Cloud,
+  Building2,
 } from 'lucide-react';
 
 export default function App() {
@@ -124,9 +133,70 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [lastAutoSaved, setLastAutoSaved] = useState<Date | null>(null);
 
+  // ─── MULTI-CABANG STATE ───
+  const [cabangList, setCabangList] = useState<Cabang[]>(() => {
+    const saved = localStorage.getItem('cabang_list_data');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [suratOrders, setSuratOrders] = useState<SuratOrder[]>(() => {
+    const saved = localStorage.getItem('surat_orders_data');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [branchAuth, setBranchAuth] = useState<{ id: string; nama: string } | null>(() => {
+    const saved = localStorage.getItem('branch_authenticated');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  useEffect(() => { localStorage.setItem('cabang_list_data', JSON.stringify(cabangList)); }, [cabangList]);
+  // ─── BRANCH STOCK & TRANSACTION TRACKING ───
+  const [cabangStok, setCabangStok] = useState<BranchStock[]>(() => {
+    const saved = localStorage.getItem('cabang_stok_data');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [branchTransactions, setBranchTransactions] = useState<BranchTransaction[]>(() => {
+    const saved = localStorage.getItem('branch_transactions_data');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => { localStorage.setItem('surat_orders_data', JSON.stringify(suratOrders)); }, [suratOrders]);
+  useEffect(() => { localStorage.setItem('cabang_stok_data', JSON.stringify(cabangStok)); }, [cabangStok]);
+  useEffect(() => { localStorage.setItem('branch_transactions_data', JSON.stringify(branchTransactions)); }, [branchTransactions]);
+
+  // Helper: update branch stock teoritis
+  const updateBranchStock = (cabangId: string, bahanNama: string, qtyChange: number, satuan: string) => {
+    setCabangStok(prev => {
+      const existing = prev.find(s => s.cabangId === cabangId && s.bahanNama === bahanNama);
+      if (existing) {
+        return prev.map(s =>
+          s.cabangId === cabangId && s.bahanNama === bahanNama
+            ? { ...s, stokTeoritis: Math.max(0, s.stokTeoritis + qtyChange), lastUpdated: new Date().toISOString() }
+            : s
+        );
+      }
+      return [...prev, {
+        cabangId,
+        bahanNama,
+        stokTeoritis: Math.max(0, qtyChange),
+        stokFisik: 0,
+        satuan,
+        lastUpdated: new Date().toISOString(),
+      }];
+    });
+  };
+
+  const addBranchTransaction = (tx: Omit<BranchTransaction, 'id'>) => {
+    setBranchTransactions(prev => [{
+      ...tx,
+      id: `btx-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`
+    }, ...prev]);
+  };
+
+  useEffect(() => { localStorage.setItem('surat_orders_data', JSON.stringify(suratOrders)); }, [suratOrders]);
+
   // Tabs layout — satu modul satu fitur
   const [activeTab, setActiveTab] = useState<
     | 'dashboard'
+    | 'data_pusat'
     | 'materials'
     | 'recipes'
     | 'hpp'
@@ -151,11 +221,11 @@ export default function App() {
     | 'erp_baker_pct'
     | 'erp_bep'
     | 'erp_dough_temp'
-    | 'erp_harga_prediksi'
     | 'erp_image_gen'
     | 'erp_profit_distribusi'
     | 'erp_alert_system'
     | 'erp_backup'
+    | 'erp_production_center'
   >('dashboard');
 
   // --- Lifted States with persistent syncing back to localStorage ---
@@ -198,8 +268,21 @@ export default function App() {
     showToast('Proyek Litbang dihapus.', 'info');
   };
 
-  const handleAddWasteLog = (log: WasteLog) => {
+  const handleAddWasteLog = (log: WasteLog, cabangId?: string) => {
     setWasteLogs((prev) => [log, ...prev]);
+    // If from branch, deduct branch stock
+    if (cabangId) {
+      updateBranchStock(cabangId, log.bahanNama, -log.qtyWasted, log.satuan);
+      addBranchTransaction({
+        cabangId,
+        tipe: 'waste',
+        bahanNama: log.bahanNama,
+        qty: log.qtyWasted,
+        satuan: log.satuan,
+        tanggal: new Date().toISOString(),
+        refId: log.id,
+      });
+    }
     showToast(`Input Waste "${log.bahanNama}" berhasil dicatat!`, 'success');
   };
 
@@ -571,7 +654,7 @@ export default function App() {
     setHasUnsavedChanges(true);
   };
 
-  const handleCompletePOSSale = (productName: string, soldQty: number, totalRevenue: number, source?: string) => {
+  const handleCompletePOSSale = (productName: string, soldQty: number, totalRevenue: number, source?: string, cabangId?: string) => {
     // 1. Locate the recipe ingredients for this product
     const ingredientsForProduct = detailResep.filter(
       (r) => r.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
@@ -665,9 +748,154 @@ export default function App() {
       console.error('Failed to record revenue:', err);
     }
 
+    // 6. If from a branch, deduct branch stock
+    if (cabangId && source?.startsWith('POS Cabang')) {
+      const ingredientsForProduct = detailResep.filter(
+        (r) => r.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
+      );
+      const productInfo = productHpp.find(
+        (p) => p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
+      );
+      const yieldPortions = productInfo?.porsiJual || 1;
+
+      ingredientsForProduct.forEach(ing => {
+        const consumedAmount = (ing.takaran / yieldPortions) * soldQty;
+        const bahan = bahanBaku.find(b => b.nama.toLowerCase().trim() === ing.namaBahan.toLowerCase().trim());
+        updateBranchStock(cabangId, ing.namaBahan, -consumedAmount, bahan?.satuan || 'gr');
+        addBranchTransaction({
+          cabangId,
+          tipe: 'pos_jual',
+          bahanNama: ing.namaBahan,
+          qty: consumedAmount,
+          satuan: bahan?.satuan || 'gr',
+          tanggal: new Date().toISOString(),
+          refId: `pos-${Date.now()}`,
+        });
+      });
+    }
+
     setHasUnsavedChanges(true);
     const revStr = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(totalRevenue);
     showToast(`Transaksi Sukses! Menjual ${soldQty} pcs "${productName}" (${revStr}). Bahan baku otomatis dipotong.`, 'success');
+  };
+
+  // ─── MULTI-CABANG HANDLERS ───
+  const handleAddCabang = (c: Cabang) => {
+    const dup = cabangList.some(cb => cb.username === c.username);
+    if (dup) { showToast(`Username "${c.username}" sudah dipakai!`, 'error'); return; }
+    setCabangList(prev => [...prev, c]);
+    showToast(`Cabang "${c.nama}" berhasil didaftarkan!`, 'success');
+  };
+
+  const handleEditCabang = (id: string, c: Cabang) => {
+    setCabangList(prev => prev.map(cb => cb.id === id ? c : cb));
+    showToast(`Cabang "${c.nama}" diupdate!`, 'success');
+  };
+
+  const handleDeleteCabang = (id: string) => {
+    setCabangList(prev => prev.filter(c => c.id !== id));
+    showToast('Cabang dihapus.', 'info');
+  };
+
+  const handleAddSuratOrder = (so: SuratOrder) => {
+    setSuratOrders(prev => [so, ...prev]);
+
+    if (so.status === 'dikirim') {
+      // Owner langsung kirim barang → kurangi stok pusat (bahanBaku)
+      setBahanBaku(prev => prev.map(b => {
+        const item = so.items.find(i => i.bahanNama === b.nama);
+        if (item) {
+          return { ...b, isiKemasan: Math.max(0, b.isiKemasan - item.qty) };
+        }
+        return b;
+      }));
+    }
+
+    // Record branch transaction for sent goods
+    so.items.forEach(item => {
+      const bahan = bahanBaku.find(b => b.nama === item.bahanNama);
+      addBranchTransaction({
+        cabangId: so.cabangId,
+        tipe: so.status === 'dikirim' ? 'so_kirim' : 'so_minta',
+        bahanNama: item.bahanNama,
+        qty: item.qty,
+        satuan: bahan?.satuan || 'pcs',
+        tanggal: new Date().toISOString(),
+        refId: so.id,
+      });
+    });
+    const msg = so.status === 'minta' ? `Permintaan dari "${so.cabangNama}" masuk!` : `Surat Order ke "${so.cabangNama}" dikirim!`;
+    showToast(msg, 'success');
+  };
+
+  const handleUpdateSuratOrder = (id: string, so: SuratOrder) => {
+    const prevStatus = suratOrders.find(s => s.id === id)?.status;
+    setSuratOrders(prev => prev.map(s => s.id === id ? so : s));
+
+    if (so.status === 'dikirim' && prevStatus === 'minta') {
+      // Owner setujui permintaan cabang → kurangi stok pusat
+      setBahanBaku(prev => prev.map(b => {
+        const item = so.items.find(i => i.bahanNama === b.nama);
+        if (item) {
+          return { ...b, isiKemasan: Math.max(0, b.isiKemasan - item.qty) };
+        }
+        return b;
+      }));
+      showToast(`Permintaan "${so.cabangNama}" disetujui! Stok pusat berkurang.`, 'success');
+    }
+
+    if (so.status === 'diterima') {
+      // Cabang terima barang → tambah stok cabang
+      const original = suratOrders.find(s => s.id === id);
+      const items = original?.items || so.items;
+      items.forEach(item => {
+        const bahan = bahanBaku.find(b => b.nama === item.bahanNama);
+        updateBranchStock(so.cabangId, item.bahanNama, item.qty, bahan?.satuan || 'pcs');
+        addBranchTransaction({
+          cabangId: so.cabangId,
+          tipe: 'so_terima',
+          bahanNama: item.bahanNama,
+          qty: item.qty,
+          satuan: bahan?.satuan || 'pcs',
+          tanggal: new Date().toISOString(),
+          refId: so.id,
+        });
+      });
+      showToast(`Surat Order ke "${so.cabangNama}" diterima! Stok cabang bertambah.`, 'success');
+    }
+  };
+
+  // ─── SYNC STOCK OPNAME FROM BRANCH ───
+  const handleSyncStokOpname = (cabangId: string, bahanNama: string, stokFisik: number, satuan: string) => {
+    setCabangStok(prev => {
+      const existing = prev.find(s => s.cabangId === cabangId && s.bahanNama === bahanNama);
+      if (existing) {
+        return prev.map(s =>
+          s.cabangId === cabangId && s.bahanNama === bahanNama
+            ? { ...s, stokFisik, lastUpdated: new Date().toISOString() }
+            : s
+        );
+      }
+      return [...prev, {
+        cabangId,
+        bahanNama,
+        stokTeoritis: 0,
+        stokFisik,
+        satuan,
+        lastUpdated: new Date().toISOString(),
+      }];
+    });
+  };
+
+  // ─── BRANCH AUTH HANDLERS ───
+  const handleBranchLogin = (cabang: Cabang) => {
+    setBranchAuth({ id: cabang.id, nama: cabang.nama });
+  };
+
+  const handleBranchLogout = () => {
+    localStorage.removeItem('branch_authenticated');
+    localStorage.removeItem('branch_authenticated_at');
+    setBranchAuth(null);
   };
 
   // Compute calculated results array of all products
@@ -713,9 +941,79 @@ export default function App() {
     }
   }, [isOwnerAuthenticated]);
 
-  // If not authenticated, show login screen
-  if (!isOwnerAuthenticated) {
+  // ─── AUTH GATE ───
+  const [showBranchLogin, setShowBranchLogin] = useState(false);
+  const [showOwnerLogin, setShowOwnerLogin] = useState(false);
+
+  if (!isOwnerAuthenticated && !branchAuth) {
+    // Show login selection screen
+    if (!showBranchLogin && !showOwnerLogin && cabangList.length > 0) {
+      return (
+        <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
+          <div className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl p-8 space-y-6">
+            <div className="text-center space-y-3">
+              <div className="w-16 h-16 rounded-2xl bg-emerald-600 flex items-center justify-center text-white mx-auto shadow-xl">
+                <Layers className="w-8 h-8 stroke-2" />
+              </div>
+              <h1 className="text-xl font-black text-white tracking-tight uppercase">Near Bakery & Co. ERP</h1>
+              <p className="text-[11px] text-emerald-400 font-bold tracking-widest">PILIH METODE LOGIN</p>
+            </div>
+            <button onClick={() => setShowBranchLogin(true)}
+              className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all shadow-md cursor-pointer">
+              🏪 Login sebagai Staff Cabang
+            </button>
+            <button onClick={() => setShowOwnerLogin(true)}
+              className="w-full py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all cursor-pointer">
+              🔐 Login sebagai Owner
+            </button>
+            <p className="text-[10px] text-gray-600 text-center mt-4">
+              Owner login menggunakan password. Staff cabang menggunakan username & password dari Data Pusat.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (showOwnerLogin) {
+      return <OwnerLogin onLoginSuccess={handleOwnerLogin} />;
+    }
+    
+    if (showBranchLogin) {
+      return (
+        <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
+          <BranchLogin cabangList={cabangList} onLoginSuccess={handleBranchLogin} onBackToOwner={() => setShowBranchLogin(false)} />
+        </div>
+      );
+    }
+    
     return <OwnerLogin onLoginSuccess={handleOwnerLogin} />;
+  }
+
+  // If branch authenticated, show BranchDashboard
+  if (branchAuth && !isOwnerAuthenticated) {
+    const currentCabang = cabangList.find(c => c.id === branchAuth.id);
+    if (currentCabang) {
+      return (
+        <BranchDashboard
+          cabang={currentCabang}
+          bahanBaku={bahanBaku}
+          suratOrders={suratOrders}
+          productHpp={productHpp}
+          detailResep={detailResep}
+          calculatedProducts={calculatedProducts}
+          wasteLogs={wasteLogs}
+          cabangStok={cabangStok.filter(s => s.cabangId === currentCabang.id)}
+          branchTransactions={branchTransactions.filter(t => t.cabangId === currentCabang.id)}
+          onAddWasteLog={handleAddWasteLog}
+          onDeleteWasteLog={handleDeleteWasteLog}
+          onAddSuratOrder={handleAddSuratOrder}
+          onUpdateSuratOrder={handleUpdateSuratOrder}
+          onCompletePOSSale={handleCompletePOSSale}
+          onSyncStokOpname={handleSyncStokOpname}
+          onLogout={handleBranchLogout}
+        />
+      );
+    }
   }
 
   return (
@@ -793,9 +1091,10 @@ export default function App() {
         {/* SIDEBAR DYNAMIC NAVIGATION MENUS */}
         <nav className="flex-1 overflow-y-auto p-4 space-y-5 select-none scrollbar-thin">
           
-          {/* 📁 ① MASTER DATA — Setup awal: daftarkan bahan & resep */}
+          {/* 📁 ① MASTER DATA — Setup awal: daftarkan cabang, bahan & resep */}
           <div className="space-y-1">
             <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">① Master Data</span>
+            <SidebarBtn tab="data_pusat" active={activeTab} icon={<Building2 className="w-4 h-4" />} label="🏛️ Data Pusat" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="materials" active={activeTab} icon={<Package className="w-4 h-4" />} label="📦 Bahan Baku" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="recipes" active={activeTab} icon={<FolderTree className="w-4 h-4" />} label="📝 Formulasi Resep" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
           </div>
@@ -806,6 +1105,7 @@ export default function App() {
             <SidebarBtn tab="erp_stock" active={activeTab} icon={<Package className="w-4 h-4" />} label="🏭 Stok Gudang" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_fefo_expiry" active={activeTab} icon={<ShieldAlert className="w-4 h-4" />} label="📋 FEFO & Expiry" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_bom" active={activeTab} icon={<Layers className="w-4 h-4" />} label="🔧 BOM & Yield" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="erp_production_center" active={activeTab} icon={<ClipboardList className="w-4 h-4" />} label="🏭 Prod. Center" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_mps" active={activeTab} icon={<Calendar className="w-4 h-4" />} label="📅 Jadwal MPS" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_work_order" active={activeTab} icon={<ClipboardList className="w-4 h-4" />} label="📄 Work Order" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_production_planner" active={activeTab} icon={<ShoppingCart className="w-4 h-4" />} label="📊 Prod. Planner" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
@@ -837,8 +1137,7 @@ export default function App() {
             <SidebarBtn tab="erp_profit_distribusi" active={activeTab} icon={<PieChart className="w-4 h-4" />} label="🎯 Alokasi Laba" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_bep" active={activeTab} icon={<BarChart3 className="w-4 h-4" />} label="🧮 BEP & Balance" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
             <SidebarBtn tab="erp_budget" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="💰 Anggaran Budget" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_harga_prediksi" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="📈 Harga & Prediksi" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="hpp" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="🧮 Simulasi HPP" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
+            <SidebarBtn tab="hpp" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="📈 Harga & HPP" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
           </div>
 
           {/* 🗑️ ⑥ OPERASIONAL & WASTE — Kerugian, R&D, IoT */}
@@ -985,6 +1284,24 @@ export default function App() {
           
           {/* RENDER CURRENT TAB VIEW WITH FULL STRUCTURAL COMPATIBILITY */}
           <div className="pb-16">
+            {activeTab === 'data_pusat' && (
+              <DataPusatTab
+                bahanBaku={bahanBaku}
+                onAddMaterial={handleAddMaterial}
+                onEditMaterial={handleEditMaterial}
+                onDeleteMaterial={handleDeleteMaterial}
+                cabangList={cabangList}
+                onAddCabang={handleAddCabang}
+                onEditCabang={handleEditCabang}
+                onDeleteCabang={handleDeleteCabang}
+                suratOrders={suratOrders}
+                onAddSuratOrder={handleAddSuratOrder}
+                onUpdateSuratOrder={handleUpdateSuratOrder}
+                cabangStok={cabangStok}
+                branchTransactions={branchTransactions}
+                wasteLogs={wasteLogs}
+              />
+            )}
             {activeTab === 'dashboard' && (
               <DashboardTab
                 calculatedProducts={calculatedProducts}
@@ -1011,13 +1328,12 @@ export default function App() {
               />
             )}
             {activeTab === 'hpp' && (
-              <HppTab
+              <HargaHppTab
+                bahanBaku={bahanBaku}
                 calculatedProducts={calculatedProducts}
+                detailResep={detailResep}
                 onUpdateProductPricing={handleUpdateProductPricing}
                 onDeleteProduct={handleDeleteProduct}
-                bahanBaku={bahanBaku}
-                productHpp={productHpp}
-                detailResep={detailResep}
               />
             )}
             {activeTab === 'erp_bi' && (
@@ -1053,6 +1369,14 @@ export default function App() {
             {activeTab === 'erp_bom' && (
               <BomTab productHpp={productHpp} calculatedProducts={calculatedProducts} />
             )}
+            {activeTab === 'erp_production_center' && (
+              <ProductionCenterTab
+                productHpp={productHpp}
+                detailResep={detailResep}
+                calculatedProducts={calculatedProducts}
+                bahanBaku={bahanBaku}
+              />
+            )}
             {activeTab === 'erp_mps' && (
               <MpsTab productHpp={productHpp} detailResep={detailResep} bahanBaku={bahanBaku} />
             )}
@@ -1060,10 +1384,10 @@ export default function App() {
               <StokGudangTab />
             )}
             {activeTab === 'erp_fefo_expiry' && (
-              <FefoExpiryTab bahanBaku={bahanBaku} productHpp={productHpp} />
+              <FefoExpiryTab bahanBaku={bahanBaku} productHpp={productHpp} onAddWasteLog={handleAddWasteLog} />
             )}
             {activeTab === 'erp_supplier' && (
-              <SupplierTab />
+              <SupplierTab bahanBaku={bahanBaku} />
             )}
             {activeTab === 'erp_log' && (
               <LogisticsTab />
@@ -1102,12 +1426,6 @@ export default function App() {
                 detailResep={detailResep}
                 calculatedProducts={calculatedProducts}
                 bahanBaku={bahanBaku}
-              />
-            )}
-            {activeTab === 'erp_harga_prediksi' && (
-              <HargaPrediksiTab
-                bahanBaku={bahanBaku}
-                calculatedProducts={calculatedProducts}
               />
             )}
             {activeTab === 'erp_work_order' && (

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldAlert, PackageOpen, Calendar, AlertTriangle, Clock, Package, Trash2, Plus, RefreshCw, Printer } from 'lucide-react';
-import { BahanBaku, ProductHpp } from '../types';
+import { ShieldAlert, Calendar, AlertTriangle, Clock, Package, Trash2, Plus, Printer, RefreshCw, AlertOctagon } from 'lucide-react';
+import { BahanBaku, ProductHpp, WasteLog } from '../types';
 
 interface BatchLog {
   id: string;
@@ -30,9 +30,10 @@ interface ProductExpiryLog {
 interface FefoExpiryTabProps {
   bahanBaku: BahanBaku[];
   productHpp?: ProductHpp[];
+  onAddWasteLog?: (log: WasteLog, cabangId?: string) => void;
 }
 
-export default function FefoExpiryTab({ bahanBaku, productHpp }: FefoExpiryTabProps) {
+export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: FefoExpiryTabProps) {
   const [batches, setBatches] = useState<BatchLog[]>(() => {
     const saved = localStorage.getItem('fefo_expiry_batches_data');
     return saved ? JSON.parse(saved) : [];
@@ -48,7 +49,6 @@ export default function FefoExpiryTab({ bahanBaku, productHpp }: FefoExpiryTabPr
     return saved ? JSON.parse(saved) : {};
   });
 
-  // Save batches to localStorage
   useEffect(() => {
     localStorage.setItem('fefo_expiry_batches_data', JSON.stringify(batches));
   }, [batches]);
@@ -88,7 +88,25 @@ export default function FefoExpiryTab({ bahanBaku, productHpp }: FefoExpiryTabPr
     setBatches(prev => prev.filter(b => b.id !== id));
   };
 
-  // FEFO Rekomendasi
+  const handleConvertToWaste = (batch: BatchLog) => {
+    if (!onAddWasteLog) return;
+    const confirmMsg = `Konversi batch "${batch.batchNo}" (${batch.bahanNama} ${batch.qty} ${batch.satuan}) ke Waste?\n\nBatch ini akan dihapus dari daftar dan dicatat sebagai waste.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    const wasteLog: WasteLog = {
+      id: `waste-${Date.now()}`,
+      bahanNama: batch.bahanNama,
+      qtyWasted: batch.qty,
+      satuan: batch.satuan,
+      lossValue: batch.qty * (bahanBaku.find(b => b.nama === batch.bahanNama)?.hargaSatuan || 0),
+      tanggal: new Date().toISOString().substring(0, 10),
+      penyebab: `Expired — Batch ${batch.batchNo}`,
+      kategori: 'expired',
+    };
+    onAddWasteLog(wasteLog);
+    handleDeleteBatch(batch.id);
+  };
+
   const getFEFORecommendation = () => {
     const active = batches.filter(b => new Date(b.expiryDate) >= new Date());
     const sorted = active.sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
@@ -97,7 +115,6 @@ export default function FefoExpiryTab({ bahanBaku, productHpp }: FefoExpiryTabPr
 
   const fefoRec = getFEFORecommendation();
 
-  // Expiry alerts
   const today = new Date();
   const in7Days = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
   const in3Days = new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000);
@@ -112,7 +129,6 @@ export default function FefoExpiryTab({ bahanBaku, productHpp }: FefoExpiryTabPr
     return d > in3Days && d <= in7Days;
   });
 
-  // Product expiry monitoring
   const [productExpiry, setProductExpiry] = useState<ProductExpiryLog[]>(() => {
     const saved = localStorage.getItem('fefo_product_expiry_data');
     return saved ? JSON.parse(saved) : [];
@@ -122,7 +138,6 @@ export default function FefoExpiryTab({ bahanBaku, productHpp }: FefoExpiryTabPr
     localStorage.setItem('fefo_product_expiry_data', JSON.stringify(productExpiry));
   }, [productExpiry]);
 
-  // Stock by ingredient
   const stockByBahan = batches.reduce((acc: Record<string, number>, b) => {
     if (!acc[b.bahanNama]) acc[b.bahanNama] = 0;
     acc[b.bahanNama] += b.qty;
@@ -157,6 +172,7 @@ export default function FefoExpiryTab({ bahanBaku, productHpp }: FefoExpiryTabPr
           </h2>
           <p className="text-xs text-gray-500 mt-1">
             Lacak batch bahan baku berdasarkan tanggal kedaluwarsa (First Expired First Out) + peringatan stok kritis.
+            Batch expired bisa dikonversi langsung ke Waste.
           </p>
         </div>
         <button onClick={() => {
@@ -197,6 +213,14 @@ export default function FefoExpiryTab({ bahanBaku, productHpp }: FefoExpiryTabPr
           <Printer className="w-3.5 h-3.5" /> Cetak
         </button>
       </div>
+
+      {/* KONEKSI INFO */}
+      {onAddWasteLog && (
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-[10px] text-blue-800 flex items-center gap-2">
+          <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+          <span><span className="font-bold">Terhubung ke Waste:</span> Batch expired bisa langsung dikonversi ke Waste Log dengan klik tombol "→ Waste" pada batch merah.</span>
+        </div>
+      )}
 
       {/* ALERT PANELS */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -285,7 +309,7 @@ export default function FefoExpiryTab({ bahanBaku, productHpp }: FefoExpiryTabPr
             </form>
           )}
 
-          <div className="overflow-y-auto max-h-[400px]">
+          <div className="overflow-y-auto max-h-[500px]">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50/50 sticky top-0">
@@ -295,7 +319,7 @@ export default function FefoExpiryTab({ bahanBaku, productHpp }: FefoExpiryTabPr
                   <th className="px-4 py-2.5">Supplier</th>
                   <th className="px-4 py-2.5 text-right">Expired</th>
                   <th className="px-4 py-2.5 text-center">Status</th>
-                  <th className="px-4 py-2.5"></th>
+                  <th className="px-4 py-2.5 text-center">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -308,7 +332,7 @@ export default function FefoExpiryTab({ bahanBaku, productHpp }: FefoExpiryTabPr
                   const isCritical = days >= 0 && days <= 3;
                   const isWarning = days > 3 && days <= 7;
                   return (
-                    <tr key={b.id} className={`hover:bg-gray-50/50 ${isExpired ? 'bg-red-50/30' : isCritical ? 'bg-amber-50/30' : ''}`}>
+                    <tr key={b.id} className={`hover:bg-gray-50/50 ${isExpired ? 'bg-red-50/50' : isCritical ? 'bg-amber-50/30' : ''}`}>
                       <td className="px-4 py-3 font-mono font-bold text-gray-800">{b.batchNo}</td>
                       <td className="px-4 py-3">{b.bahanNama}</td>
                       <td className="px-4 py-3 text-right font-mono font-bold">
@@ -328,10 +352,19 @@ export default function FefoExpiryTab({ bahanBaku, productHpp }: FefoExpiryTabPr
                         )}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <button onClick={() => handleDeleteBatch(b.id)}
-                          className="text-gray-400 hover:text-red-600 cursor-pointer">
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          {isExpired && onAddWasteLog && (
+                            <button onClick={() => handleConvertToWaste(b)}
+                              className="text-red-600 hover:text-red-800 hover:bg-red-50 p-1 rounded cursor-pointer"
+                              title="Konversi ke Waste">
+                              <AlertOctagon className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button onClick={() => handleDeleteBatch(b.id)}
+                            className="text-gray-400 hover:text-red-600 cursor-pointer p-1">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -354,9 +387,9 @@ export default function FefoExpiryTab({ bahanBaku, productHpp }: FefoExpiryTabPr
           )}
         </div>
 
-        {/* KANAN: Product Expiry + Safety Stock */}
+        {/* KANAN: Settings */}
         <div className="lg:col-span-4 space-y-4">
-          {/* Product Expiry Alert */}
+          {/* Product Expiry */}
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
             <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <ShieldAlert className="w-4 h-4 text-rose-600" /> Produk Jadi Expiry
@@ -365,7 +398,6 @@ export default function FefoExpiryTab({ bahanBaku, productHpp }: FefoExpiryTabPr
             {productExpiry.length === 0 ? (
               <div className="text-center py-4">
                 <p className="text-xs text-gray-400">Belum ada data produk jadi expired.</p>
-                <p className="text-[10px] text-gray-400 mt-1">Data akan muncul ketika produk memiliki tanggal kadaluwarsa.</p>
               </div>
             ) : (
               <div className="space-y-2 max-h-[250px] overflow-y-auto">
@@ -389,39 +421,12 @@ export default function FefoExpiryTab({ bahanBaku, productHpp }: FefoExpiryTabPr
                 ))}
               </div>
             )}
-            <button onClick={() => {
-              const prodName = window.prompt('Nama produk:');
-              if (!prodName) return;
-              const batchNo = window.prompt('No. Batch:');
-              if (!batchNo) return;
-              const qty = parseInt(window.prompt('Jumlah:') || '0');
-              if (qty <= 0) return;
-              const expDate = window.prompt('Tanggal Expired (YYYY-MM-DD):');
-              if (!expDate) return;
-              const today = new Date();
-              const exp = new Date(expDate);
-              let status: 'aman' | 'warning' | 'expired' = 'aman';
-              const daysDiff = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-              if (daysDiff < 0) status = 'expired';
-              else if (daysDiff <= 7) status = 'warning';
-              setProductExpiry(prev => [{
-                id: `pe-${Date.now()}`,
-                namaProduk: prodName,
-                batchNo,
-                qty,
-                expiryDate: expDate,
-                status,
-                notes: '',
-              }, ...prev]);
-            }} className="w-full mt-2 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-1">
-              <Plus className="w-3 h-3" /> Tambah Produk Expired
-            </button>
           </div>
 
-          {/* Safety Stock & Reorder */}
+          {/* Safety Stock */}
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
             <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">Safety Stock Settings</h4>
-            <p className="text-xs text-gray-500 mb-3">Atur batas minimal stok per bahan. Sistem akan memberi alert jika stok di bawah batas.</p>
+            <p className="text-xs text-gray-500 mb-3">Atur batas minimal stok per bahan.</p>
             <div className="space-y-2 text-xs max-h-[300px] overflow-y-auto">
               {bahanBaku.map(b => (
                 <div key={b.nama} className="flex items-center gap-2">
@@ -458,6 +463,14 @@ export default function FefoExpiryTab({ bahanBaku, productHpp }: FefoExpiryTabPr
               </div>
             )}
           </div>
+
+          {/* Info koneksi */}
+          {onAddWasteLog && (
+            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-[10px] text-emerald-800">
+              <AlertOctagon className="w-3 h-3 inline mr-1" />
+              <span className="font-bold">Terhubung ke Waste Control:</span> Klik ikon peringatan 🔔 pada batch expired untuk otomatis mencatat waste.
+            </div>
+          )}
         </div>
       </div>
     </div>

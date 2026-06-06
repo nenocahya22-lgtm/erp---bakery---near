@@ -107,3 +107,63 @@ export interface RDExperiment {
   }[];
   dateCreated: string;
 }
+
+// === PRODUCTION CALENDAR ===
+export interface ProductionCalendarEntry {
+  id: string;
+  tanggal: string; // YYYY-MM-DD
+  label: string;
+  warna: 'emerald' | 'amber' | 'blue' | 'red' | 'purple';
+  cabangId?: string; // null = all branches
+  notes?: string;
+}
+
+// === BRANCH STOCK TRACKING ===
+export interface BranchStock {
+  cabangId: string;
+  bahanNama: string;
+  stokTeoritis: number; // calculated from SO received - POS sold - Waste
+  stokFisik: number; // from stock opname
+  satuan: string;
+  lastUpdated: string;
+}
+
+export interface BranchTransaction {
+  id: string;
+  cabangId: string;
+  tipe: 'so_terima' | 'pos_jual' | 'waste' | 'so_minta' | 'so_kirim';
+  bahanNama: string;
+  qty: number;
+  satuan: string;
+  tanggal: string;
+  refId: string;
+}
+
+// === MULTI-CABANG SYSTEM ===
+export interface Cabang {
+  id: string;
+  nama: string;
+  alamat: string;
+  username: string;
+  password: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface SuratOrder {
+  id: string;
+  cabangId: string;
+  cabangNama: string;
+  tanggalKirim: string;
+  status: 'minta' | 'dikirim' | 'diterima';
+  items: { bahanNama: string; qty: number }[];
+}
+
+export interface StokCabang {
+  cabangId: string;
+  bahanNama: string;
+  stokTeoritis: number;
+  stokFisik: number;
+  satuan: string;
+  lastSO: string;
+}

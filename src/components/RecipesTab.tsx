@@ -365,6 +365,32 @@ export default function RecipesTab({
     }
   };
 
+  // Target margin for auto-suggested pricing (default 40%)
+  const [targetMargin, setTargetMargin] = useState(40);
+
+  // Calculate suggested selling price based on HPP + target margin
+  const suggestedPrice = activeProduct
+    ? Math.round(((totalIngredientsCost + activeProduct.overhead) / activeRecipePorsi) / (1 - targetMargin / 100))
+    : 0;
+
+  // Apply suggested price to the active product
+  const handleApplySuggestedPrice = () => {
+    if (!activeProduct) return;
+    const newPrice = suggestedPrice;
+    activeProduct.hargaJual = newPrice;
+    setEditHargaJual(newPrice.toString());
+    // Trigger parent state update via existing mechanism
+    onUpdateProductIngredients(activeProduct.namaProduk, activeDetails, activeRecipePorsi);
+    showToastLocal(`Harga jual diterapkan: Rp ${newPrice.toLocaleString('id-ID')}`, 'success');
+  };
+
+  // Simple local toast notification
+  const [localToast, setLocalToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+  const showToastLocal = (message: string, type: 'success' | 'info' = 'info') => {
+    setLocalToast({ message, type });
+    setTimeout(() => setLocalToast(null), 3000);
+  };
+
   // Topping Add-On Actions
   const handleAddTopping = (e: React.FormEvent) => {
     e.preventDefault();
@@ -569,25 +595,26 @@ export default function RecipesTab({
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Harga Jual (Rp)</label>
+                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Harga Jual (Rp) <span className="text-amber-500">*opsional</span></label>
                   <input
                     type="number"
                     min="0"
-                    placeholder="45000"
+                    placeholder="0 — akan dihitung otomatis nanti"
                     value={newProductHargaJual}
                     onChange={(e) => setNewProductHargaJual(e.target.value)}
-                    className="w-full text-xs border border-gray-200 bg-white rounded-lg p-2 font-mono text-center text-emerald-800 font-bold"
+                    className="w-full text-xs border border-gray-200 bg-white rounded-lg p-2 font-mono text-center text-gray-500 font-bold"
                   />
+                  <p className="text-[9px] text-gray-400 mt-0.5">Kosongkan (0) — sistem akan suggest harga berdasarkan HPP + margin nanti.</p>
                 </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-gray-200">
-                <button
-                  type="submit"
-                  className="w-full py-2.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs cursor-pointer text-center active:scale-[0.98]"
-                >
-                  Mulai Formulasi Menu
-                </button>
+              <button
+                type="submit"
+                className="w-full py-2.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs cursor-pointer text-center active:scale-[0.98]"
+              >
+                {parseFloat(newProductHargaJual) > 0 ? 'Buat & Simpan Resep' : 'Buat Resep — Atur Harga Nanti'}
+              </button>
               </div>
             </form>
           ) : (
@@ -1154,18 +1181,86 @@ export default function RecipesTab({
                   </div>
                 </div>
 
-                <div className="border-t border-slate-800/80 pt-3 flex flex-col sm:flex-row justify-between items-center text-xs gap-3 font-semibold leading-relaxed">
-                  <p className="text-slate-400 max-w-md">
-                    Roti ini dijual seharga <span className="text-white font-bold font-mono">{formatCurrency(activeProduct.hargaJual)}</span> per unit. Estimasi margin keuntungan bersih adalah <span className="text-emerald-400 font-bold font-mono">{(((activeProduct.hargaJual - ((totalIngredientsCost + activeProduct.overhead) / activeRecipePorsi)) / activeProduct.hargaJual) * 100).toFixed(1)}%</span>.
-                  </p>
-                  
+                {/* Suggested Pricing Section */}
+                <div className="border-t border-slate-800/80 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Current Price & Margin */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-400">Harga Jual Saat Ini</span>
+                      <span className={`font-mono font-bold ${activeProduct.hargaJual > 0 ? 'text-white' : 'text-amber-400'}`}>
+                        {activeProduct.hargaJual > 0 ? formatCurrency(activeProduct.hargaJual) : 'BELUM DIATUR'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-400">Margin Aktual</span>
+                      <span className={`font-mono font-bold ${activeProduct.hargaJual > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                        {activeProduct.hargaJual > 0
+                          ? `${(((activeProduct.hargaJual - ((totalIngredientsCost + activeProduct.overhead) / activeRecipePorsi)) / activeProduct.hargaJual) * 100).toFixed(1)}%`
+                          : '—'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Target Margin & Suggested Price */}
+                  <div className="space-y-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] uppercase font-bold text-slate-400">Target Margin</span>
+                      <input
+                        type="range"
+                        min="5"
+                        max="80"
+                        step="5"
+                        value={targetMargin}
+                        onChange={(e) => setTargetMargin(parseInt(e.target.value))}
+                        className="flex-1 h-1.5 accent-emerald-500 cursor-pointer"
+                      />
+                      <span className="text-xs font-mono font-bold text-emerald-400 w-8 text-right">{targetMargin}%</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-400">Harga Rekomendasi</span>
+                      <span className="text-base font-black font-mono text-amber-400">
+                        {suggestedPrice > 0 ? formatCurrency(suggestedPrice) : '—'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[9px] text-slate-500">
+                        HPP {formatCurrency(Math.round((totalIngredientsCost + activeProduct.overhead) / activeRecipePorsi))} + {targetMargin}% margin
+                      </span>
+                      <button
+                        onClick={handleApplySuggestedPrice}
+                        disabled={suggestedPrice <= 0 || activeProduct.hargaJual === suggestedPrice}
+                        className={`text-[10px] font-bold uppercase px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                          suggestedPrice > 0 && activeProduct.hargaJual !== suggestedPrice
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                            : 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                        }`}
+                      >
+                        Terapkan Harga
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Current margin badge */}
+                <div className="border-t border-slate-800/80 pt-2 flex justify-end">
                   <div className="bg-slate-950 p-2 border border-slate-800 rounded-xl leading-none">
                     <span className="text-[10px] block text-slate-500 mb-1 font-semibold uppercase">Margin Bersih</span>
                     <span className="text-base font-black font-mono text-emerald-400">
-                      {(((activeProduct.hargaJual - ((totalIngredientsCost + activeProduct.overhead) / activeRecipePorsi)) / activeProduct.hargaJual) * 100).toFixed(1)}%
+                      {activeProduct.hargaJual > 0
+                        ? `${(((activeProduct.hargaJual - ((totalIngredientsCost + activeProduct.overhead) / activeRecipePorsi)) / activeProduct.hargaJual) * 100).toFixed(1)}%`
+                        : '—'}
                     </span>
                   </div>
                 </div>
+
+                {/* Local Toast for price updates */}
+                {localToast && (
+                  <div className={`text-[10px] font-bold px-3 py-2 rounded-lg text-center ${
+                    localToast.type === 'success' ? 'bg-emerald-800/60 text-emerald-200' : 'bg-slate-800 text-slate-300'
+                  }`}>
+                    {localToast.message}
+                  </div>
+                )}
               </div>
 
             </div>
