@@ -1,0 +1,129 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "A product for sale in the web store.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "stock": { "type": "number" },
+        "imageUrl": { "type": "string" },
+        "category": { "type": "string" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "createdAt": { "type": "object", "format": "date-time" }
+      },
+      "required": ["id", "name", "description", "price", "stock", "imageUrl", "category"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "An order placed by a customer.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "items": { "type": "array" },
+        "totalAmount": { "type": "number" },
+        "status": { "type": "string" },
+        "shippingAddress": { "type": "object" },
+        "paymentMethod": { "type": "string" },
+        "paymentStatus": { "type": "string" },
+        "trackingNumber": { "type": "string" },
+        "statusHistory": { "type": "array" },
+        "createdAt": { "type": "object", "format": "date-time" },
+        "updatedAt": { "type": "object", "format": "date-time" }
+      },
+      "required": ["id", "userId", "userName", "userEmail", "items", "totalAmount", "status", "shippingAddress", "paymentMethod", "paymentStatus"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "A product review from a customer.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "productId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "object", "format": "date-time" }
+      },
+      "required": ["id", "productId", "userId", "userName", "rating", "comment"]
+    },
+    "ChatRoom": {
+      "title": "ChatRoom",
+      "description": "A single chat discussion channel between a buyer and the seller.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "buyerId": { "type": "string" },
+        "buyerName": { "type": "string" },
+        "buyerEmail": { "type": "string" },
+        "lastMessage": { "type": "string" },
+        "lastMessageTime": { "type": "object", "format": "date-time" },
+        "unreadBySeller": { "type": "boolean" },
+        "unreadByBuyer": { "type": "boolean" }
+      },
+      "required": ["id", "buyerId", "buyerName", "buyerEmail"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "A single text message inside a chat room.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderRole": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "object", "format": "date-time" }
+      },
+      "required": ["id", "senderId", "senderRole", "message"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A push/in-app notification for order updates.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "read": { "type": "boolean" },
+        "orderId": { "type": "string" },
+        "createdAt": { "type": "object", "format": "date-time" }
+      },
+      "required": ["id", "userId", "title", "body", "read"]
+    }
+  },
+  "firestore": {
+    "products/{productId}": {
+      "schema": "Product",
+      "description": "E-commerce products."
+    },
+    "orders/{orderId}": {
+      "schema": "Order",
+      "description": "Customer orders."
+    },
+    "products/{productId}/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Reviews belonging to individual products."
+    },
+    "chats/{chatId}": {
+      "schema": "ChatRoom",
+      "description": "Chat rooms for buyer-seller direct messaging."
+    },
+    "chats/{chatId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Messages inside a chat room."
+    },
+    "notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications for order status changes."
+    }
+  }
+}

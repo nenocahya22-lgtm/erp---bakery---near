@@ -1,0 +1,159 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ==========================================
+    // GLOBAL HELPERS & PRIMITIVES (Phase 3)
+    // ==========================================
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    
+    function incoming() {
+      return request.resource.data;
+    }
+    
+    function existing() {
+      return resource.data;
+    }
+    
+    function isMerchant() {
+      return isSignedIn() && (
+        request.auth.token.get('email', '') == 'nenocahya22@gmail.com' ||
+        request.auth.token.get('email', '') == 'seller@webstore.com' ||
+        request.auth.uid == 'merchant-test-uid' ||
+        exists(/databases/$(database)/documents/merchants/$(request.auth.uid))
+      );
+    }
+
+    // Global Safety Net (Phase 4, Pillar 1)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ==========================================
+    // VALIDATION BLUEPRINTS (Pillar 2)
+    // ==========================================
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['id', 'name', 'description', 'price', 'stock', 'imageUrl', 'category']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 200 &&
+             data.description is string && data.description.size() <= 2000 &&
+             (data.price is int || data.price is float) && data.price >= 0 &&
+             data.stock is int && data.stock >= 0 &&
+             data.imageUrl is string && data.imageUrl.size() <= 1000 &&
+             data.category is string && data.category.size() <= 100;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll(['id', 'userId', 'userName', 'userEmail', 'items', 'totalAmount', 'status', 'shippingAddress', 'paymentMethod', 'paymentStatus']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.userName is string && data.userName.size() <= 100 &&
+             data.userEmail is string && data.userEmail.size() <= 100 &&
+             data.items is list && data.items.size() > 0 &&
+             (data.totalAmount is int || data.totalAmount is float) && data.totalAmount >= 0 &&
+             data.status is string && data.status.size() <= 50 &&
+             data.shippingAddress is map &&
+             data.paymentMethod is string && data.paymentMethod.size() <= 50 &&
+             data.paymentStatus is string && data.paymentStatus.size() <= 50;
+    }
+
+    function isValidReview(data) {
+      return data.keys().hasAll(['id', 'productId', 'userId', 'userName', 'rating', 'comment']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.productId is string && data.productId.size() <= 128 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.userName is string && data.userName.size() <= 100 &&
+             (data.rating is int || data.rating is float) && data.rating >= 1 && data.rating <= 5 &&
+             data.comment is string && data.comment.size() <= 1000;
+    }
+
+    function isValidChatRoom(data) {
+      return data.keys().hasAll(['id', 'buyerId', 'buyerName', 'buyerEmail']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.buyerId is string && data.buyerId.size() <= 128 &&
+             data.buyerName is string && data.buyerName.size() <= 100 &&
+             data.buyerEmail is string && data.buyerEmail.size() <= 100;
+    }
+
+    function isValidChatMessage(data) {
+      return data.keys().hasAll(['senderId', 'senderRole', 'message']) &&
+             data.senderId is string && data.senderId.size() <= 128 &&
+             data.senderRole is string && data.senderRole.size() <= 50 &&
+             data.message is string && data.message.size() <= 5000;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['id', 'userId', 'title', 'body', 'read']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.title is string && data.title.size() <= 200 &&
+             data.body is string && data.body.size() <= 2000 &&
+             data.read is bool;
+    }
+
+    // ==========================================
+    // COLLECTION PATH MATCHES
+    // ==========================================
+
+    // Products (Pillar 6, 8)
+    match /products/{productId} {
+      allow get, list: if true;
+      allow create: if isMerchant() && isValidProduct(incoming());
+      allow update: if isMerchant() && isValidProduct(incoming());
+      allow delete: if isMerchant();
+      
+      // Nested Reviews (Pillar 1, 2)
+      match /reviews/{reviewId} {
+        allow get, list: if true;
+        allow create: if isSignedIn() && incoming().userId == request.auth.uid && isValidReview(incoming());
+        allow update: if isSignedIn() && existing().userId == request.auth.uid;
+        allow delete: if (isSignedIn() && existing().userId == request.auth.uid) || isMerchant();
+      }
+    }
+
+    // Orders (Pillar 4, 8)
+    match /orders/{orderId} {
+      allow list: if isMerchant() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow get: if isMerchant() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && isValidOrder(incoming());
+      allow update: if isMerchant() || (isSignedIn() && existing().userId == request.auth.uid);
+      allow delete: if isMerchant();
+    }
+
+    // Chats & Messages (Pillar 5, 8 - Secure Local Cost-free Checks)
+    match /chats/{chatId} {
+      allow list: if isMerchant() || (isSignedIn() && resource.data.buyerId == request.auth.uid);
+      allow get: if isMerchant() || (isSignedIn() && (chatId == request.auth.uid + '_admin' || resource.data.buyerId == request.auth.uid));
+      allow create: if isSignedIn() && chatId == request.auth.uid + '_admin' && incoming().buyerId == request.auth.uid && isValidChatRoom(incoming());
+      allow update: if isMerchant() || (isSignedIn() && chatId == request.auth.uid + '_admin');
+      allow delete: if isMerchant();
+
+      match /messages/{messageId} {
+        allow list, get: if isMerchant() || (isSignedIn() && chatId == request.auth.uid + '_admin');
+        allow create: if (isMerchant() || (isSignedIn() && chatId == request.auth.uid + '_admin')) && isValidChatMessage(incoming());
+        allow update, delete: if isMerchant();
+      }
+    }
+
+    // Notifications (Pillar 8)
+    match /notifications/{notificationId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isMerchant() || (isSignedIn() && incoming().userId == request.auth.uid && isValidNotification(incoming()));
+      allow update, delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+
+    // Merchant Profiles for testing/self-enrollment
+    match /merchants/{merchantId} {
+      allow read, write: if isSignedIn() && request.auth.uid == merchantId;
+    }
+  }
+}
