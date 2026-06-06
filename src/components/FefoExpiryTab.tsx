@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ShieldAlert, Calendar, AlertTriangle, Clock, Package, Trash2, Plus, Printer, RefreshCw, AlertOctagon } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ShieldAlert, Calendar, AlertTriangle, Clock, Package, Trash2, Plus, Printer, RefreshCw, AlertOctagon, Database, Zap, CheckCircle2 } from 'lucide-react';
 import { BahanBaku, ProductHpp, WasteLog } from '../types';
 
 interface BatchLog {
@@ -48,6 +48,8 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
     const saved = localStorage.getItem('fefo_safety_stock_data');
     return saved ? JSON.parse(saved) : {};
   });
+  const [showSyncConfirm, setShowSyncConfirm] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ added: number; skipped: string[] } | null>(null);
 
   useEffect(() => {
     localStorage.setItem('fefo_expiry_batches_data', JSON.stringify(batches));
@@ -57,6 +59,53 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
     localStorage.setItem('fefo_safety_stock_data', JSON.stringify(safetyStock));
   }, [safetyStock]);
 
+  // ─── SYNC FROM STOK PUSAT ───
+  const handleSyncFromStok = () => {
+    const existingBahanNames = new Set(batches.map(b => b.bahanNama.toLowerCase()));
+    const added: BatchLog[] = [];
+    const skipped: string[] = [];
+
+    bahanBaku.forEach(b => {
+      if (b.isiKemasan <= 0) return;
+      if (existingBahanNames.has(b.nama.toLowerCase())) {
+        skipped.push(b.nama);
+        return;
+      }
+      // Auto-generate batch from stock
+      const defaultExpiry = new Date();
+      defaultExpiry.setMonth(defaultExpiry.getMonth() + 3); // assume 3 months from now
+      const expStr = defaultExpiry.toISOString().substring(0, 10);
+      added.push({
+        id: `batch-sync-${Date.now()}-${b.nama.replace(/\s/g, '-')}`,
+        batchNo: `STK-${Date.now().toString().slice(-6)}`,
+        materialName: b.nama,
+        bahanNama: b.nama,
+        qtySecured: b.isiKemasan,
+        qty: b.isiKemasan,
+        unit: b.satuan,
+        satuan: b.satuan,
+        supplier: 'Dari Stok',
+        expDate: expStr,
+        expiryDate: expStr,
+        dateAdded: new Date().toISOString().substring(0, 10),
+      });
+    });
+
+    if (added.length > 0) {
+      setBatches(prev => [...added, ...prev]);
+    }
+    setSyncResult({ added: added.length, skipped });
+    setShowSyncConfirm(true);
+    setTimeout(() => setShowSyncConfirm(false), 4000);
+  };
+
+  // ─── AUTO-DETECT: bahan yang ada stok tapi belum punya batch ───
+  const bahanTanpaBatch = useMemo(() => {
+    const batchBahan = new Set(batches.map(b => b.bahanNama.toLowerCase()));
+    return bahanBaku.filter(b => b.isiKemasan > 0 && !batchBahan.has(b.nama.toLowerCase()));
+  }, [bahanBaku, batches]);
+
+  // ─── BATCH CRUD ───
   const handleAddBatch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formBahan || !formBatch || !formExpiry) return;
@@ -77,10 +126,7 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
       dateAdded: new Date().toISOString().substring(0, 10),
     };
     setBatches(prev => [newBatch, ...prev]);
-    setFormBatch('');
-    setFormQty('');
-    setFormSupplier('');
-    setFormExpiry('');
+    setFormBatch(''); setFormQty(''); setFormSupplier(''); setFormExpiry('');
     setShowForm(false);
   };
 
@@ -165,72 +211,92 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
   return (
     <div className="space-y-6">
       {/* HEADER */}
-      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex justify-between items-start">
+      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div>
           <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
             <ShieldAlert className="w-6 h-6 text-emerald-600" /> FEFO & Expiry Alert
           </h2>
           <p className="text-xs text-gray-500 mt-1">
             Lacak batch bahan baku berdasarkan tanggal kedaluwarsa (First Expired First Out) + peringatan stok kritis.
-            Batch expired bisa dikonversi langsung ke Waste.
           </p>
         </div>
-        <button onClick={() => {
-          const printWin = window.open('', '_blank');
-          if (!printWin) return;
-          const rows = [...expiredBatches, ...criticalBatches, ...warningBatches, ...batches.filter(b => {
-            const d = new Date(b.expiryDate);
-            return d > in7Days;
-          })].map(b => {
-            const days = daysUntil(b.expiryDate);
-            const isExpired = days < 0;
-            const isCritical = days >= 0 && days <= 3;
-            return `<tr${isExpired ? ' style="background:#fef2f2;"' : isCritical ? ' style="background:#fffbeb;"' : ''}>
-              <td style="padding:8px;border-bottom:1px solid #eee;font-family:monospace;font-weight:bold;">${b.batchNo}</td>
-              <td style="padding:8px;border-bottom:1px solid #eee;">${b.bahanNama}</td>
-              <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;">${b.qty >= 1000 ? (b.qty/1000).toFixed(1) + ' kg' : b.qty + ' ' + b.satuan}</td>
-              <td style="padding:8px;border-bottom:1px solid #eee;">${b.supplier || '-'}</td>
-              <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">${formatDate(b.expiryDate)}</td>
-              <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;${isExpired ? 'color:#dc2626;font-weight:bold;' : ''}">${isExpired ? 'Expired!' : days + ' hr'}</td>
-            </tr>`;
-          }).join('');
-          printWin.document.write(`
-            <html><head><title>Laporan FEFO</title>
-            <style>body{font-family:'Segoe UI',Arial,sans-serif;max-width:900px;margin:0 auto;padding:40px;color:#1f2937;}h1{font-size:22px;color:#065f46;}.meta{color:#6b7280;font-size:12px;margin-bottom:20px;}table{width:100%;border-collapse:collapse;}th{background:#f3f4f6;padding:10px;text-align:left;font-size:11px;text-transform:uppercase;}td{padding:8px;border-bottom:1px solid #e5e7eb;}.alert{display:inline-block;padding:6px 14px;border-radius:8px;font-size:13px;margin-right:8px;}.red{background:#fef2f2;color:#dc2626;}.amber{background:#fffbeb;color:#d97706;}.green{background:#f0fdf4;color:#059669;}@media print{body{padding:20px;}}</style></head><body>
-            <h1>📋 LAPORAN BATCH & EXPIRY</h1>
-            <div class="meta">Tanggal Cetak: ${new Date().toLocaleDateString('id-ID', { year:'numeric',month:'long',day:'numeric' })}</div>
-            <div style="margin-bottom:16px;">
-              <span class="alert red">⚠️ Kedaluwarsa: ${expiredBatches.length}</span>
-              <span class="alert amber">⏰ Kritis: ${criticalBatches.length}</span>
-              <span class="alert green">✅ Stok Kritis: ${lowStockItems.length}</span>
-            </div>
-            <table><thead><tr><th>Batch</th><th>Bahan</th><th style="text-align:right;">Stok</th><th>Supplier</th><th style="text-align:right;">Expired</th><th style="text-align:center;">Status</th></tr></thead><tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:20px;">Belum ada batch.</td></tr>'}</tbody></table>
-            <p style="margin-top:40px;text-align:center;color:#9ca3af;font-size:11px;">Near Bakery & Co. ERP — FEFO & Expiry System</p>
-            <script>window.print();<\/script></body></html>
-          `);
-          printWin.document.close();
-        }} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1 shrink-0">
-          <Printer className="w-3.5 h-3.5" /> Cetak
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleSyncFromStok}
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1">
+            <Database className="w-3.5 h-3.5" /> Sync dari Stok Pusat
+          </button>
+          <button onClick={() => {
+            const printWin = window.open('', '_blank');
+            if (!printWin) return;
+            const rows = [...expiredBatches, ...criticalBatches, ...warningBatches, ...batches.filter(b => {
+              const d = new Date(b.expiryDate);
+              return d > in7Days;
+            })].map(b => {
+              const days = daysUntil(b.expiryDate);
+              const isExpired = days < 0;
+              const isCritical = days >= 0 && days <= 3;
+              return `<tr${isExpired ? ' style="background:#fef2f2;"' : isCritical ? ' style="background:#fffbeb;"' : ''}>
+                <td style="padding:8px;border-bottom:1px solid #eee;font-family:monospace;font-weight:bold;">${b.batchNo}</td>
+                <td style="padding:8px;border-bottom:1px solid #eee;">${b.bahanNama}</td>
+                <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;">${b.qty >= 1000 ? (b.qty/1000).toFixed(1) + ' kg' : b.qty + ' ' + b.satuan}</td>
+                <td style="padding:8px;border-bottom:1px solid #eee;">${b.supplier || '-'}</td>
+                <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">${formatDate(b.expiryDate)}</td>
+                <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;${isExpired ? 'color:#dc2626;font-weight:bold;' : ''}">${isExpired ? 'Expired!' : days + ' hr'}</td>
+              </tr>`;
+            }).join('');
+            printWin.document.write(`
+              <html><head><title>Laporan FEFO</title>
+              <style>body{font-family:'Segoe UI',Arial,sans-serif;max-width:900px;margin:0 auto;padding:40px;color:#1f2937;}h1{font-size:22px;color:#065f46;}table{width:100%;border-collapse:collapse;}th{background:#f3f4f6;padding:10px;text-align:left;font-size:11px;text-transform:uppercase;}td{padding:8px;border-bottom:1px solid #e5e7eb;}.alert{display:inline-block;padding:6px 14px;border-radius:8px;font-size:13px;margin-right:8px;}@media print{body{padding:20px;}}</style></head><body>
+              <h1>📋 LAPORAN BATCH & EXPIRY</h1>
+              <p style="color:#6b7280;font-size:12px;">Tanggal Cetak: ${new Date().toLocaleDateString('id-ID', { year:'numeric',month:'long',day:'numeric' })}</p>
+              <table><thead><tr><th>Batch</th><th>Bahan</th><th style="text-align:right;">Stok</th><th>Supplier</th><th style="text-align:right;">Expired</th><th style="text-align:center;">Status</th></tr></thead><tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:20px;">Belum ada batch.</td></tr>'}</tbody></table>
+              <script>window.print();<\\/script></body></html>
+            `);
+            printWin.document.close();
+          }} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1 shrink-0">
+            <Printer className="w-3.5 h-3.5" /> Cetak
+          </button>
+        </div>
       </div>
+
+      {/* SYNC RESULT TOAST */}
+      {showSyncConfirm && syncResult && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-[10px] text-emerald-800 flex items-center gap-2 animate-pulse">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>
+            <strong>Sync selesai!</strong> {syncResult.added} batch baru dibuat dari stok pusat.
+            {syncResult.skipped.length > 0 && ` ${syncResult.skipped.length} bahan dilewati (sudah punya batch).`}
+          </span>
+        </div>
+      )}
+
+      {/* AUTO-DETECT BAHAN TANPA BATCH */}
+      {bahanTanpaBatch.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[10px] text-amber-800 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>
+            <strong>{bahanTanpaBatch.length} bahan</strong> dengan stok ({bahanTanpaBatch.map(b => `${b.nama} (${b.isiKemasan} ${b.satuan})`).join(', ')}) 
+            {' '}belum punya batch FEFO. Klik <strong>"Sync dari Stok Pusat"</strong> untuk auto-buat batch.
+          </span>
+        </div>
+      )}
 
       {/* KONEKSI INFO */}
       {onAddWasteLog && (
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-[10px] text-blue-800 flex items-center gap-2">
-          <RefreshCw className="w-3.5 h-3.5 shrink-0" />
-          <span><span className="font-bold">Terhubung ke Waste:</span> Batch expired bisa langsung dikonversi ke Waste Log dengan klik tombol "→ Waste" pada batch merah.</span>
+          <Zap className="w-3.5 h-3.5 shrink-0" />
+          <span><span className="font-bold">Terhubung ke Waste & Stok Pusat:</span> Batch expired bisa langsung dikonversi ke Waste. Sync otomatis narik data dari stok pusat.</span>
         </div>
       )}
 
       {/* ALERT PANELS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
         <div className={`p-4 rounded-xl border shadow-xs ${expiredBatches.length > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100'}`}>
           <div className="flex items-center gap-2">
             <AlertTriangle className={`w-5 h-5 ${expiredBatches.length > 0 ? 'text-red-600' : 'text-gray-400'}`} />
             <div>
               <span className="text-xs font-bold text-gray-700 block">Kedaluwarsa</span>
               <span className="font-mono font-black text-lg">{expiredBatches.length}</span>
-              <span className="text-[10px] text-gray-500 ml-1">batch</span>
             </div>
           </div>
         </div>
@@ -240,7 +306,6 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
             <div>
               <span className="text-xs font-bold text-gray-700 block">Kritis (≤3 hr)</span>
               <span className="font-mono font-black text-lg">{criticalBatches.length}</span>
-              <span className="text-[10px] text-gray-500 ml-1">batch</span>
             </div>
           </div>
         </div>
@@ -250,7 +315,6 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
             <div>
               <span className="text-xs font-bold text-gray-700 block">Akan Expired</span>
               <span className="font-mono font-black text-lg">{warningBatches.length}</span>
-              <span className="text-[10px] text-gray-500 ml-1">batch</span>
             </div>
           </div>
         </div>
@@ -260,7 +324,15 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
             <div>
               <span className="text-xs font-bold text-gray-700 block">Stok Kritis</span>
               <span className="font-mono font-black text-lg">{lowStockItems.length}</span>
-              <span className="text-[10px] text-gray-500 ml-1">bahan</span>
+            </div>
+          </div>
+        </div>
+        <div className={`p-4 rounded-xl border shadow-xs ${bahanTanpaBatch.length > 0 ? 'bg-purple-50 border-purple-200' : 'bg-gray-50 border-gray-100'}`}>
+          <div className="flex items-center gap-2">
+            <Database className={`w-5 h-5 ${bahanTanpaBatch.length > 0 ? 'text-purple-600' : 'text-gray-400'}`} />
+            <div>
+              <span className="text-xs font-bold text-gray-700 block">Tanpa Batch</span>
+              <span className="font-mono font-black text-lg">{bahanTanpaBatch.length}</span>
             </div>
           </div>
         </div>
@@ -316,6 +388,7 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
                   <th className="px-4 py-2.5">Batch #</th>
                   <th className="px-4 py-2.5">Bahan</th>
                   <th className="px-4 py-2.5 text-right">Stok</th>
+                  <th className="px-4 py-2.5">Stok Pusat</th>
                   <th className="px-4 py-2.5">Supplier</th>
                   <th className="px-4 py-2.5 text-right">Expired</th>
                   <th className="px-4 py-2.5 text-center">Status</th>
@@ -331,6 +404,7 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
                   const isExpired = days < 0;
                   const isCritical = days >= 0 && days <= 3;
                   const isWarning = days > 3 && days <= 7;
+                  const stokPusat = bahanBaku.find(bb => bb.nama === b.bahanNama)?.isiKemasan || 0;
                   return (
                     <tr key={b.id} className={`hover:bg-gray-50/50 ${isExpired ? 'bg-red-50/50' : isCritical ? 'bg-amber-50/30' : ''}`}>
                       <td className="px-4 py-3 font-mono font-bold text-gray-800">{b.batchNo}</td>
@@ -338,6 +412,7 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
                       <td className="px-4 py-3 text-right font-mono font-bold">
                         {b.qty >= 1000 ? `${(b.qty / 1000).toFixed(1)} kg` : `${b.qty} ${b.satuan}`}
                       </td>
+                      <td className="px-4 py-3 text-right font-mono text-gray-500">{stokPusat} {b.satuan}</td>
                       <td className="px-4 py-3 text-gray-500">{b.supplier || '-'}</td>
                       <td className="px-4 py-3 text-right font-mono text-gray-500">{formatDate(b.expiryDate)}</td>
                       <td className="px-4 py-3 text-center">
@@ -370,7 +445,7 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
                   );
                 })}
                 {batches.length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">Belum ada batch. Tambah batch pertama!</td></tr>
+                  <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">Belum ada batch. Klik "Sync dari Stok Pusat" atau tambah manual!</td></tr>
                 )}
               </tbody>
             </table>
@@ -381,7 +456,7 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
             <div className="m-4 p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs">
               <span className="text-[10px] font-bold text-amber-700 uppercase block mb-1">Rekomendasi FEFO:</span>
               <p className="font-bold text-slate-900 font-mono">{fefoRec.batchNo} - {fefoRec.bahanNama}</p>
-              <p className="text-gray-600">Exp: <span className="font-bold text-red-700">{fefoRec.expiryDate}</span></p>
+              <p className="text-gray-600">Exp: <span className="font-bold text-red-700">{formatDate(fefoRec.expiryDate)}</span></p>
               <p className="text-[10px] text-amber-700 mt-1 italic">Gunakan batch ini terlebih dahulu untuk mencegah waste.</p>
             </div>
           )}
@@ -389,60 +464,7 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
 
         {/* KANAN: Settings */}
         <div className="lg:col-span-4 space-y-4">
-          {/* Product Expiry */}
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
-            <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <ShieldAlert className="w-4 h-4 text-rose-600" /> Produk Jadi Expiry
-            </h4>
-            <p className="text-xs text-gray-500 mb-3">Pantau produk jadi yang mendekati expired date.</p>
-            {productExpiry.length === 0 ? (
-              <div className="text-center py-4">
-                <p className="text-xs text-gray-400">Belum ada data produk jadi expired.</p>
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-[250px] overflow-y-auto">
-                {productExpiry.map(p => (
-                  <div key={p.id} className={`p-3 rounded-lg border text-xs ${
-                    p.status === 'expired' ? 'bg-red-50 border-red-200' :
-                    p.status === 'warning' ? 'bg-amber-50 border-amber-200' :
-                    'bg-green-50 border-green-200'
-                  }`}>
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-gray-800">{p.namaProduk}</span>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                        p.status === 'expired' ? 'bg-red-200 text-red-800' :
-                        p.status === 'warning' ? 'bg-amber-200 text-amber-800' :
-                        'bg-green-200 text-green-800'
-                      }`}>{p.status}</span>
-                    </div>
-                    <p className="text-[10px] text-gray-500 mt-0.5">Batch: {p.batchNo} | Qty: {p.qty} pcs</p>
-                    <p className="text-[10px] text-gray-500">Exp: {p.expiryDate}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Safety Stock */}
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
-            <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">Safety Stock Settings</h4>
-            <p className="text-xs text-gray-500 mb-3">Atur batas minimal stok per bahan.</p>
-            <div className="space-y-2 text-xs max-h-[300px] overflow-y-auto">
-              {bahanBaku.map(b => (
-                <div key={b.nama} className="flex items-center gap-2">
-                  <span className="flex-1 truncate font-medium text-gray-700">{b.nama}</span>
-                  <input type="number" min="0" value={safetyStock[b.nama] || 500}
-                    onChange={(e) => setSafetyStock({ ...safetyStock, [b.nama]: parseInt(e.target.value) || 0 })}
-                    className="w-16 border border-gray-200 rounded p-1.5 text-center font-mono" />
-                  <span className="text-gray-400 text-[9px]">{b.satuan}</span>
-                </div>
-              ))}
-              {bahanBaku.length === 0 && (
-                <p className="text-gray-400 text-center py-3">Tambah bahan baku dulu.</p>
-              )}
-            </div>
-          </div>
-
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
             <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <RefreshCw className="w-4 h-4 text-emerald-600" /> Reorder Alert
@@ -464,11 +486,50 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
             )}
           </div>
 
-          {/* Info koneksi */}
+          {/* Safety Stock Settings */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">Safety Stock Settings</h4>
+            <div className="space-y-2 text-xs max-h-[300px] overflow-y-auto">
+              {bahanBaku.map(b => (
+                <div key={b.nama} className="flex items-center gap-2">
+                  <span className="flex-1 truncate font-medium text-gray-700">{b.nama}</span>
+                  <input type="number" min="0" value={safetyStock[b.nama] || 500}
+                    onChange={(e) => setSafetyStock({ ...safetyStock, [b.nama]: parseInt(e.target.value) || 0 })}
+                    className="w-16 border border-gray-200 rounded p-1.5 text-center font-mono" />
+                  <span className="text-gray-400 text-[9px]">{b.satuan}</span>
+                </div>
+              ))}
+              {bahanBaku.length === 0 && (
+                <p className="text-gray-400 text-center py-3">Tambah bahan baku dulu.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Bahan tanpa batch quick-list */}
+          {bahanTanpaBatch.length > 0 && (
+            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
+              <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <Database className="w-4 h-4 text-purple-600" /> Bahan Tanpa Batch
+              </h4>
+              <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                {bahanTanpaBatch.map(b => (
+                  <div key={b.nama} className="flex items-center justify-between bg-purple-50 p-2 rounded-lg border border-purple-100 text-xs">
+                    <span className="font-medium text-purple-900">{b.nama}</span>
+                    <span className="font-mono text-purple-700">{b.isiKemasan} {b.satuan}</span>
+                  </div>
+                ))}
+              </div>
+              <button onClick={handleSyncFromStok}
+                className="mt-3 w-full bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-bold py-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1">
+                <Database className="w-3.5 h-3.5" /> Sync {bahanTanpaBatch.length} Bahan
+              </button>
+            </div>
+          )}
+
           {onAddWasteLog && (
             <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-[10px] text-emerald-800">
-              <AlertOctagon className="w-3 h-3 inline mr-1" />
-              <span className="font-bold">Terhubung ke Waste Control:</span> Klik ikon peringatan 🔔 pada batch expired untuk otomatis mencatat waste.
+              <Zap className="w-3 h-3 inline mr-1" />
+              <span className="font-bold">Terhubung ke Waste Control:</span> Klik 🔔 pada batch expired untuk otomatis mencatat waste.
             </div>
           )}
         </div>

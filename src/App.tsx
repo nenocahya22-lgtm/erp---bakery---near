@@ -1012,9 +1012,9 @@ export default function App() {
   }
 
   return (
-    <div id="application-layout" className="min-h-screen bg-slate-100 font-sans text-gray-800 relative">
+    <div id="application-layout" className="min-h-screen bg-slate-100 font-sans text-gray-800 flex">
       
-      {/* OVERLAY BACKDROP — when sidebar is open on mobile */}
+      {/* MOBILE OVERLAY BACKDROP — when sidebar is open on mobile */}
       {isSidebarOpen && (
         <div 
           className="fixed inset-0 bg-black/40 z-30 md:hidden"
@@ -1022,7 +1022,7 @@ export default function App() {
         />
       )}
 
-      {/* FLOATING SIDEBAR TOGGLE — when sidebar is closed */}
+      {/* FLOATING SIDEBAR TOGGLE — when sidebar is closed, shown on all sizes */}
       {!isSidebarOpen && (
         <button
           onClick={() => setIsSidebarOpen(true)}
@@ -1033,178 +1033,24 @@ export default function App() {
         </button>
       )}
 
-      {/* LEFT SIDEBAR — slides over content, does NOT push it */}
-      <aside className={`fixed top-0 left-0 z-40 h-full w-72 bg-slate-900 text-slate-300 border-r border-slate-800 flex flex-col shadow-2xl transition-all duration-300 ease-in-out ${
+      {/* ─── MOBILE SIDEBAR (overlay, translate-based) ─── */}
+      <aside className={`md:hidden fixed top-0 left-0 z-40 h-full w-72 bg-slate-900 text-slate-300 border-r border-slate-800 flex flex-col shadow-2xl transition-all duration-300 ease-in-out ${
         isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
       }`}>
-        {/* LOGO BRAND BAR */}
-        <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-black shadow-md">
-              <Layers className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-[11px] font-black text-white tracking-wider uppercase mb-0.5">Near Bakery & Co. ERP</h2>
-              <p className="text-[9px] text-emerald-400 font-bold tracking-widest uppercase">Owner Console</p>
-            </div>
-          </div>
-          {/* Close/Toggle button for sidebar */}
-          <button 
-            onClick={() => setIsSidebarOpen(false)}
-            className="p-1 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg cursor-pointer"
-            title="Tutup Sidebar"
-          >
-            <PanelRightClose className="w-5 h-5" />
-          </button>
-        </div>
+        {/* SIDEBAR CONTENT — will be rendered inside here */}
+        <SidebarContent isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} activeTab={activeTab} setActiveTab={setActiveTab} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} setSpreadsheetTitle={setSpreadsheetTitle} showToast={showToast} initiateGoogleConnect={initiateGoogleConnect} handleOwnerLogout={handleOwnerLogout} />
+      </aside>
 
-        {/* LOGGED IN USER PROFILE INDICATOR */}
-        <div className="p-4 bg-slate-900/60 border-b border-slate-800 text-xs flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7.5 h-7.5 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-bold font-mono text-emerald-400">
-              OW
-            </div>
-            <div>
-              <p className="font-bold text-white text-[11px] truncate max-w-[100px]">Owner Toko</p>
-              <p className="text-[9px] text-gray-500 font-mono font-bold">owner@bakery.id</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-1">
-            {/* GOOGLE SHEETS CONNECT BUTTON */}
-            <button
-              onClick={initiateGoogleConnect}
-              title="Hubungkan Google Sheets"
-              className="p-1.5 hover:bg-slate-800 text-gray-500 hover:text-white rounded-lg transition-colors cursor-pointer flex items-center"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-            </button>
-
-            {/* LOGOUT BUTTON */}
-            <button
-              onClick={handleOwnerLogout}
-              title="Logout / Keluar"
-              className="p-1.5 hover:bg-slate-800 text-gray-500 hover:text-red-400 rounded-lg transition-colors cursor-pointer flex items-center"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-
-        {/* SIDEBAR DYNAMIC NAVIGATION MENUS */}
-        <nav className="flex-1 overflow-y-auto p-4 space-y-5 select-none scrollbar-thin">
-          
-          {/* 📁 ① MASTER DATA — Setup awal: daftarkan cabang, bahan & resep */}
-          <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">① Master Data</span>
-            <SidebarBtn tab="data_pusat" active={activeTab} icon={<Building2 className="w-4 h-4" />} label="🏛️ Data Pusat" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="materials" active={activeTab} icon={<Package className="w-4 h-4" />} label="📦 Bahan Baku" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="recipes" active={activeTab} icon={<FolderTree className="w-4 h-4" />} label="📝 Formulasi Resep" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-          </div>
-
-          {/* 🏭 ② INVENTORY & PRODUKSI — Stok, jadwal oven, work order */}
-          <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">② Inventory & Produksi</span>
-            <SidebarBtn tab="erp_stock" active={activeTab} icon={<Package className="w-4 h-4" />} label="🏭 Stok Gudang" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_fefo_expiry" active={activeTab} icon={<ShieldAlert className="w-4 h-4" />} label="📋 FEFO & Expiry" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_bom" active={activeTab} icon={<Layers className="w-4 h-4" />} label="🔧 BOM & Yield" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_production_center" active={activeTab} icon={<ClipboardList className="w-4 h-4" />} label="🏭 Prod. Center" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_baker_pct" active={activeTab} icon={<Percent className="w-4 h-4" />} label="🍞 Baker's %" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_dough_temp" active={activeTab} icon={<Thermometer className="w-4 h-4" />} label="🌡️ Suhu Adonan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-          </div>
-
-          {/* 🤝 ③ PEMBELIAN & SUPPLIER — Vendor, PO, distribusi */}
-          <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">③ Pembelian & Supplier</span>
-            <span className="px-3 text-[10px] text-gray-600 font-medium">✅ Ada di Data Pusat</span>
-          </div>
-
-          {/* 🛒 ④ KASIR & PENJUALAN — POS, online, marketing */}
-          <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">④ Kasir & Penjualan</span>
-            <SidebarBtn tab="erp_pos" active={activeTab} icon={<ShoppingCart className="w-4 h-4" />} label="🛒 POS Kasir" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_online" active={activeTab} icon={<Users className="w-4 h-4" />} label="📱 Pesanan Online" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_crm" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="📈 CRM Marketing" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-          </div>
-
-          {/* 💰 ⑤ KEUANGAN — Laporan, arus kas, alokasi laba */}
-          <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑤ Keuangan</span>
-            <SidebarBtn tab="dashboard" active={activeTab} icon={<LineChart className="w-4 h-4" />} label="👋 Ringkasan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_bi" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="📊 Laporan P&L" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_cash_flow" active={activeTab} icon={<Coins className="w-4 h-4" />} label="💵 Arus Kas" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_profit_distribusi" active={activeTab} icon={<PieChart className="w-4 h-4" />} label="🎯 Alokasi Laba" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_bep" active={activeTab} icon={<BarChart3 className="w-4 h-4" />} label="🧮 BEP & Balance" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_budget" active={activeTab} icon={<CheckCircle2 className="w-4 h-4" />} label="💰 Anggaran Budget" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="hpp" active={activeTab} icon={<TrendingUp className="w-4 h-4" />} label="📈 Harga & HPP" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-          </div>
-
-          {/* 🗑️ ⑥ OPERASIONAL & WASTE — Kerugian, R&D, IoT */}
-          <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑥ Operasional & Waste</span>
-            <SidebarBtn tab="erp_waste" active={activeTab} icon={<X className="w-4 h-4" />} label="🗑️ Manajemen Waste" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_rd" active={activeTab} icon={<FlaskConical className="w-4 h-4" />} label="🔬 Sandbox R&D" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_compliance" active={activeTab} icon={<ShieldAlert className="w-4 h-4" />} label="🧊 Recall Pangan" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-            <SidebarBtn tab="erp_iot" active={activeTab} icon={<Cpu className="w-4 h-4" />} label="🤖 Smart IoT" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-          </div>
-
-          {/* 🛠️ ⑦ TOOLS */}
-          <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑦ Tools</span>
-            <SidebarBtn tab="erp_image_gen" active={activeTab} icon={<Image className="w-4 h-4" />} label="🎨 Image Gen" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-          </div>
-
-          {/* 🔔 ⑧ MONITORING & ALERT */}
-          <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑧ Monitoring</span>
-            <SidebarBtn tab="erp_alert_system" active={activeTab} icon={<Bell className="w-4 h-4" />} label="🔔 Monitoring & Alert" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-          </div>
-
-          {/* 💾 ⑨ BACKUP & RESTORE */}
-          <div className="space-y-1">
-            <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑨ Backup</span>
-            <SidebarBtn tab="erp_backup" active={activeTab} icon={<Cloud className="w-4 h-4" />} label="💾 Backup & Restore" onClick={setActiveTab} onClose={() => setIsSidebarOpen(false)} />
-          </div>
-
-        </nav>
-
-        {/* GOOGLE SHEETS CONNECTION */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950 flex flex-col gap-2 shrink-0">
-          {spreadsheetId ? (
-            <>
-              <a
-                href={`https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-center font-mono text-[10px] text-emerald-400 bg-slate-905 border border-slate-800 hover:border-emerald-600/50 py-1.5 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5" /> BUKA SPREADSHEET ↗
-              </a>
-              <button
-                onClick={() => {
-                  localStorage.removeItem('spreadsheet_url');
-                  setSpreadsheetId(null);
-                  setSpreadsheetTitle('');
-                  showToast('Koneksi Google Sheets diputuskan.', 'info');
-                }}
-                className="w-full py-1.5 text-center text-[10px] font-extrabold uppercase bg-slate-800 hover:bg-rose-700 hover:text-white text-slate-400 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <LogOut className="w-3.5 h-3.5" /> Putus Koneksi
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={initiateGoogleConnect}
-              className="w-full py-1.5 text-center text-[10px] font-extrabold uppercase bg-emerald-600/10 hover:bg-emerald-700 hover:text-white text-emerald-400 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-emerald-800/30"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5" /> HUBUNGKAN GOOGLE SHEETS
-            </button>
-          )}
+      {/* ─── DESKTOP SIDEBAR (push layout, width-based) ─── */}
+      <aside className="hidden md:flex flex-shrink-0 bg-slate-900 text-slate-300 border-r border-slate-800 flex-col shadow-2xl transition-all duration-300 ease-in-out overflow-hidden"
+        style={{ width: isSidebarOpen ? 288 : 0 }}>
+        <div style={{ width: 288 }} className="flex flex-col h-full">
+          <SidebarContent isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} activeTab={activeTab} setActiveTab={setActiveTab} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} setSpreadsheetTitle={setSpreadsheetTitle} showToast={showToast} initiateGoogleConnect={initiateGoogleConnect} handleOwnerLogout={handleOwnerLogout} />
         </div>
       </aside>
 
-      {/* MAIN WORKSPACE — always full width, unaffected by sidebar */}
-      <div id="erp-workspace-area" className="flex flex-col min-h-screen bg-slate-50">
+      {/* MAIN WORKSPACE — flex-1, adjusts width as sidebar opens/closes */}
+      <div id="erp-workspace-area" className="flex-1 min-w-0 flex flex-col bg-slate-50">
         
         {/* TOP MOBILE TOGGLE & SYSTEM CLOCK CONTROL BAR */}
         <header className="bg-white border-b border-gray-150 h-16 py-3 px-4 sm:px-6 flex justify-between items-center shrink-0 shadow-xs z-30">
@@ -1546,23 +1392,157 @@ export default function App() {
   );
 }
 
-// ===== SIDEBAR BUTTON COMPONENT =====
-function SidebarBtn({ tab, active, icon, label, onClick, onClose }: {
-  tab: string; active: string; icon: React.ReactNode; label: string;
-  onClick: (t: any) => void; onClose: () => void;
+// ===== SIDEBAR CONTENT COMPONENT =====
+function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveTab, spreadsheetId, setSpreadsheetId, setSpreadsheetTitle, showToast, initiateGoogleConnect, handleOwnerLogout }: {
+  isSidebarOpen: boolean;
+  setIsSidebarOpen: (v: boolean) => void;
+  activeTab: string;
+  setActiveTab: (t: any) => void;
+  spreadsheetId: string | null;
+  setSpreadsheetId: (v: string | null) => void;
+  setSpreadsheetTitle: (v: string) => void;
+  showToast: (msg: string, type: 'success' | 'error' | 'info') => void;
+  initiateGoogleConnect: () => void;
+  handleOwnerLogout: () => void;
 }) {
-  const isActive = active === tab;
-  return (
+  const sidebarBtn = (tabKey: string, icon: React.ReactNode, label: string) => (
     <button
-      onClick={() => { onClick(tab); onClose(); }}
+      onClick={() => { setActiveTab(tabKey); setIsSidebarOpen(false); }}
       className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-        isActive
+        activeTab === tabKey
           ? 'bg-emerald-600 text-white font-extrabold shadow-sm'
           : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
       }`}
     >
-      <span className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-emerald-400'}`}>{icon}</span>
+      <span className={`w-4 h-4 shrink-0 ${activeTab === tabKey ? 'text-white' : 'text-emerald-400'}`}>{icon}</span>
       <span>{label}</span>
     </button>
   );
+
+  return (
+    <>
+      {/* LOGO BRAND BAR */}
+      <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-black shadow-md">
+            <Layers className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-[11px] font-black text-white tracking-wider uppercase mb-0.5">Near Bakery & Co. ERP</h2>
+            <p className="text-[9px] text-emerald-400 font-bold tracking-widest uppercase">Owner Console</p>
+          </div>
+        </div>
+        <button onClick={() => setIsSidebarOpen(false)}
+          className="p-1 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg cursor-pointer" title="Tutup Sidebar">
+          <PanelRightClose className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* PROFILE */}
+      <div className="p-4 bg-slate-900/60 border-b border-slate-800 text-xs flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7.5 h-7.5 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-bold font-mono text-emerald-400">OW</div>
+          <div>
+            <p className="font-bold text-white text-[11px] truncate max-w-[100px]">Owner Toko</p>
+            <p className="text-[9px] text-gray-500 font-mono font-bold">owner@bakery.id</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <button onClick={initiateGoogleConnect} title="Hubungkan Google Sheets"
+            className="p-1.5 hover:bg-slate-800 text-gray-500 hover:text-white rounded-lg transition-colors cursor-pointer flex items-center">
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+          </button>
+          <button onClick={handleOwnerLogout} title="Logout"
+            className="p-1.5 hover:bg-slate-800 text-gray-500 hover:text-red-400 rounded-lg transition-colors cursor-pointer flex items-center">
+            <LogOut className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* NAVIGATION */}
+      <nav className="flex-1 overflow-y-auto p-4 space-y-5 select-none scrollbar-thin">
+        <div className="space-y-1">
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">① Master Data</span>
+          {sidebarBtn('data_pusat', <Building2 className="w-4 h-4" />, '🏛️ Data Pusat')}
+          {sidebarBtn('materials', <Package className="w-4 h-4" />, '📦 Bahan Baku')}
+          {sidebarBtn('recipes', <FolderTree className="w-4 h-4" />, '📝 Formulasi Resep')}
+        </div>
+        <div className="space-y-1">
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">② Inventory & Produksi</span>
+          {sidebarBtn('erp_stock', <Package className="w-4 h-4" />, '🏭 Stok Gudang')}
+          {sidebarBtn('erp_fefo_expiry', <ShieldAlert className="w-4 h-4" />, '📋 FEFO & Expiry')}
+          {sidebarBtn('erp_bom', <Layers className="w-4 h-4" />, '🔧 BOM & Yield')}
+          {sidebarBtn('erp_production_center', <ClipboardList className="w-4 h-4" />, '🏭 Prod. Center')}
+          {sidebarBtn('erp_baker_pct', <Percent className="w-4 h-4" />, "🍞 Baker's %")}
+          {sidebarBtn('erp_dough_temp', <Thermometer className="w-4 h-4" />, '🌡️ Suhu Adonan')}
+        </div>
+        <div className="space-y-1">
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">③ Pembelian & Supplier</span>
+          <span className="px-3 text-[10px] text-gray-600 font-medium">✅ Ada di Data Pusat</span>
+        </div>
+        <div className="space-y-1">
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">④ Kasir & Penjualan</span>
+          {sidebarBtn('erp_pos', <ShoppingCart className="w-4 h-4" />, '🛒 POS Kasir')}
+          {sidebarBtn('erp_online', <Users className="w-4 h-4" />, '📱 Pesanan Online')}
+          {sidebarBtn('erp_crm', <TrendingUp className="w-4 h-4" />, '📈 CRM Marketing')}
+        </div>
+        <div className="space-y-1">
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑤ Keuangan</span>
+          {sidebarBtn('dashboard', <LineChart className="w-4 h-4" />, '👋 Ringkasan')}
+          {sidebarBtn('erp_bi', <TrendingUp className="w-4 h-4" />, '📊 Laporan P&L')}
+          {sidebarBtn('erp_cash_flow', <Coins className="w-4 h-4" />, '💵 Arus Kas')}
+          {sidebarBtn('erp_profit_distribusi', <PieChart className="w-4 h-4" />, '🎯 Alokasi Laba')}
+          {sidebarBtn('erp_bep', <BarChart3 className="w-4 h-4" />, '🧮 BEP & Balance')}
+          {sidebarBtn('erp_budget', <CheckCircle2 className="w-4 h-4" />, '💰 Anggaran Budget')}
+          {sidebarBtn('hpp', <TrendingUp className="w-4 h-4" />, '📈 Harga & HPP')}
+        </div>
+        <div className="space-y-1">
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑥ Operasional & Waste</span>
+          {sidebarBtn('erp_waste', <X className="w-4 h-4" />, '🗑️ Manajemen Waste')}
+          {sidebarBtn('erp_rd', <FlaskConical className="w-4 h-4" />, '🔬 Sandbox R&D')}
+          {sidebarBtn('erp_compliance', <ShieldAlert className="w-4 h-4" />, '🧊 Recall Pangan')}
+          {sidebarBtn('erp_iot', <Cpu className="w-4 h-4" />, '🤖 Smart IoT')}
+        </div>
+        <div className="space-y-1">
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑦ Tools</span>
+          {sidebarBtn('erp_image_gen', <Image className="w-4 h-4" />, '🎨 Image Gen')}
+        </div>
+        <div className="space-y-1">
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑧ Monitoring</span>
+          {sidebarBtn('erp_alert_system', <Bell className="w-4 h-4" />, '🔔 Monitoring & Alert')}
+        </div>
+        <div className="space-y-1">
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑨ Backup</span>
+          {sidebarBtn('erp_backup', <Cloud className="w-4 h-4" />, '💾 Backup & Restore')}
+        </div>
+      </nav>
+
+      {/* GSHEETS CONNECTION */}
+      <div className="p-4 border-t border-slate-800 bg-slate-950 flex flex-col gap-2 shrink-0">
+        {spreadsheetId ? (
+          <>
+            <a href={`https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`} target="_blank" rel="noreferrer"
+              className="text-center font-mono text-[10px] text-emerald-400 bg-slate-905 border border-slate-800 hover:border-emerald-600/50 py-1.5 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+              <FileSpreadsheet className="w-3.5 h-3.5" /> BUKA SPREADSHEET ↗
+            </a>
+            <button onClick={() => {
+              localStorage.removeItem('spreadsheet_url');
+              setSpreadsheetId(null);
+              setSpreadsheetTitle('');
+              showToast('Koneksi Google Sheets diputuskan.', 'info');
+            }}
+              className="w-full py-1.5 text-center text-[10px] font-extrabold uppercase bg-slate-800 hover:bg-rose-700 hover:text-white text-slate-400 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5">
+              <LogOut className="w-3.5 h-3.5" /> Putus Koneksi
+            </button>
+          </>
+        ) : (
+          <button onClick={initiateGoogleConnect}
+            className="w-full py-1.5 text-center text-[10px] font-extrabold uppercase bg-emerald-600/10 hover:bg-emerald-700 hover:text-white text-emerald-400 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-emerald-800/30">
+            <FileSpreadsheet className="w-3.5 h-3.5" /> HUBUNGKAN GOOGLE SHEETS
+          </button>
+        )}
+      </div>
+    </>
+  );
 }
+
