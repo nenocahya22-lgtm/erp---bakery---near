@@ -54,6 +54,11 @@ export default function BranchDashboard({
   const [wasteQty, setWasteQty] = useState('');
   const [wasteAlasan, setWasteAlasan] = useState('');
 
+  // ─── WORK ORDER STATE ───
+  const [woProd, setWoProd] = useState('');
+  const [woBatch, setWoBatch] = useState(1);
+  const [woNotes, setWoNotes] = useState('');
+
   // ─── HELPERS ───
   const branchSOs = suratOrders.filter(s => s.cabangId === cabang.id);
   const branchWasteLogs = wasteLogs.filter(w => w.location === `Cabang ${cabang.nama}`);
@@ -568,9 +573,6 @@ export default function BranchDashboard({
                 </h3>
               </div>
               {(() => {
-                const [woProd, setWoProd] = useState('');
-                const [woBatch, setWoBatch] = useState(1);
-                const [woNotes, setWoNotes] = useState('');
                 const resep = detailResep.filter(r => r.namaProduk === woProd);
                 const calc = calculatedProducts.find(c => c.namaProduk === woProd);
                 const totalCost = resep.reduce((s, r) => {
@@ -671,9 +673,22 @@ export default function BranchDashboard({
                           {so.items.map(i => `${i.bahanNama}: ${i.qty}`).join(', ')}
                         </p>
                       </div>
-                      <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
-                        so.status === 'diterima' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                      }`}>{so.status}</span>
+                      {so.status === 'dikirim' ? (
+                        <button
+                          onClick={() => {
+                            if (window.confirm('Apakah Anda yakin sudah menerima barang-barang ini? Stok cabang akan bertambah secara otomatis.')) {
+                              onUpdateSuratOrder(so.id, { ...so, status: 'diterima' });
+                            }
+                          }}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                        >
+                          Terima Barang
+                        </button>
+                      ) : (
+                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+                          so.status === 'diterima' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                        }`}>{so.status}</span>
+                      )}
                     </div>
                   ))}
                 </div>
