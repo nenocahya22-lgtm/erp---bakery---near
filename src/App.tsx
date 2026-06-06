@@ -650,34 +650,36 @@ export default function App() {
     );
     const yieldPortions = productInfo?.porsiJual || 1;
 
-    // 3. Deduct raw materials based on this formulation inside our main bahanBaku state!
+    // 3. Deduct raw materials based on this formulation inside our main bahanBaku state! (Only if it's not a branch sale)
     let criticalStockWarning = false;
-    setBahanBaku((prevBahan) => {
-      return prevBahan.map((b) => {
-        const ingredientUsed = ingredientsForProduct.find(
-          (ing) => ing.namaBahan.toLowerCase().trim() === b.nama.toLowerCase().trim()
-        );
+    if (!cabangId) {
+      setBahanBaku((prevBahan) => {
+        return prevBahan.map((b) => {
+          const ingredientUsed = ingredientsForProduct.find(
+            (ing) => ing.namaBahan.toLowerCase().trim() === b.nama.toLowerCase().trim()
+          );
 
-        if (ingredientUsed) {
-          // consumedAmount = (takaran / yieldPortions) * soldQty
-          const consumedAmount = (ingredientUsed.takaran / yieldPortions) * soldQty;
-          const currentUnitStock = b.isiKemasan > 0 ? (b.isiKemasan - consumedAmount) : 0;
-          
-          if (currentUnitStock < 50) {
-            criticalStockWarning = true;
+          if (ingredientUsed) {
+            // consumedAmount = (takaran / yieldPortions) * soldQty
+            const consumedAmount = (ingredientUsed.takaran / yieldPortions) * soldQty;
+            const currentUnitStock = b.isiKemasan > 0 ? (b.isiKemasan - consumedAmount) : 0;
+            
+            if (currentUnitStock < 50) {
+              criticalStockWarning = true;
+            }
+            return {
+              ...b,
+              isiKemasan: Math.max(0, Number(currentUnitStock.toFixed(2)))
+            };
           }
-          return {
-            ...b,
-            isiKemasan: Math.max(0, Number(currentUnitStock.toFixed(2)))
-          };
-        }
-        return b;
+          return b;
+        });
       });
-    });
+    }
 
-    // 4. Also deduct multi-warehouse stock levels inside localStorage 'stock_levels_data' for high visual accuracy in InventoryTab!
+    // 4. Also deduct multi-warehouse stock levels inside localStorage 'stock_levels_data' for high visual accuracy in InventoryTab! (Only if it's not a branch sale)
     const savedStocks = localStorage.getItem('stock_levels_data');
-    if (savedStocks) {
+    if (savedStocks && !cabangId) {
       try {
         const parsed = JSON.parse(savedStocks);
         ingredientsForProduct.forEach((ing) => {
