@@ -588,7 +588,12 @@ export default function DataPusatTab({
                 onChange={e => setBahanSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500" />
             </div>
-            <button onClick={() => { setEditingBahan(null); setBahanForm({kode:'',nama:'',satuan:'gr',isiKemasan:1000,hargaBeliReal:0,markupPercent:25,kategori:''}); setShowBahanModal(true); }}
+            <button onClick={() => {
+              const autoKode = `BB-${Date.now().toString(36).toUpperCase()}`;
+              setEditingBahan(null);
+              setBahanForm({kode: autoKode, nama: '', satuan: 'gr', isiKemasan: 1000, hargaBeliReal: 0, markupPercent: 25, kategori: ''});
+              setShowBahanModal(true);
+            }}
               className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer">
               <Plus className="w-3.5 h-3.5" /> Tambah Bahan Baru
             </button>
