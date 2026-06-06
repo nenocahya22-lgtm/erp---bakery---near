@@ -192,6 +192,10 @@ export default function DataPusatTab({
     setPurchaseOrders(prev => prev.map(p => {
       if (p.id !== id) return p;
       // PO diterima → tambah stok pusat
+      const bahan = bahanBaku.find(b => b.nama === p.bahanNama);
+      if (bahan) {
+        onEditMaterial(bahan.nama, { ...bahan, isiKemasan: bahan.isiKemasan + p.qty });
+      }
       return { ...p, status: 'Diterima' as const };
     }));
   };

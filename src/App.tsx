@@ -18,7 +18,7 @@ import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, Was
 
 import OwnerLogin from './components/OwnerLogin';
 import DashboardTab from './components/DashboardTab';
-
+import MaterialsTab from './components/MaterialsTab';
 import RecipesTab from './components/RecipesTab';
 import HargaHppTab from './components/HargaHppTab';
 
@@ -67,6 +67,7 @@ import {
   RefreshCw,
   FolderTree,
   TrendingUp,
+  Package,
   Cpu,
   ShieldAlert,
   LineChart,
@@ -191,6 +192,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<
     | 'dashboard'
     | 'data_pusat'
+    | 'materials'
     | 'recipes'
     | 'hpp'
     | 'erp_bi'
@@ -1137,6 +1139,13 @@ export default function App() {
                 wasteLogs={wasteLogs}
               />
             )}
+            {activeTab === 'materials' && (
+              <MaterialsTab
+                bahanBaku={bahanBaku}
+                cabangList={cabangList}
+                cabangStok={cabangStok}
+              />
+            )}
             {activeTab === 'dashboard' && (
               <DashboardTab
                 calculatedProducts={calculatedProducts}
@@ -1442,6 +1451,7 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
         <div className="space-y-1">
           <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">① Master Data</span>
           {sidebarBtn('data_pusat', <Building2 className="w-4 h-4" />, '🏛️ Data Pusat')}
+          {sidebarBtn('materials', <Package className="w-4 h-4" />, '📦 Bahan Baku')}
           {sidebarBtn('recipes', <FolderTree className="w-4 h-4" />, '📝 Formulasi Resep')}
         </div>
         <div className="space-y-1">
