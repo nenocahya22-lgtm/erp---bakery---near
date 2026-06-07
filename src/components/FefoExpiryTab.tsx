@@ -518,10 +518,76 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog, ca
             </div>
           )}
 
-          {onAddWasteLog && (
+          {/* ─── RINGKASAN EXPIRED PER CABANG ─── */}
+          {expiredBatches.length > 0 && onAddWasteLog && (
+            <div className="bg-white p-5 rounded-2xl border border-red-200 shadow-xs border-l-4 border-l-red-500">
+              <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-red-600" /> Ringkasan Expired per Cabang
+              </h4>
+              <p className="text-[10px] text-gray-500 mb-3">
+                Bahan expired yang terdistribusi ke cabang — segera recall untuk dicatat sebagai waste.
+              </p>
+              <div className="space-y-2">
+                {(() => {
+                  // Compute expired items per cabang
+                  const cabangExpired = new Map<string, { nama: string; items: { bahan: string; qty: number; satuan: string }[] }>();
+                  expiredBatches.forEach(b => {
+                    suratOrders
+                      .filter(so => so.items.some(i => i.bahanNama === b.bahanNama))
+                      .forEach(so => {
+                        const cabang = cabangList.find(c => c.id === so.cabangId);
+                        if (!cabang) return;
+                        const item = so.items.find(i => i.bahanNama === b.bahanNama);
+                        if (!item || item.qty <= 0) return;
+                        if (!cabangExpired.has(cabang.id)) {
+                          cabangExpired.set(cabang.id, { nama: cabang.nama, items: [] });
+                        }
+                        const existingItem = cabangExpired.get(cabang.id)!.items.find(i => i.bahan === b.bahanNama);
+                        if (existingItem) {
+                          existingItem.qty += item.qty;
+                        } else {
+                          cabangExpired.get(cabang.id)!.items.push({ bahan: b.bahanNama, qty: item.qty, satuan: b.satuan });
+                        }
+                      });
+                  });
+                  if (cabangExpired.size === 0) {
+                    return <p className="text-[10px] text-gray-400 italic">Tidak ada batch expired yang terdistribusi ke cabang.</p>;
+                  }
+                  return Array.from(cabangExpired.values()).map(c => (
+                    <div key={c.nama} className="border border-red-100 rounded-xl p-3 bg-white">
+                      <div className="flex items-center gap-1.5 text-xs mb-1.5">
+                        <span className="font-bold text-red-800">{c.nama}</span>
+                        <span className="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-bold">{c.items.reduce((s,i) => s + i.qty, 0)} unit expired</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {c.items.map((item, idx) => (
+                          <span key={idx} className="text-[9px] bg-amber-50 border border-amber-200 text-amber-800 px-1.5 py-0.5 rounded-lg font-medium">
+                            {item.bahan}: {item.qty} {item.satuan}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+              <div className="mt-3 p-2 bg-red-50 border border-red-100 rounded-lg text-[10px] text-red-800">
+                <AlertTriangle className="w-3 h-3 inline mr-1" />
+                <strong>Total {expiredBatches.length} batch expired</strong> — gunakan tombol <strong>"Recall & Waste"</strong> di panel Distribusi Batch untuk menarik barang dari cabang dan mencatatnya sebagai waste otomatis.
+              </div>
+            </div>
+          )}
+
+          {expiredBatches.length > 0 && onAddWasteLog && (
             <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-[10px] text-emerald-800">
               <Zap className="w-3 h-3 inline mr-1" />
-              <span className="font-bold">Terhubung ke Waste Control:</span> Klik 🔔 pada batch expired untuk otomatis mencatat waste.
+              <span className="font-bold">Terhubung ke Waste Control:</span> Klik <strong>"Recall & Waste"</strong> pada batch expired di panel Distribusi Batch untuk recall dari cabang dan catat waste otomatis.
+            </div>
+          )}
+
+          {expiredBatches.length > 0 && !onAddWasteLog && (
+            <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-[10px] text-amber-800">
+              <AlertTriangle className="w-3 h-3 inline mr-1" />
+              <span className="font-bold">Ada {expiredBatches.length} batch expired</span> — hubungkan modul Waste Control untuk bisa melakukan recall ke cabang.
             </div>
           )}
 
@@ -531,9 +597,10 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog, ca
               <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                 <Truck className="w-4 h-4 text-emerald-600" /> Distribusi Batch ke Cabang
               </h4>
-              <p className="text-xs text-gray-500 mb-3">Tracking pengiriman batch berdasarkan Surat Order ke masing-masing cabang.</p>
-              <div className="space-y-3 max-h-[300px] overflow-y-auto">
-                {batches.slice(0, 10).map(batch => {
+              <p className="text-xs text-gray-500 mb-3">Tracking pengiriman batch berdasarkan Surat Order ke masing-masing cabang. Batch <strong>expired</strong> bisa langsung di-recall dari cabang dan dicatat sebagai waste.</p>
+              <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                {batches.slice(0, 20).map(batch => {
+                  const isExpired = new Date(batch.expiryDate) < new Date();
                   // Cari SO yang mengirim bahan ini ke cabang
                   const distributions = suratOrders
                     .filter(so => so.items.some(i => i.bahanNama === batch.bahanNama))
@@ -545,29 +612,64 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog, ca
                     }))
                     .filter(d => d.qty > 0);
 
-                  if (distributions.length === 0) return null;
+                  if (distributions.length === 0 && !isExpired) return null;
                   return (
-                    <div key={batch.id} className="border border-gray-200 rounded-xl p-3 bg-gray-50">
-                      <div className="flex items-center gap-2 text-xs mb-2">
-                        <span className="font-mono font-bold text-gray-700">{batch.batchNo}</span>
-                        <span className="font-bold text-gray-900">{batch.bahanNama}</span>
-                        <span className="text-gray-400">({batch.satuan})</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {distributions.map((d, i) => (
-                          <div key={i} className={`text-[9px] px-2 py-1 rounded-lg border font-bold ${
-                            d.status === 'diterima' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
-                            d.status === 'dikirim' ? 'bg-amber-50 border-amber-200 text-amber-800' :
-                            'bg-blue-50 border-blue-200 text-blue-800'
-                          }`}>
-                            {d.cabang?.nama || 'Unknown'}: {d.qty} {batch.satuan}
-                            <span className="ml-1">({d.status === 'diterima' ? '✅' : d.status === 'dikirim' ? '📦' : '🕐'})</span>
-                          </div>
-                        ))}
-                        {distributions.length === 0 && (
-                          <span className="text-[10px] text-gray-400 italic">Belum ada distribusi ke cabang</span>
+                    <div key={batch.id} className={`border rounded-xl p-3 ${isExpired ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+                      <div className="flex items-center justify-between gap-2 text-xs mb-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono font-bold text-gray-700">{batch.batchNo}</span>
+                          <span className="font-bold text-gray-900">{batch.bahanNama}</span>
+                          <span className="text-gray-400">({batch.satuan})</span>
+                          {isExpired && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 font-bold text-[9px]">EXPIRED</span>
+                          )}
+                        </div>
+                        {isExpired && onAddWasteLog && (
+                          <button onClick={() => {
+                            const cabangDetails = distributions.map(d => `  • ${d.cabang?.nama || 'Unknown'}: ${d.qty} ${batch.satuan} (${d.status})`).join('\n');
+                            const totalDistQty = distributions.reduce((s,d) => s + d.qty, 0);
+                            const recallMsg = `⚠️ RECALL batch "${batch.batchNo}" (${batch.bahanNama})\n\nBatch ini sudah expired dan terdistribusi ke:\n${cabangDetails}\n\nTOTAL: ${totalDistQty} ${batch.satuan}\n\nKonversi semua ke Waste?`;
+                            if (!window.confirm(recallMsg)) return;
+                            // Create waste log for each cabang distribution
+                            distributions.forEach(d => {
+                              if (d.qty <= 0) return;
+                              const wasteLog: WasteLog = {
+                                id: `waste-recall-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
+                                bahanNama: batch.bahanNama,
+                                qtyWasted: d.qty,
+                                satuan: batch.satuan,
+                                lossValue: d.qty * (bahanBaku.find(b => b.nama === batch.bahanNama)?.hargaSatuan || 0),
+                                location: 'Gudang Utama',
+                                reason: d.cabang ? `Recall dari ${d.cabang.nama} - Batch ${batch.batchNo}` : `Recall expired - Batch ${batch.batchNo}`,
+                                dateLogged: new Date().toISOString().substring(0, 10),
+                              };
+                              onAddWasteLog(wasteLog);
+                            });
+                            // Remove the expired batch
+                            handleDeleteBatch(batch.id);
+                          }}
+                            className="inline-flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-[9px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer">
+                            <AlertOctagon className="w-3 h-3" /> Recall & Waste
+                          </button>
                         )}
                       </div>
+                      {distributions.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {distributions.map((d, i) => (
+                            <div key={i} className={`text-[9px] px-2 py-1 rounded-lg border font-bold ${
+                              d.status === 'diterima' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+                              d.status === 'dikirim' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+                              'bg-blue-50 border-blue-200 text-blue-800'
+                            }`}>
+                              {d.cabang?.nama || 'Unknown'}: {d.qty} {batch.satuan}
+                              <span className="ml-1">({d.status === 'diterima' ? '✅' : d.status === 'dikirim' ? '📦' : '🕐'})</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {distributions.length === 0 && !isExpired && (
+                        <span className="text-[10px] text-gray-400 italic">Belum ada distribusi ke cabang</span>
+                      )}
                     </div>
                   );
                 })}

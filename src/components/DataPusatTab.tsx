@@ -1821,88 +1821,137 @@ export default function DataPusatTab({
                   onChange={e => setBahanForm(f => ({...f, nama: e.target.value}))}
                   className="w-full text-xs border border-gray-200 rounded-xl p-2.5" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Kemasan (isi)</label>
-                  <input type="number" min="1" value={bahanForm.isiKemasan}
-                    onChange={e => setBahanForm(f => ({...f, isiKemasan: parseInt(e.target.value)||0}))}
-                    className="w-full text-xs border border-gray-200 rounded-xl p-2.5 font-mono" />
-                </div>
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Satuan</label>
-                  <select value={bahanForm.satuan}
-                    onChange={e => setBahanForm(f => ({...f, satuan: e.target.value}))}
-                    className="w-full text-xs border border-gray-200 rounded-xl p-2.5">
-                    <option value="gr">gr (gram)</option>
-                    <option value="kg">kg (kilogram)</option>
-                    <option value="ml">ml (mililiter)</option>
-                    <option value="liter">liter</option>
-                    <option value="pcs">pcs (pieces)</option>
-                    <option value="pack">pack</option>
-                    <option value="sdt">sdt (sendok teh)</option>
-                    <option value="sdm">sdm (sendok makan)</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Harga Beli (Real) *</label>
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">Rp</span>
-                    <input type="number" min="0" placeholder="10000" value={bahanForm.hargaBeliReal}
-                      onChange={e => setBahanForm(f => ({...f, hargaBeliReal: parseInt(e.target.value)||0}))}
-                      className="w-full pl-8 text-xs border border-gray-200 rounded-xl p-2.5 font-mono" />
+              {/* ─── FORM UNTUK PRODUK/MINUMAN (dengan kemasan, markup) ─── */}
+              {bahanForm.kategori !== 'Alat' ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Kemasan (isi)</label>
+                      <input type="number" min="1" value={bahanForm.isiKemasan}
+                        onChange={e => setBahanForm(f => ({...f, isiKemasan: parseInt(e.target.value)||0}))}
+                        className="w-full text-xs border border-gray-200 rounded-xl p-2.5 font-mono" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Satuan</label>
+                      <select value={bahanForm.satuan}
+                        onChange={e => setBahanForm(f => ({...f, satuan: e.target.value}))}
+                        className="w-full text-xs border border-gray-200 rounded-xl p-2.5">
+                        <option value="gr">gr (gram)</option>
+                        <option value="kg">kg (kilogram)</option>
+                        <option value="ml">ml (mililiter)</option>
+                        <option value="liter">liter</option>
+                        <option value="pcs">pcs (pieces)</option>
+                        <option value="pack">pack</option>
+                        <option value="sdt">sdt (sendok teh)</option>
+                        <option value="sdm">sdm (sendok makan)</option>
+                      </select>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Markup (%)</label>
-                  <div className="relative">
-                    <input type="number" min="0" max="1000" value={bahanForm.markupPercent}
-                      onChange={e => setBahanForm(f => ({...f, markupPercent: parseInt(e.target.value)||0}))}
-                      className="w-full text-xs border border-gray-200 rounded-xl p-2.5 font-mono font-bold text-emerald-700" />
-                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-emerald-600 font-bold">%</span>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Harga Beli (Real) *</label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">Rp</span>
+                        <input type="number" min="0" placeholder="10000" value={bahanForm.hargaBeliReal}
+                          onChange={e => setBahanForm(f => ({...f, hargaBeliReal: parseInt(e.target.value)||0}))}
+                          className="w-full pl-8 text-xs border border-gray-200 rounded-xl p-2.5 font-mono" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Markup (%)</label>
+                      <div className="relative">
+                        <input type="number" min="0" max="1000" value={bahanForm.markupPercent}
+                          onChange={e => setBahanForm(f => ({...f, markupPercent: parseInt(e.target.value)||0}))}
+                          className="w-full text-xs border border-gray-200 rounded-xl p-2.5 font-mono font-bold text-emerald-700" />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-emerald-600 font-bold">%</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-              {/* Preview harga */}
-              {bahanForm.hargaBeliReal > 0 && (
-                <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-xs space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Harga Beli (Real):</span>
-                    <span className="font-mono font-bold">{formatCurrency(bahanForm.hargaBeliReal)}</span>
+                  {/* Preview harga */}
+                  {bahanForm.hargaBeliReal > 0 && (
+                    <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-xs space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Harga Beli (Real):</span>
+                        <span className="font-mono font-bold">{formatCurrency(bahanForm.hargaBeliReal)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Markup {bahanForm.markupPercent}%:</span>
+                        <span className="font-mono font-bold text-amber-700">+{formatCurrency(Math.round(bahanForm.hargaBeliReal * bahanForm.markupPercent / 100))}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-emerald-200 pt-1">
+                        <span className="font-bold text-emerald-800">Harga Jual per Kemasan:</span>
+                        <span className="font-mono font-black text-emerald-800">{formatCurrency(Math.round(bahanForm.hargaBeliReal * (1 + bahanForm.markupPercent/100)))}</span>
+                      </div>
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-gray-500">Harga Satuan per {bahanForm.satuan}:</span>
+                        <span className="font-mono text-gray-600">{formatCurrency(Math.round(bahanForm.hargaBeliReal * (1 + bahanForm.markupPercent/100) / bahanForm.isiKemasan))}/{bahanForm.satuan}</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* ─── FORM KHUSUS ALAT (tanpa kemasan/markup) ─── */
+                <>
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[10px] text-amber-800 mb-2">
+                    🔧 <strong>Kategori Alat</strong> — isi dengan data alat/perlengkapan. Tidak menggunakan markup harga.
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Markup {bahanForm.markupPercent}%:</span>
-                    <span className="font-mono font-bold text-amber-700">+{formatCurrency(Math.round(bahanForm.hargaBeliReal * bahanForm.markupPercent / 100))}</span>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Jumlah Unit</label>
+                      <input type="number" min="1" value={bahanForm.isiKemasan}
+                        onChange={e => setBahanForm(f => ({...f, isiKemasan: parseInt(e.target.value)||1, satuan: 'pcs'}))}
+                        className="w-full text-xs border border-gray-200 rounded-xl p-2.5 font-mono" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Satuan</label>
+                      <div className="w-full text-xs border border-gray-200 rounded-xl p-2.5 bg-gray-50 text-gray-500 font-bold">
+                        pcs
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex justify-between border-t border-emerald-200 pt-1">
-                    <span className="font-bold text-emerald-800">Harga Jual per Kemasan:</span>
-                    <span className="font-mono font-black text-emerald-800">{formatCurrency(Math.round(bahanForm.hargaBeliReal * (1 + bahanForm.markupPercent/100)))}</span>
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Harga Beli (per unit) *</label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">Rp</span>
+                      <input type="number" min="0" placeholder="500000" value={bahanForm.hargaBeliReal}
+                        onChange={e => setBahanForm(f => ({...f, hargaBeliReal: parseInt(e.target.value)||0, markupPercent: 0}))}
+                        className="w-full pl-8 text-xs border border-gray-200 rounded-xl p-2.5 font-mono" />
+                    </div>
+                    <p className="text-[9px] text-gray-400 mt-1">Harga beli alat per unit. Tidak ada markup.</p>
                   </div>
-                  <div className="flex justify-between text-[10px]">
-                    <span className="text-gray-500">Harga Satuan per {bahanForm.satuan}:</span>
-                    <span className="font-mono text-gray-600">{formatCurrency(Math.round(bahanForm.hargaBeliReal * (1 + bahanForm.markupPercent/100) / bahanForm.isiKemasan))}/{bahanForm.satuan}</span>
-                  </div>
-                </div>
+                  {bahanForm.hargaBeliReal > 0 && (
+                    <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Harga Beli:</span>
+                        <span className="font-mono font-bold">{formatCurrency(bahanForm.hargaBeliReal)}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-amber-200 pt-1 mt-1">
+                        <span className="font-bold text-amber-800">Total Nilai ({bahanForm.isiKemasan} pcs):</span>
+                        <span className="font-mono font-black text-amber-800">{formatCurrency(bahanForm.hargaBeliReal * bahanForm.isiKemasan)}</span>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
               <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
                 <button onClick={() => setShowBahanModal(false)}
                   className="px-4 py-2 text-xs font-medium text-gray-500 hover:bg-gray-100 rounded-xl cursor-pointer">Batal</button>
                 <button onClick={() => {
                   if (!bahanForm.nama.trim()) return;
-                  const hargaJualKemasan = Math.round(bahanForm.hargaBeliReal * (1 + bahanForm.markupPercent/100));
-                  const hargaSatuan = bahanForm.isiKemasan > 0 ? Math.round(hargaJualKemasan / bahanForm.isiKemasan) : 0;
+                  const isAlat = bahanForm.kategori === 'Alat';
+                  const hargaJual = isAlat ? bahanForm.hargaBeliReal : Math.round(bahanForm.hargaBeliReal * (1 + bahanForm.markupPercent/100));
+                  const hargaSatuan = isAlat ? bahanForm.hargaBeliReal : (bahanForm.isiKemasan > 0 ? Math.round(hargaJual / bahanForm.isiKemasan) : 0);
                   const newBahan: BahanBaku = {
                     kode: bahanForm.kode || undefined,
                     nama: bahanForm.nama.trim(),
                     kategori: bahanForm.kategori || undefined,
-                    satuan: bahanForm.satuan,
-                    isiKemasan: bahanForm.isiKemasan,
-                    hargaBeli: hargaJualKemasan, // Harga after markup (harga jual per kemasan)
-                    hargaSatuan: hargaSatuan, // Per unit
-                    hargaBeliReal: bahanForm.hargaBeliReal, // Harga beli real
-                    hargaSatuanReal: bahanForm.isiKemasan > 0 ? Math.round(bahanForm.hargaBeliReal / bahanForm.isiKemasan) : 0,
-                    markupPercent: bahanForm.markupPercent,
+                    satuan: isAlat ? 'pcs' : bahanForm.satuan,
+                    isiKemasan: isAlat ? (bahanForm.isiKemasan || 1) : bahanForm.isiKemasan,
+                    hargaBeli: hargaJual,
+                    hargaSatuan: hargaSatuan,
+                    hargaBeliReal: bahanForm.hargaBeliReal,
+                    hargaSatuanReal: isAlat ? bahanForm.hargaBeliReal : (bahanForm.isiKemasan > 0 ? Math.round(bahanForm.hargaBeliReal / bahanForm.isiKemasan) : 0),
+                    markupPercent: isAlat ? 0 : bahanForm.markupPercent,
                   };
                   if (editingBahan) {
                     onEditMaterial(editingBahan.nama, newBahan);
@@ -1911,7 +1960,7 @@ export default function DataPusatTab({
                   }
                   setShowBahanModal(false);
                 }}
-                  disabled={!bahanForm.nama.trim() || bahanForm.hargaBeliReal <= 0 || bahanForm.isiKemasan <= 0}
+                  disabled={!bahanForm.nama.trim() || bahanForm.hargaBeliReal <= 0 || (bahanForm.kategori !== 'Alat' && bahanForm.isiKemasan <= 0)}
                   className="px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white rounded-xl cursor-pointer disabled:cursor-not-allowed">
                   {editingBahan ? 'Simpan Perubahan' : 'Tambah Bahan'}
                 </button>
