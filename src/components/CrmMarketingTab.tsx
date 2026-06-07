@@ -494,33 +494,67 @@ export default function CrmMarketingTab({
             </div>
           </div>
 
-          {/* Segmentasi Pelanggan */}
+          {/* Segmentasi Pelanggan — REAL DATA dari POS */}
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-100 pb-2">
               <Users className="w-4 h-4 text-emerald-600" /> Segmentasi Pelanggan
             </h3>
             <div className="space-y-3">
               {(() => {
-                const totalCustomers = Math.max(ordersData.length, 10);
-                const segments = [
-                  { segment: '💎 VIP (Top Spender)', size: Math.max(1, Math.round(totalCustomers * 0.1)), action: 'Loyalty card + free item' },
-                  { segment: '⭐ Regular', size: Math.max(1, Math.round(totalCustomers * 0.3)), action: 'Diskon 10% tiap kunjungan ke-5' },
-                  { segment: '📢 At Risk', size: Math.max(1, Math.round(totalCustomers * 0.2)), action: 'Kirim promo reaktivasi via WA' },
-                  { segment: '🆕 New Customer', size: Math.max(1, Math.round(totalCustomers * 0.15)), action: 'Welcome offer: diskon 20%' },
+                // Derive real segments from POS orders data
+                const customerMap: Record<string, { totalSpend: number; visits: number; lastDate: string; sources: string[] }> = {};
+                (ordersData as any[]).forEach((o: any) => {
+                  const name = (o.customerName || 'Pelanggan POS').toLowerCase().trim();
+                  if (!customerMap[name]) {
+                    customerMap[name] = { totalSpend: 0, visits: 0, lastDate: '', sources: [] };
+                  }
+                  customerMap[name].totalSpend += o.totalSum || 0;
+                  customerMap[name].visits += 1;
+                  if (o.date && o.date > customerMap[name].lastDate) customerMap[name].lastDate = o.date;
+                  if (o.source && !customerMap[name].sources.includes(o.source)) customerMap[name].sources.push(o.source);
+                });
+
+                const customers = Object.values(customerMap);
+                const totalCustomers = customers.length;
+
+                if (totalCustomers === 0) {
+                  return <p className="text-xs text-gray-400 text-center py-4">Belum ada data pelanggan. Mulai transaksi POS untuk melihat segmentasi.</p>;
+                }
+
+                const avgSpend = customers.reduce((s, c) => s + c.totalSpend, 0) / totalCustomers;
+
+                // Real segments based on actual data
+                const vip = customers.filter(c => c.totalSpend > avgSpend * 2.5 || c.visits >= 10);
+                const regular = customers.filter(c => !vip.includes(c) && c.visits >= 3);
+                const atRisk = customers.filter(c => !vip.includes(c) && !regular.includes(c) && c.visits >= 2);
+                const newCustomers = customers.filter(c => c.visits === 1);
+
+                const segmentData = [
+                  { segment: '💎 VIP (Top Spender)', customers: vip, action: 'Loyalty card + free item tiap 10x beli' },
+                  { segment: '⭐ Regular', customers: regular, action: 'Diskon 10% tiap kunjungan ke-5' },
+                  { segment: '📢 At Risk', customers: atRisk, action: 'Kirim promo reaktivasi via WA' },
+                  { segment: '🆕 New Customer', customers: newCustomers, action: 'Welcome offer: diskon 20%' },
                 ];
-                return segments.map((g, idx) => (
+
+                return segmentData.map((g, idx) => (
                   <div key={idx} className="p-3 bg-gray-50 border border-gray-150 rounded-xl text-xs">
                     <div className="flex justify-between items-center font-bold">
                       <span className="text-gray-900">{g.segment}</span>
-                      <span className="font-mono text-emerald-800 px-2 py-0.5 rounded text-[10px]">{g.size} member</span>
+                      <span className="font-mono text-emerald-800 px-2 py-0.5 rounded text-[10px]">{g.customers.length} pelanggan</span>
                     </div>
                     <p className="text-[10px] text-indigo-600 font-semibold mt-1">🎯 {g.action}</p>
+                    {g.customers.length > 0 && (
+                      <p className="text-[9px] text-gray-400 mt-0.5 font-mono">
+                        💰 Rata-rata: {formatCurrency(Math.round(g.customers.reduce((s, c) => s + c.totalSpend, 0) / g.customers.length))} /pelanggan
+                        {g.customers.length > 1 && ` • ${g.customers.length} total`}
+                      </p>
+                    )}
                   </div>
                 ));
               })()}
-              {ordersData.length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-4">Data akan muncul setelah ada transaksi POS.</p>
-              )}
+              <div className="bg-slate-50 p-2 rounded-lg text-[9px] text-gray-500 text-center">
+                🧑‍🤝‍🧑 Segmentasi berdasarkan data {ordersData.length} transaksi POS nyata. Data diperbarui otomatis.
+              </div>
             </div>
           </div>
 

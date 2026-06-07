@@ -101,6 +101,86 @@ export default function ProductionCenterTab({
   const totalPlannerHarga = Object.values(plannerNeeds).reduce((sum, n) => sum + n.hargaTotal, 0);
   const totalPlannerPcs = Object.values(plannerTargets).reduce((a, b) => (a as number) + (b as number), 0) as number;
 
+  // ─── DAILY CHECKLIST STATE ───
+  const [checklistItems, setChecklistItems] = useState<Record<string, boolean>>(() => {
+    const saved = localStorage.getItem('production_checklist_data');
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  const defaultChecklist = [
+    { key: 'cek_bahan', label: 'Cek ketersediaan bahan baku' },
+    { key: 'cek_suhu', label: 'Cek suhu ruang produksi' },
+    { key: 'siapkan_alat', label: 'Siapkan peralatan & loyang bersih' },
+    { key: 'timbang_bahan', label: 'Timbang bahan sesuai Work Order' },
+    { key: 'preheat_oven', label: 'Preheat oven 15 menit sebelum mulai' },
+    { key: 'catat_waktu', label: 'Catat waktu produksi & suhu aktual' },
+    { key: 'cek_kebersihan', label: 'Pastikan area produksi bersih' },
+    { key: 'record_temp', label: 'Catat suhu adonan akhir mixing' },
+  ];
+
+  const handleToggleChecklist = (key: string) => {
+    const updated = { ...checklistItems, [key]: !checklistItems[key] };
+    setChecklistItems(updated);
+    localStorage.setItem('production_checklist_data', JSON.stringify(updated));
+  };
+
+  const handleResetChecklist = () => {
+    if (!window.confirm('Reset checklist harian? Semua centang akan dihapus.')) return;
+    setChecklistItems({});
+    localStorage.setItem('production_checklist_data', JSON.stringify({}));
+  };
+
+  // ─── BAKING LOG STATE ───
+  const [bakingLogs, setBakingLogs] = useState<{
+    id: string; date: string; productName: string; batchQty: number;
+    doughTemp: number; ovenTemp: number; startTime: string; endTime: string;
+    notes: string;
+  }[]>(() => {
+    const saved = localStorage.getItem('production_baking_logs');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [showBakingLogModal, setShowBakingLogModal] = useState(false);
+  const [blProduct, setBlProduct] = useState('');
+  const [blBatch, setBlBatch] = useState(1);
+  const [blDoughTemp, setBlDoughTemp] = useState('26');
+  const [blOvenTemp, setBlOvenTemp] = useState('180');
+  const [blStart, setBlStart] = useState(new Date().toTimeString().substring(0, 5));
+  const [blEnd, setBlEnd] = useState('');
+  const [blNotes, setBlNotes] = useState('');
+
+  const handleAddBakingLog = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!blProduct) return;
+    const log = {
+      id: `bl-${Date.now()}`,
+      date: new Date().toISOString().substring(0, 10),
+      productName: blProduct,
+      batchQty: blBatch,
+      doughTemp: parseFloat(blDoughTemp) || 0,
+      ovenTemp: parseFloat(blOvenTemp) || 0,
+      startTime: blStart,
+      endTime: blEnd,
+      notes: blNotes.trim(),
+    };
+    const updated = [log, ...bakingLogs].slice(0, 100);
+    setBakingLogs(updated);
+    localStorage.setItem('production_baking_logs', JSON.stringify(updated));
+    setShowBakingLogModal(false);
+    setBlProduct('');
+    setBlBatch(1);
+    setBlDoughTemp('26');
+    setBlOvenTemp('180');
+    setBlStart(new Date().toTimeString().substring(0, 5));
+    setBlEnd('');
+    setBlNotes('');
+  };
+
+  const handleDeleteBakingLog = (id: string) => {
+    const updated = bakingLogs.filter(l => l.id !== id);
+    setBakingLogs(updated);
+    localStorage.setItem('production_baking_logs', JSON.stringify(updated));
+  };
+
   // ─── WORK ORDER STATE ───
   const [woProduct, setWoProduct] = useState('');
   const [woBatch, setWoBatch] = useState(1);
@@ -345,6 +425,46 @@ export default function ProductionCenterTab({
                 <Thermometer className="w-4 h-4 text-blue-600" /> Kalkulator Suhu Adonan
               </h3>
               <DoughTempCalculator />
+            </div>
+
+            {/* BAKING LOG */}
+            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-3">
+              <div className="flex items-center justify-between border-b border-gray-50 pb-2">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-emerald-600" /> Baking Log
+                </h3>
+                <button onClick={() => setShowBakingLogModal(true)}
+                  className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer">
+                  <Plus className="w-3 h-3" /> Catat Baking
+                </button>
+              </div>
+
+              {bakingLogs.length === 0 ? (
+                <p className="text-[10px] text-gray-400 text-center py-4">Belum ada catatan baking. Klik "Catat Baking" untuk mencatat batch produksi.</p>
+              ) : (
+                <div className="space-y-2 max-h-[240px] overflow-y-auto">
+                  {bakingLogs.slice(0, 10).map(log => (
+                    <div key={log.id} className="p-2.5 bg-gray-50 rounded-xl border border-gray-100 text-xs">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-gray-900">{log.productName}</span>
+                          <span className="text-[9px] text-gray-400 font-mono">×{log.batchQty}</span>
+                        </div>
+                        <button onClick={() => handleDeleteBakingLog(log.id)}
+                          className="text-gray-400 hover:text-red-600 cursor-pointer">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <div className="flex gap-3 mt-1 text-[10px] text-gray-500 font-mono">
+                        <span>🔥 {log.ovenTemp}°C</span>
+                        <span>🧊 {log.doughTemp}°C</span>
+                        <span>⏱️ {log.startTime}{log.endTime ? `-${log.endTime}` : ''}</span>
+                      </div>
+                      {log.notes && <p className="text-[9px] text-gray-400 mt-0.5">📝 {log.notes}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -695,17 +815,117 @@ export default function ProductionCenterTab({
                 </ol>
               </div>
               <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
-                <h4 className="font-bold text-emerald-800 mb-1">✅ Checklist Produksi Harian</h4>
-                <ul className="space-y-1 text-emerald-700">
-                  <li className="flex items-center gap-2"><input type="checkbox" className="rounded border-emerald-300 accent-emerald-600" /> Cek ketersediaan bahan baku</li>
-                  <li className="flex items-center gap-2"><input type="checkbox" className="rounded border-emerald-300 accent-emerald-600" /> Cek suhu ruang produksi</li>
-                  <li className="flex items-center gap-2"><input type="checkbox" className="rounded border-emerald-300 accent-emerald-600" /> Siapkan peralatan & loyang bersih</li>
-                  <li className="flex items-center gap-2"><input type="checkbox" className="rounded border-emerald-300 accent-emerald-600" /> Timbang bahan sesuai Work Order</li>
-                  <li className="flex items-center gap-2"><input type="checkbox" className="rounded border-emerald-300 accent-emerald-600" /> Preheat oven 15 menit sebelum mulai</li>
-                  <li className="flex items-center gap-2"><input type="checkbox" className="rounded border-emerald-300 accent-emerald-600" /> Catat waktu produksi & suhu aktual</li>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-bold text-emerald-800 text-xs">✅ Checklist Produksi Harian</h4>
+                  <button onClick={handleResetChecklist}
+                    className="text-[9px] font-bold text-emerald-600 hover:text-emerald-800 bg-emerald-100 hover:bg-emerald-200 px-2 py-0.5 rounded-lg transition cursor-pointer">
+                    Reset
+                  </button>
+                </div>
+                <ul className="space-y-1.5 text-emerald-700 text-xs">
+                  {defaultChecklist.map(item => {
+                    const checked = checklistItems[item.key] || false;
+                    return (
+                      <li key={item.key} className="flex items-center gap-2">
+                        <input type="checkbox" checked={checked}
+                          onChange={() => handleToggleChecklist(item.key)}
+                          className="rounded border-emerald-300 accent-emerald-600 cursor-pointer w-3.5 h-3.5" />
+                        <span className={`${checked ? 'line-through text-emerald-400' : ''} transition-all`}>
+                          {item.label}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
+                <div className="mt-2 pt-1.5 border-t border-emerald-200 flex justify-between text-[9px] text-emerald-600">
+                  <span className="font-semibold">{defaultChecklist.filter(d => checklistItems[d.key]).length}/{defaultChecklist.length} selesai</span>
+                  {(() => {
+                    const done = defaultChecklist.filter(d => checklistItems[d.key]).length;
+                    const pct = defaultChecklist.length > 0 ? Math.round((done / defaultChecklist.length) * 100) : 0;
+                    return (
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-16 h-1.5 bg-emerald-200 rounded-full overflow-hidden">
+                          <div className="h-full bg-emerald-600 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="font-bold font-mono">{pct}%</span>
+                      </div>
+                    );
+                  })()}
+                </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── BAKING LOG MODAL ─── */}
+      {showBakingLogModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl border border-gray-100 overflow-hidden">
+            <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-emerald-600" /> Catat Baking Batch
+              </h3>
+              <button onClick={() => setShowBakingLogModal(false)} className="text-gray-400 hover:text-gray-600 p-1 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleAddBakingLog} className="p-6 space-y-4 text-xs">
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Produk</label>
+                <select required value={blProduct} onChange={e => setBlProduct(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl p-2.5 bg-white">
+                  <option value="">-- Pilih Produk --</option>
+                  {productHpp.map(p => <option key={p.namaProduk} value={p.namaProduk}>{p.namaProduk}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Batch Qty</label>
+                  <input type="number" min="0.5" step="0.5" value={blBatch}
+                    onChange={e => setBlBatch(parseFloat(e.target.value) || 1)}
+                    className="w-full border border-gray-200 rounded-xl p-2.5 font-mono font-bold" />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Suhu Oven (°C)</label>
+                  <input type="number" value={blOvenTemp}
+                    onChange={e => setBlOvenTemp(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl p-2.5 font-mono" />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Suhu Adonan (°C)</label>
+                  <input type="number" value={blDoughTemp}
+                    onChange={e => setBlDoughTemp(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl p-2.5 font-mono" />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Mulai</label>
+                  <input type="time" value={blStart}
+                    onChange={e => setBlStart(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl p-2.5 font-mono" />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Selesai</label>
+                  <input type="time" value={blEnd}
+                    onChange={e => setBlEnd(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl p-2.5 font-mono" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Catatan</label>
+                <textarea value={blNotes} onChange={e => setBlNotes(e.target.value)}
+                  placeholder="Waktu proofing, texture, catatan khusus..."
+                  className="w-full border border-gray-200 rounded-xl p-2.5 h-16 resize-none" />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button type="button" onClick={() => setShowBakingLogModal(false)}
+                  className="px-4 py-2 text-xs font-medium text-gray-500 hover:bg-gray-100 rounded-xl cursor-pointer">Batal</button>
+                <button type="submit"
+                  className="px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl cursor-pointer">
+                  <Plus className="w-3.5 h-3.5 inline mr-1" /> Catat
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
