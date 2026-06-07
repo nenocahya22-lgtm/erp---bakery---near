@@ -21,19 +21,25 @@ interface RecipesTabProps {
   bahanBaku: BahanBaku[];
   productHpp: ProductHpp[];
   detailResep: DetailResep[];
+  toppings: ProductTopping[];
   onAddProduct: (p: ProductHpp, ingredients: DetailResep[]) => void;
   onUpdateProductIngredients: (productName: string, updatedDetails: DetailResep[], porsiJual: number) => void;
   onDeleteProduct: (productName: string) => void;
-  onUpdateProductDetails?: (oldName: string, updated: ProductHpp) => void; // Optional if needed, else we can do inline local updates or handle it in App.tsx
+  onAddTopping: (t: ProductTopping) => void;
+  onDeleteTopping: (id: string) => void;
+  onUpdateProductDetails?: (oldName: string, updated: ProductHpp) => void;
 }
 
 export default function RecipesTab({
   bahanBaku,
   productHpp,
   detailResep,
+  toppings,
   onAddProduct,
   onUpdateProductIngredients,
   onDeleteProduct,
+  onAddTopping,
+  onDeleteTopping,
   onUpdateProductDetails,
 }: RecipesTabProps) {
   const [selectedProductName, setSelectedProductName] = useState<string>(
@@ -80,7 +86,15 @@ export default function RecipesTab({
 
   const handleDeleteCategory = (cat: string) => {
     if (cat === 'Semua') return;
-    if (!window.confirm(`Hapus kategori "${cat}"? Kategori akan dihapus dari daftar filter. Produk dengan kategori ini tetap ada — ubah kategorinya secara manual di panel Edit.`)) return;
+    const productsInCat = productHpp.filter(p => (p.kategori || 'Lainnya') === cat);
+    const msg = productsInCat.length > 0
+      ? `Hapus kategori "${cat}" beserta ${productsInCat.length} resep di dalamnya?\n\nResep yang akan dihapus:\n${productsInCat.map(p => `- ${p.namaProduk}`).join('\n')}`
+      : `Hapus kategori "${cat}"? (tidak ada resep di dalamnya)`;
+    if (!window.confirm(msg)) return;
+    
+    // Hapus semua produk dalam kategori ini
+    productsInCat.forEach(p => onDeleteProduct(p.namaProduk));
+    
     setCategoriesList(prev => prev.filter(c => c !== cat));
     if (selectedCategory === cat) setSelectedCategory('Semua');
   };
@@ -127,22 +141,11 @@ export default function RecipesTab({
   const [editingBahanName, setEditingBahanName] = useState<string | null>(null);
   const [editingBahanQty, setEditingBahanQty] = useState<string>('');
 
-  // Topping Addon state persistent
-  const [toppings, setToppings] = useState<ProductTopping[]>(() => {
-    const saved = localStorage.getItem('toppings_data');
-    return saved ? JSON.parse(saved) : [];
-  });
-
   // New topping form state
   const [selectedToppingsBahan, setSelectedToppingsBahan] = useState('');
   const [newToppingName, setNewToppingName] = useState('');
   const [newToppingTakaran, setNewToppingTakaran] = useState('');
   const [newToppingHargaJual, setNewToppingHargaJual] = useState('5000');
-
-  // Sync Toppings back to localStorage
-  useEffect(() => {
-    localStorage.setItem('toppings_data', JSON.stringify(toppings));
-  }, [toppings]);
 
   // Find active product
   const activeProduct = productHpp.find(
@@ -226,7 +229,7 @@ export default function RecipesTab({
   const totalIngredientsCost = calculatedIngredients.reduce((acc, curr) => acc + curr.itemCost, 0);
 
   // Topping details of the active product
-  const activeToppings = toppings.filter(
+  const activeToppings = (toppings || []).filter(
     (t) => t.namaProduk.toLowerCase().trim() === selectedProductName.toLowerCase().trim()
   );
 
@@ -359,7 +362,7 @@ export default function RecipesTab({
     setNewProductName('');
     setNewProductPorsi('10');
     setNewProductOverhead('5000');
-    setNewProductHargaJual('45000');
+    setNewProductHargaJual('0');
     setNewProductKategori('Roti');
   };
 
@@ -424,6 +427,7 @@ export default function RecipesTab({
       id: Math.random().toString(36).substring(2, 9),
       namaProduk: selectedProductName,
       namaTopping: tName,
+      namaBahan: selectedToppingsBahan,
       takaran: tTakaran,
       hargaBeli: raw.hargaBeli,
       isiKemasan: raw.isiKemasan,
@@ -432,7 +436,7 @@ export default function RecipesTab({
       hargaJualTopping: parseFloat(newToppingHargaJual) || 0,
     };
 
-    setToppings((prev) => [...prev, newTp]);
+    onAddTopping(newTp);
     setSelectedToppingsBahan('');
     setNewToppingName('');
     setNewToppingTakaran('');
@@ -440,7 +444,7 @@ export default function RecipesTab({
   };
 
   const handleDeleteTopping = (id: string) => {
-    setToppings((prev) => prev.filter((t) => t.id !== id));
+    onDeleteTopping(id);
   };
 
   // Hitung Total HPP = sum of semua ingredients * qty + overhead
@@ -624,16 +628,10 @@ export default function RecipesTab({
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Harga Jual (Rp) <span className="text-amber-500">*opsional</span></label>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="0 — akan dihitung otomatis nanti"
-                    value={newProductHargaJual}
-                    onChange={(e) => setNewProductHargaJual(e.target.value)}
-                    className="w-full text-xs border border-gray-200 bg-white rounded-lg p-2 font-mono text-center text-gray-500 font-bold"
-                  />
-                  <p className="text-[9px] text-gray-400 mt-0.5">Kosongkan (0) — sistem akan suggest harga berdasarkan HPP + margin nanti.</p>
+                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Estimasi HPP (Rp) <span className="text-blue-500">*auto dari bahan</span></label>
+                  <div className="w-full text-xs border border-gray-200 bg-gray-100 rounded-lg p-2 font-mono text-center text-gray-400 font-bold">
+                    (Akan terhitung otomatis setelah tambah bahan)
+                  </div>
                 </div>
               </div>
 
@@ -642,7 +640,7 @@ export default function RecipesTab({
                 type="submit"
                 className="w-full py-2.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs cursor-pointer text-center active:scale-[0.98]"
               >
-                {parseFloat(newProductHargaJual) > 0 ? 'Buat & Simpan Resep' : 'Buat Resep — Atur Harga Nanti'}
+                Buat Resep Baru
               </button>
               </div>
             </form>
@@ -941,6 +939,7 @@ export default function RecipesTab({
                         <tr className="border-b border-gray-150 bg-slate-900 text-[10px] font-bold uppercase text-white font-mono">
                           <th className="px-4 py-3">Nama Bahan</th>
                           <th className="px-4 py-3 text-right">Takaran (Qty)</th>
+                          <th className="px-4 py-3 text-center">Satuan</th>
                           <th className="px-4 py-3 text-right">Harga Satuan</th>
                           <th className="px-4 py-3 text-right">Subtotal Biaya</th>
                           <th className="px-4 py-3 text-center">Aksi</th>
@@ -986,7 +985,7 @@ export default function RecipesTab({
                                 </div>
                               ) : (
                                 <div className="inline-flex items-center gap-1.5 justify-end group">
-                                  <span>{ing.takaran} {ing.satuan}</span>
+                                  <span>{ing.takaran}</span>
                                   <button
                                     onClick={() => handleStartInlineEdit(ing.namaBahan, ing.takaran)}
                                     className="p-1 opacity-60 group-hover:opacity-100 text-blue-600 hover:bg-blue-50 rounded transition cursor-pointer"
@@ -997,7 +996,10 @@ export default function RecipesTab({
                                 </div>
                               )}
                             </td>
-
+                            {/* ─── NEW: Separate Satuan Column ─── */}
+                            <td className="px-4 py-3 text-center font-bold text-gray-600 text-xs">
+                              {ing.satuan}
+                            </td>
                             <td className="px-4 py-3 text-right font-mono text-gray-500 text-xs">
                               {formatCurrency(ing.unitPrice)} / {ing.satuan}
                             </td>
@@ -1144,7 +1146,7 @@ export default function RecipesTab({
                 )}
 
                 {/* Adding New Topping Form */}
-                <form onSubmit={handleAddTopping} className="p-4 bg-white rounded-xl border border-indigo-150/60 grid grid-cols-1 md:grid-cols-12 gap-3 items-end text-xs">
+                            <form onSubmit={handleAddTopping} className="p-4 bg-white rounded-xl border border-indigo-150/60 grid grid-cols-1 md:grid-cols-12 gap-3 items-end text-xs">
                   <div className="md:col-span-3">
                     <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Pilih Bahan Mentah</label>
                     <select

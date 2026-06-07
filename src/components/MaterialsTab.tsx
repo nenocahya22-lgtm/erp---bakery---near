@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { BahanBaku, BranchStock, Cabang, SuratOrder } from '../types';
-import { Package, Search, ClipboardList, Building2, ShoppingCart, Truck } from 'lucide-react';
+import { Package, Search, ClipboardList, Building2, ShoppingCart, Truck, CheckCircle2 } from 'lucide-react';
 
 interface MaterialsTabProps {
   bahanBaku: BahanBaku[];
   cabangList: Cabang[];
   cabangStok: BranchStock[];
   suratOrders?: SuratOrder[];
+  onUpdateSuratOrder?: (id: string, so: SuratOrder) => void;
 }
 
-export default function MaterialsTab({ bahanBaku, cabangList, cabangStok, suratOrders = [] }: MaterialsTabProps) {
+export default function MaterialsTab({ bahanBaku, cabangList, cabangStok, suratOrders = [], onUpdateSuratOrder }: MaterialsTabProps) {
   const [search, setSearch] = useState('');
 
   const formatCurrency = (val: number) =>
@@ -123,7 +124,46 @@ export default function MaterialsTab({ bahanBaku, cabangList, cabangStok, suratO
         </div>
       )}
 
-      {/* PO Cabang Pending */}
+      {/* ─── SURAT ORDER MASUK (KONFIRMASI TERIMA) ─── */}
+      {onUpdateSuratOrder && suratOrders.filter(s => s.status === 'dikirim').length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+          <div className="p-4 border-b border-gray-100">
+            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+              <Truck className="w-4 h-4 text-emerald-600" /> Barang Masuk dari Pusat — Konfirmasi Terima
+              <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-bold rounded-lg">{suratOrders.filter(s => s.status === 'dikirim').length} dalam perjalanan</span>
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">KONFIRMASI penerimaan barang dari pusat. Setelah dikonfirmasi, stok cabang otomatis bertambah.</p>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {suratOrders.filter(s => s.status === 'dikirim').slice(0, 5).map(so => (
+              <div key={so.id} className="p-4 flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-gray-900 text-xs">{so.cabangNama}</span>
+                    <span className="text-[9px] font-mono text-gray-400">{so.id.substring(0, 12)}</span>
+                    <span className="text-[9px] text-gray-400">{new Date(so.tanggalKirim).toLocaleDateString('id-ID')}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {so.items.map((item, idx) => (
+                      <span key={idx} className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded">{item.bahanNama}: <strong>{item.qty}</strong></span>
+                    ))}
+                  </div>
+                </div>
+                <button onClick={() => {
+                  if (window.confirm(`Konfirmasi penerimaan barang dari "${so.cabangNama}"?\nStok cabang akan bertambah secara otomatis.`)) {
+                    onUpdateSuratOrder(so.id, { ...so, status: 'diterima' });
+                  }
+                }}
+                  className="inline-flex items-center gap-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[10px] font-bold px-3 py-1.5 rounded-lg transition cursor-pointer shrink-0">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Konfirmasi Terima
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ─── PERMINTAAN PENDING ─── */}
       {suratOrders.filter(s => s.status === 'minta').length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
           <div className="p-4 border-b border-gray-100">

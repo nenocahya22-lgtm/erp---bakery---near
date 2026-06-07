@@ -318,6 +318,31 @@ export default function DataPusatTab({
     );
   };
 
+  // ─── REKAP BAHAN (Merged from RekapBahanTab) ───
+  const handleCetakRekapBahan = () => {
+    const headers = ['Kode','Nama Bahan','Stok','Satuan','Harga Satuan','Total Nilai'];
+    const sorted = [...bahanBaku].sort((a, b) => a.nama.localeCompare(b.nama));
+    const rows = sorted.map(b => [
+      b.kode||'-', b.nama, b.isiKemasan.toString(), b.satuan, formatCurrency(b.hargaSatuan), formatCurrency(b.isiKemasan * b.hargaSatuan)
+    ]);
+    cetakDokumen('Rekap_Bahan', cetakLaporanHtml('REKAP BAHAN BAKU', headers, rows,
+      `Total: ${sorted.length} item | Nilai: ${formatCurrency(sorted.reduce((s,b) => s + (b.isiKemasan * b.hargaSatuan), 0))}`
+    ));
+  };
+
+  const handleExportCSVRekap = () => {
+    const headers = ['Kode','Nama Bahan','Stok','Satuan','Harga Satuan','Total Nilai'];
+    const sorted = [...bahanBaku].sort((a, b) => a.nama.localeCompare(b.nama));
+    const rows = sorted.map(b => [b.kode||'', b.nama, b.isiKemasan.toString(), b.satuan, b.hargaSatuan.toString(), (b.isiKemasan * b.hargaSatuan).toString()]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rekap_bahan_${new Date().toISOString().substring(0,10)}.csv`;
+    a.click();
+  };
+
   const handleExportHistoryAdd = (type: string, format: string, count: number) => {
     const newEntry = { type, format, timestamp: new Date().toISOString(), count };
     setExportHistory(prev => {
@@ -669,16 +694,28 @@ export default function DataPusatTab({
               <input type="text" placeholder="Cari bahan..." value={bahanSearch}
                 onChange={e => setBahanSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500" />
-            </div>
-            <button onClick={() => {
+            </div>              <div className="flex items-center gap-2">
+              <button onClick={handleCetakRekapBahan}
+                className="inline-flex items-center gap-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[9px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer">
+                <Printer className="w-3 h-3" /> Cetak Rekap
+              </button>
+              <button onClick={handleExportCSVRekap}
+                className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[9px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer">
+                <FileText className="w-3 h-3" /> CSV
+              </button>
+              <button onClick={() => {
               const autoKode = `BB-${Date.now().toString(36).toUpperCase()}`;
               setEditingBahan(null);
-              setBahanForm({kode: autoKode, nama: '', satuan: 'gr', isiKemasan: 1000, hargaBeliReal: 0, markupPercent: 25, kategori: 'Produk'});
+              const defaultKategori = bahanKategoriFilter !== 'Semua' ? bahanKategoriFilter : 'Produk';
+              const defaultSatuan = defaultKategori === 'Minuman' ? 'ml' : defaultKategori === 'Alat' ? 'pcs' : 'gr';
+              const defaultIsi = defaultKategori === 'Alat' ? 1 : 1000;
+              setBahanForm({kode: autoKode, nama: '', satuan: defaultSatuan, isiKemasan: defaultIsi, hargaBeliReal: 0, markupPercent: 25, kategori: defaultKategori});
               setShowBahanModal(true);
             }}
               className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer">
               <Plus className="w-3.5 h-3.5" /> Tambah Bahan Baru
             </button>
+              </div>
             </div>
             {/* Kategori Filter Tabs — Dinamis */}
             <div className="space-y-2">

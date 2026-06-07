@@ -32,7 +32,7 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
   const [newRDName, setNewRDName] = useState('');
   const [newRDPortion, setNewRDPortion] = useState('10');
   const [newRDOverhead, setNewRDOverhead] = useState('10000');
-  const [newRDPrice, setNewRDPrice] = useState('22000');
+  const [newRDPrice, setNewRDPrice] = useState('0');
   const [rdIngredients, setRdIngredients] = useState<{ bahanName: string; takaran: number }[]>([]);
   const [selectedBahanIdx, setSelectedBahanIdx] = useState('0');
   const [addonTakaran, setAddonTakaran] = useState('100');
@@ -104,7 +104,7 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
     setNewRDName('');
     setNewRDPortion('10');
     setNewRDOverhead('10000');
-    setNewRDPrice('22000');
+    setNewRDPrice('0');
     setRdIngredients([]);
     setSelectedExp(newExperiment.id);
   };
@@ -150,9 +150,12 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
                   className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono" />
               </div>
               <div>
-                <label className="block text-[9px] uppercase font-bold text-gray-400 mb-1">Harga Jual</label>
-                <input type="number" required value={newRDPrice} onChange={(e) => setNewRDPrice(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono" />
+                <label className="block text-[9px] uppercase font-bold text-gray-400 mb-1">Total HPP <span className="text-blue-500">*auto</span></label>
+                <div className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono bg-gray-100 text-gray-500">
+                  (Terhitung otomatis dari bahan + overhead)
+                </div>
+                {/* Hidden — keep for backward compat */}
+                <input type="hidden" value={newRDPrice} readOnly />
               </div>
             </div>
 
@@ -183,6 +186,7 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
                       <tr className="bg-gray-100 text-gray-500 uppercase font-bold">
                         <th className="p-2">Nama Bahan</th>
                         <th className="p-2 text-right">Takaran</th>
+                        <th className="p-2 text-center">Satuan</th>
                         <th className="p-2 text-right">Harga Satuan</th>
                         <th className="p-2 text-right">Subtotal</th>
                         <th className="p-2 text-center"></th>
@@ -196,7 +200,8 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
                         return (
                           <tr key={idx} className="hover:bg-gray-50">
                             <td className="p-2 font-semibold text-gray-900">{ing.bahanName}</td>
-                            <td className="p-2 text-right font-mono">{ing.takaran} {satuan}</td>
+                            <td className="p-2 text-right font-mono">{ing.takaran}</td>
+                            <td className="p-2 text-center font-bold text-gray-600">{satuan}</td>
                             <td className="p-2 text-right font-mono text-gray-500">{formatCurrency(hargaSatuan)}/{satuan}</td>
                             <td className="p-2 text-right font-mono font-bold text-emerald-700">{formatCurrency(cost)}</td>
                             <td className="p-2 text-center">
@@ -209,7 +214,7 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
                         );
                       })}
                       <tr className="bg-emerald-50 font-bold">
-                        <td colSpan={3} className="p-2 text-right text-emerald-800">Total Bahan:</td>
+                        <td colSpan={4} className="p-2 text-right text-emerald-800">Total Bahan:</td>
                         <td className="p-2 text-right font-mono text-emerald-800">
                           {formatCurrency(rdIngredients.reduce((s, i) => s + getIngredientCost(i.bahanName, i.takaran), 0))}
                         </td>
@@ -321,8 +326,8 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
                         <span className="font-bold font-mono text-emerald-700">{formatCurrency(hppPerUnit)}</span>
                       </div>
                       <div className="bg-gray-50 p-2.5 rounded-lg text-center">
-                        <span className="text-[9px] text-gray-500 block uppercase font-bold">Harga Jual</span>
-                        <span className="font-bold font-mono text-blue-700">{formatCurrency(activeExp.estHargaJual)}</span>
+                        <span className="text-[9px] text-gray-500 block uppercase font-bold">Total HPP</span>
+                        <span className="font-bold font-mono text-emerald-700">{formatCurrency(hppPerUnit * activeExp.targetOutputPorsi)}</span>
                       </div>
                       <div className="bg-gray-50 p-2.5 rounded-lg text-center">
                         <span className="text-[9px] text-gray-500 block uppercase font-bold">Margin</span>
@@ -340,6 +345,7 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
                       <tr className="bg-gray-100 text-[10px] uppercase font-bold text-gray-500">
                         <th className="px-3 py-2">Nama Bahan</th>
                         <th className="px-3 py-2 text-right">Takaran</th>
+                        <th className="px-3 py-2 text-center">Satuan</th>
                         <th className="px-3 py-2 text-right">Harga Satuan</th>
                         <th className="px-3 py-2 text-right">Subtotal</th>
                       </tr>
@@ -348,7 +354,8 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
                       {activeExp.components.map((c, i) => (
                         <tr key={i} className="hover:bg-gray-50">
                           <td className="px-3 py-2 font-medium text-gray-900">{c.bahanName}</td>
-                          <td className="px-3 py-2 text-right font-mono">{c.takaran} {c.satuan}</td>
+                          <td className="px-3 py-2 text-right font-mono">{c.takaran}</td>
+                          <td className="px-3 py-2 text-center font-bold text-gray-600">{c.satuan}</td>
                           <td className="px-3 py-2 text-right font-mono text-gray-500">{formatCurrency(c.unitPrice)}/{c.satuan}</td>
                           <td className="px-3 py-2 text-right font-mono font-bold text-emerald-700">{formatCurrency(c.takaran * c.unitPrice)}</td>
                         </tr>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ShieldAlert, Calendar, AlertTriangle, Clock, Package, Trash2, Plus, Printer, RefreshCw, AlertOctagon, Database, Zap, CheckCircle2 } from 'lucide-react';
-import { BahanBaku, ProductHpp, WasteLog } from '../types';
+import { ShieldAlert, Calendar, AlertTriangle, Clock, Package, Trash2, Plus, Printer, RefreshCw, AlertOctagon, Database, Zap, CheckCircle2, Truck } from 'lucide-react';
+import { BahanBaku, ProductHpp, WasteLog, Cabang, SuratOrder } from '../types';
 
 interface BatchLog {
   id: string;
@@ -27,9 +27,11 @@ interface FefoExpiryTabProps {
   bahanBaku: BahanBaku[];
   productHpp?: ProductHpp[];
   onAddWasteLog?: (log: WasteLog, cabangId?: string) => void;
+  cabangList?: Cabang[];
+  suratOrders?: SuratOrder[];
 }
 
-export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: FefoExpiryTabProps) {
+export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog, cabangList = [], suratOrders = [] }: FefoExpiryTabProps) {
   const [batches, setBatches] = useState<BatchLog[]>(() => {
     const saved = localStorage.getItem('fefo_expiry_batches_data');
     return saved ? JSON.parse(saved) : [];
@@ -376,7 +378,8 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
                   <th className="px-4 py-2.5">Batch #</th>
                   <th className="px-4 py-2.5">Bahan</th>
                   <th className="px-4 py-2.5 text-right">Stok</th>
-                  <th className="px-4 py-2.5">Stok Pusat</th>
+                  <th className="px-4 py-2.5 text-center">Satuan</th>
+                  <th className="px-4 py-2.5 text-right">Stok Pusat</th>
                   <th className="px-4 py-2.5">Supplier</th>
                   <th className="px-4 py-2.5 text-right">Expired</th>
                   <th className="px-4 py-2.5 text-center">Status</th>
@@ -398,8 +401,9 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
                       <td className="px-4 py-3 font-mono font-bold text-gray-800">{b.batchNo}</td>
                       <td className="px-4 py-3">{b.bahanNama}</td>
                       <td className="px-4 py-3 text-right font-mono font-bold">
-                        {b.qty >= 1000 ? `${(b.qty / 1000).toFixed(1)} kg` : `${b.qty} ${b.satuan}`}
+                        {b.qty >= 1000 ? (b.qty / 1000).toFixed(1) : b.qty}
                       </td>
+                      <td className="px-4 py-3 text-center font-bold text-gray-600">{b.satuan}</td>
                       <td className="px-4 py-3 text-right font-mono text-gray-500">{stokPusat} {b.satuan}</td>
                       <td className="px-4 py-3 text-gray-500">{b.supplier || '-'}</td>
                       <td className="px-4 py-3 text-right font-mono text-gray-500">{formatDate(b.expiryDate)}</td>
@@ -433,7 +437,7 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
                   );
                 })}
                 {batches.length === 0 && (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">Belum ada batch. Klik "Sync dari Stok Pusat" atau tambah manual!</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">Belum ada batch. Klik "Sync dari Stok Pusat" atau tambah manual!</td></tr>
                 )}
               </tbody>
             </table>
@@ -518,6 +522,56 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog }: 
             <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-[10px] text-emerald-800">
               <Zap className="w-3 h-3 inline mr-1" />
               <span className="font-bold">Terhubung ke Waste Control:</span> Klik 🔔 pada batch expired untuk otomatis mencatat waste.
+            </div>
+          )}
+
+          {/* ─── DISTRIBUSI BATCH KE CABANG ─── */}
+          {suratOrders.length > 0 && cabangList.length > 0 && batches.length > 0 && (
+            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
+              <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <Truck className="w-4 h-4 text-emerald-600" /> Distribusi Batch ke Cabang
+              </h4>
+              <p className="text-xs text-gray-500 mb-3">Tracking pengiriman batch berdasarkan Surat Order ke masing-masing cabang.</p>
+              <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                {batches.slice(0, 10).map(batch => {
+                  // Cari SO yang mengirim bahan ini ke cabang
+                  const distributions = suratOrders
+                    .filter(so => so.items.some(i => i.bahanNama === batch.bahanNama))
+                    .map(so => ({
+                      cabang: cabangList.find(c => c.id === so.cabangId),
+                      qty: so.items.find(i => i.bahanNama === batch.bahanNama)?.qty || 0,
+                      status: so.status,
+                      tanggal: so.tanggalKirim,
+                    }))
+                    .filter(d => d.qty > 0);
+
+                  if (distributions.length === 0) return null;
+                  return (
+                    <div key={batch.id} className="border border-gray-200 rounded-xl p-3 bg-gray-50">
+                      <div className="flex items-center gap-2 text-xs mb-2">
+                        <span className="font-mono font-bold text-gray-700">{batch.batchNo}</span>
+                        <span className="font-bold text-gray-900">{batch.bahanNama}</span>
+                        <span className="text-gray-400">({batch.satuan})</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {distributions.map((d, i) => (
+                          <div key={i} className={`text-[9px] px-2 py-1 rounded-lg border font-bold ${
+                            d.status === 'diterima' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+                            d.status === 'dikirim' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+                            'bg-blue-50 border-blue-200 text-blue-800'
+                          }`}>
+                            {d.cabang?.nama || 'Unknown'}: {d.qty} {batch.satuan}
+                            <span className="ml-1">({d.status === 'diterima' ? '✅' : d.status === 'dikirim' ? '📦' : '🕐'})</span>
+                          </div>
+                        ))}
+                        {distributions.length === 0 && (
+                          <span className="text-[10px] text-gray-400 italic">Belum ada distribusi ke cabang</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

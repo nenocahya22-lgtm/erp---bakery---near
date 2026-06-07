@@ -29,9 +29,10 @@ interface ShiftLog {
 interface PosKasirTabProps {
   calculatedProducts: CalculationResult[];
   onCompletePOSSale: (productName: string, qty: number, totalRevenue: number, source?: string) => void;
+  toppings?: { id: string; namaProduk: string; namaTopping: string; takaran: number; hargaJualTopping: number; }[];
 }
 
-export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: PosKasirTabProps) {
+export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, toppings }: PosKasirTabProps) {
   const [activeReceipt, setActiveReceipt] = useState<RetailOrder | null>(null);
   const [showLaporan, setShowLaporan] = useState(false);
   const [showRekap, setShowRekap] = useState(false);
@@ -48,17 +49,24 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale }: P
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Daftar add-on / topping yang tersedia
-  const availableAddOns = [
-    { nama: 'Extra Keju', harga: 5000 },
-    { nama: 'Coklat Meleleh', harga: 4000 },
-    { nama: 'Krim Vanilla', harga: 3000 },
-    { nama: 'Selai Stroberi', harga: 3000 },
-    { nama: 'Kacang Almond', harga: 6000 },
-    { nama: 'Sprinkle Pelangi', harga: 2000 },
-    { nama: 'Susu Kental Manis', harga: 2000 },
-    { nama: 'Meses Coklat', harga: 2000 },
-  ];
+  // Data topping dari modul Resep (global state)
+  const availableAddOns = React.useMemo(() => {
+    // Ambil dari props toppings, filter unique per produk untuk POS
+    if (!toppings || toppings.length === 0) {
+      return [];
+    }
+    // Deduplicate by namaTopping
+    const seen = new Set<string>();
+    return toppings.filter(t => {
+      const key = t.namaTopping.toLowerCase().trim();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).map(t => ({
+      nama: t.namaTopping,
+      harga: t.hargaJualTopping,
+    }));
+  }, [toppings]);
 
   const [shiftLogs, setShiftLogs] = useState<ShiftLog[]>(() => {
     const saved = localStorage.getItem('pos_shift_logs');

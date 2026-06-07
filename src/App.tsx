@@ -14,7 +14,7 @@ import {
   loadRevenueFromSheets,
 } from './lib/sheets';
 import { calculateAllProducts } from './lib/calculations';
-import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, WasteLog, Cabang, SuratOrder, BranchStock, BranchTransaction } from './types';
+import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, WasteLog, Cabang, SuratOrder, BranchStock, BranchTransaction, ProductTopping } from './types';
 
 import OwnerLogin from './components/OwnerLogin';
 import DashboardTab from './components/DashboardTab';
@@ -45,7 +45,6 @@ import BepTab from './components/BepTab';
 import DoughTemperatureTab from './components/DoughTemperatureTab';
 import ProfitDistribusiTab from './components/ProfitDistribusiTab';
 import BackupSystemTab from './components/BackupSystemTab';
-import RekapBahanTab from './components/RekapBahanTab';
 import PembukuanTab from './components/PembukuanTab';
 
 // Production Center
@@ -124,6 +123,24 @@ export default function App() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lastAutoSaved, setLastAutoSaved] = useState<Date | null>(null);
+
+  // ─── TOPPINGS GLOBAL STATE ───
+  const [toppings, setToppings] = useState<ProductTopping[]>(() => {
+    const saved = localStorage.getItem('toppings_data');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('toppings_data', JSON.stringify(toppings));
+  }, [toppings]);
+
+  const handleAddTopping = (t: ProductTopping) => {
+    setToppings(prev => [...prev, t]);
+  };
+
+  const handleDeleteTopping = (id: string) => {
+    setToppings(prev => prev.filter(t => t.id !== id));
+  };
 
   // ─── MULTI-CABANG STATE ───
   const [cabangList, setCabangList] = useState<Cabang[]>(() => {
@@ -1141,6 +1158,7 @@ export default function App() {
                 cabangList={cabangList}
                 cabangStok={cabangStok}
                 suratOrders={suratOrders}
+                onUpdateSuratOrder={handleUpdateSuratOrder}
               />
             )}
             {activeTab === 'dashboard' && (
@@ -1155,9 +1173,12 @@ export default function App() {
                 bahanBaku={bahanBaku}
                 productHpp={productHpp}
                 detailResep={detailResep}
+                toppings={toppings}
                 onAddProduct={handleAddProduct}
                 onUpdateProductIngredients={handleUpdateProductIngredients}
                 onDeleteProduct={handleDeleteProduct}
+                onAddTopping={handleAddTopping}
+                onDeleteTopping={handleDeleteTopping}
               />
             )}
             {activeTab === 'hpp' && (
@@ -1212,12 +1233,13 @@ export default function App() {
               />
             )}
             {activeTab === 'erp_fefo_expiry' && (
-              <FefoExpiryTab bahanBaku={bahanBaku} productHpp={productHpp} onAddWasteLog={handleAddWasteLog} />
+              <FefoExpiryTab bahanBaku={bahanBaku} productHpp={productHpp} onAddWasteLog={handleAddWasteLog} cabangList={cabangList} suratOrders={suratOrders} />
             )}
             {activeTab === 'erp_pos' && (
               <PosKasirTab
                 calculatedProducts={calculatedProducts}
                 onCompletePOSSale={handleCompletePOSSale}
+                toppings={toppings}
               />
             )}
             {activeTab === 'erp_online' && (
@@ -1280,9 +1302,6 @@ export default function App() {
                 detailResep={detailResep}
                 calculatedProducts={calculatedProducts}
               />
-            )}
-            {activeTab === 'erp_rekap_bahan' && (
-              <RekapBahanTab bahanBaku={bahanBaku} />
             )}
             {activeTab === 'erp_pembukuan' && (
               <PembukuanTab
@@ -1459,10 +1478,8 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
           <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">③ Inventory & Produksi</span>
           {sidebarBtn('erp_fefo_expiry', <ShieldAlert className="w-4 h-4" />, '📋 FEFO & Expiry')}
           {sidebarBtn('erp_bom', <Layers className="w-4 h-4" />, '🔧 BOM & Yield')}
-          {sidebarBtn('erp_rekap_bahan', <Package className="w-4 h-4" />, '📋 Rekap Bahan')}
           {sidebarBtn('erp_production_center', <ClipboardList className="w-4 h-4" />, '🏭 Prod. Center')}
-          {sidebarBtn('erp_baker_pct', <Percent className="w-4 h-4" />, "🍞 Baker's %")}
-          {sidebarBtn('erp_dough_temp', <Thermometer className="w-4 h-4" />, '🌡️ Suhu Adonan')}
+          {/* Rekap Bahan sudah merge ke Data Pusat → sub-section Rekap */}
         </div>
         <div className="space-y-1">
           <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">④ Kasir & Penjualan</span>

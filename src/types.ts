@@ -24,6 +24,7 @@ export interface ProductTopping {
   id: string;
   namaProduk: string;
   namaTopping: string;
+  namaBahan: string; // Bahan baku yang digunakan sebagai topping
   takaran: number;
   hargaBeli: number;
   isiKemasan: number;
