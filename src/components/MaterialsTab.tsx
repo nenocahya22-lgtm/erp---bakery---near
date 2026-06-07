@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BahanBaku, BranchStock, Cabang, SuratOrder } from '../types';
-import { Package, Search, ClipboardList, Building2, ShoppingCart, Truck, CheckCircle2 } from 'lucide-react';
+import { Package, Search, ClipboardList, Building2, ShoppingCart, Truck, CheckCircle2, ClipboardCheck } from 'lucide-react';
 
 interface MaterialsTabProps {
   bahanBaku: BahanBaku[];
@@ -120,6 +120,85 @@ export default function MaterialsTab({ bahanBaku, cabangList, cabangStok, suratO
           </div>
           <div className="p-3 bg-blue-50 border-t border-blue-100 text-[10px] text-blue-800">
             Detail stok opname ada di <strong>Data Pusat → Stok Opname</strong>.
+          </div>
+        </div>
+      )}
+
+      {/* ─── STOK OPNAME CABANG (TERHUBUNG KE DATA PUSAT) ─── */}
+      {cabangList.filter(c => c.isActive).length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+          <div className="p-4 border-b border-gray-100">
+            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+              <ClipboardCheck className="w-4 h-4 text-emerald-600" /> 📋 Stok Opname Cabang
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">Data stok opname per cabang — terhubung langsung ke <strong>🏛️ Data Pusat → Stok Opname</strong>. Staff cabang melakukan input fisik via dashboard masing-masing.</p>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {cabangList.filter(c => c.isActive).map(cabang => {
+              const cabangStockItems = cabangStok.filter(s => s.cabangId === cabang.id);
+              if (cabangStockItems.length === 0) return null;
+              const totalSelisih = cabangStockItems.reduce((sum, s) => sum + (s.stokFisik - s.stokTeoritis), 0);
+              return (
+                <div key={cabang.id} className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-emerald-600" />
+                      <span className="text-xs font-bold text-gray-900">{cabang.nama}</span>
+                      <span className="text-[9px] text-gray-500">{cabangStockItems.length} bahan di-SO</span>
+                    </div>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                      totalSelisih === 0 ? 'bg-emerald-100 text-emerald-800' :
+                      totalSelisih > 0 ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
+                    }`}>
+                      {totalSelisih === 0 ? '✅ Balance' : totalSelisih > 0 ? `🔵 Plus ${totalSelisih}` : `🔴 Minus ${Math.abs(totalSelisih)}`}
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50">
+                          <th className="px-3 py-2 rounded-l-lg">Bahan</th>
+                          <th className="px-3 py-2 text-right">Teoritis</th>
+                          <th className="px-3 py-2 text-right">Fisik</th>
+                          <th className="px-3 py-2 text-right">Selisih</th>
+                          <th className="px-3 py-2 text-center rounded-r-lg">Analisa</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {cabangStockItems.map(item => {
+                          const selisih = item.stokFisik - item.stokTeoritis;
+                          return (
+                            <tr key={`${item.cabangId}-${item.bahanNama}`} className={`hover:bg-gray-50 ${selisih !== 0 ? 'bg-amber-50/30' : ''}`}>
+                              <td className="px-3 py-2.5 font-semibold text-gray-900">{item.bahanNama}</td>
+                              <td className="px-3 py-2.5 text-right font-mono">{item.stokTeoritis} {item.satuan}</td>
+                              <td className="px-3 py-2.5 text-right font-mono">{item.stokFisik} {item.satuan}</td>
+                              <td className={`px-3 py-2.5 text-right font-mono font-bold ${
+                                selisih === 0 ? 'text-emerald-600' : selisih > 0 ? 'text-blue-600' : 'text-red-600'
+                              }`}>{selisih > 0 ? `+${selisih}` : selisih}</td>
+                              <td className="px-3 py-2.5 text-center">
+                                {selisih === 0 ? (
+                                  <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">✅ Aman</span>
+                                ) : selisih > 0 ? (
+                                  <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">🔵 Plus</span>
+                                ) : (
+                                  <span className="text-[10px] bg-red-100 text-red-800 px-2 py-0.5 rounded-full font-bold">🔴 Minus</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mt-2 text-[10px] text-gray-400 text-right">
+                    Data sinkron langsung dengan <strong>Data Pusat → Stok Opname</strong>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="p-3 bg-blue-50 border-t border-blue-100 text-[10px] text-blue-800">
+            <strong>🔗 Terhubung:</strong> Stok opname di sini diambil dari input staff cabang di dashboard masing-masing. Data yang sama tampil di <strong>🏛️ Data Pusat → Stok Opname</strong>. Tidak perlu input ulang.
           </div>
         </div>
       )}
