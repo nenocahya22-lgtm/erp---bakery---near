@@ -385,25 +385,6 @@ export default function RecipesTab({
     }
   };
 
-  // Target margin for auto-suggested pricing (default 40%)
-  const [targetMargin, setTargetMargin] = useState(40);
-
-  // Calculate suggested selling price based on HPP + target margin
-  const suggestedPrice = activeProduct
-    ? Math.round(((totalIngredientsCost + activeProduct.overhead) / activeRecipePorsi) / (1 - targetMargin / 100))
-    : 0;
-
-  // Apply suggested price to the active product
-  const handleApplySuggestedPrice = () => {
-    if (!activeProduct) return;
-    const newPrice = suggestedPrice;
-    activeProduct.hargaJual = newPrice;
-    setEditHargaJual(newPrice.toString());
-    // Trigger parent state update via existing mechanism
-    onUpdateProductIngredients(activeProduct.namaProduk, activeDetails, activeRecipePorsi);
-    showToastLocal(`Harga jual diterapkan: Rp ${newPrice.toLocaleString('id-ID')}`, 'success');
-  };
-
   // Simple local toast notification
   const [localToast, setLocalToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
   const showToastLocal = (message: string, type: 'success' | 'info' = 'info') => {
@@ -1261,43 +1242,12 @@ export default function RecipesTab({
                     </div>
                   </div>
 
-                  {/* Target Margin & Suggested Price */}
                   <div className="space-y-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] uppercase font-bold text-slate-400">Target Margin</span>
-                      <input
-                        type="range"
-                        min="5"
-                        max="80"
-                        step="5"
-                        value={targetMargin}
-                        onChange={(e) => setTargetMargin(parseInt(e.target.value))}
-                        className="flex-1 h-1.5 accent-emerald-500 cursor-pointer"
-                      />
-                      <span className="text-xs font-mono font-bold text-emerald-400 w-8 text-right">{targetMargin}%</span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-400">Harga Rekomendasi</span>
-                      <span className="text-base font-black font-mono text-amber-400">
-                        {suggestedPrice > 0 ? formatCurrency(suggestedPrice) : '—'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-[9px] text-slate-500">
-                        HPP {formatCurrency(Math.round((totalIngredientsCost + activeProduct.overhead) / activeRecipePorsi))} + {targetMargin}% margin
-                      </span>
-                      <button
-                        onClick={handleApplySuggestedPrice}
-                        disabled={suggestedPrice <= 0 || activeProduct.hargaJual === suggestedPrice}
-                        className={`text-[10px] font-bold uppercase px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                          suggestedPrice > 0 && activeProduct.hargaJual !== suggestedPrice
-                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                            : 'bg-slate-800 text-slate-600 cursor-not-allowed'
-                        }`}
-                      >
-                        Terapkan Harga
-                      </button>
-                    </div>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      💡 Atur <strong>target margin & harga jual</strong> di modul <strong>📈 Harga & HPP → HPP & Margin</strong>. 
+                      Di sana kamu bisa set margin per produk, atur target global untuk semua produk sekaligus, 
+                      dan lihat simulasi dynamic pricing dengan sekali klik.
+                    </p>
                   </div>
                 </div>
 
