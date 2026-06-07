@@ -116,10 +116,19 @@ export default function App() {
   const [sheetTitles, setSheetTitles] = useState<string[]>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
 
-  // Core records state
-  const [bahanBaku, setBahanBaku] = useState<BahanBaku[]>([]);
-  const [productHpp, setProductHpp] = useState<ProductHpp[]>([]);
-  const [detailResep, setDetailResep] = useState<DetailResep[]>([]);
+  // Core records state — persisted to localStorage for offline mode
+  const [bahanBaku, setBahanBaku] = useState<BahanBaku[]>(() => {
+    const saved = localStorage.getItem('bahan_baku_data');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [productHpp, setProductHpp] = useState<ProductHpp[]>(() => {
+    const saved = localStorage.getItem('product_hpp_data');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [detailResep, setDetailResep] = useState<DetailResep[]>(() => {
+    const saved = localStorage.getItem('detail_resep_data');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lastAutoSaved, setLastAutoSaved] = useState<Date | null>(null);
@@ -133,6 +142,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('toppings_data', JSON.stringify(toppings));
   }, [toppings]);
+
+  useEffect(() => { localStorage.setItem('bahan_baku_data', JSON.stringify(bahanBaku)); }, [bahanBaku]);
+  useEffect(() => { localStorage.setItem('product_hpp_data', JSON.stringify(productHpp)); }, [productHpp]);
+  useEffect(() => { localStorage.setItem('detail_resep_data', JSON.stringify(detailResep)); }, [detailResep]);
 
   const handleAddTopping = (t: ProductTopping) => {
     setToppings(prev => [...prev, t]);
@@ -319,6 +332,9 @@ export default function App() {
     localStorage.removeItem('toppings_data');
     localStorage.removeItem('pos_orders_data');
     localStorage.removeItem('stock_levels_data');
+    localStorage.removeItem('bahan_baku_data');
+    localStorage.removeItem('product_hpp_data');
+    localStorage.removeItem('detail_resep_data');
     
     setHasUnsavedChanges(true);
     showToast('Sistem Near Bakery & Co berhasil diformat steril! Semua data contoh telah dibersihkan.', 'success');
@@ -1479,7 +1495,7 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
         <div className="space-y-1">
           <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">② Master Data</span>
           {sidebarBtn('data_pusat', <Building2 className="w-4 h-4" />, '🏛️ Data Pusat')}
-          {sidebarBtn('materials', <Package className="w-4 h-4" />, '📦 Bahan (Read-Only)')}
+          {sidebarBtn('materials', <Package className="w-4 h-4" />, '📦 Monitor Stok')}
           {sidebarBtn('recipes', <FolderTree className="w-4 h-4" />, '📝 Formulasi Resep')}
         </div>
         <div className="space-y-1">
