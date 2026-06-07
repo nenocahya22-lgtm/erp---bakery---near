@@ -43,7 +43,6 @@ import KitchenWorkOrderTab from './components/KitchenWorkOrderTab';
 import BakerPercentageTab from './components/BakerPercentageTab';
 import BepTab from './components/BepTab';
 import DoughTemperatureTab from './components/DoughTemperatureTab';
-import ImageGeneratorTab from './components/ImageGeneratorTab';
 import ProfitDistribusiTab from './components/ProfitDistribusiTab';
 import BackupSystemTab from './components/BackupSystemTab';
 import RekapBahanTab from './components/RekapBahanTab';
@@ -83,7 +82,6 @@ import {
   Thermometer,
   PanelRightClose,
   PanelRightOpen,
-  Image,
   PieChart,
   Cloud,
   Building2,
@@ -209,7 +207,6 @@ export default function App() {
     | 'erp_baker_pct'
     | 'erp_bep'
     | 'erp_dough_temp'
-    | 'erp_image_gen'
     | 'erp_profit_distribusi'
     | 'erp_backup'
     | 'erp_production_center'
@@ -1243,7 +1240,7 @@ export default function App() {
               <SmartKitchenTab />
             )}
             {activeTab === 'erp_compliance' && (
-              <ComplianceSafetyTab productHpp={productHpp} />
+              <ComplianceSafetyTab productHpp={productHpp} onAddWasteLog={handleAddWasteLog} cabangList={cabangList} />
             )}
             {activeTab === 'erp_production_planner' && (
               <ProductionPlannerTab
@@ -1272,9 +1269,6 @@ export default function App() {
             )}
             {activeTab === 'erp_dough_temp' && (
               <DoughTemperatureTab />
-            )}
-            {activeTab === 'erp_image_gen' && (
-              <ImageGeneratorTab />
             )}
             {activeTab === 'erp_profit_distribusi' && (
               <ProfitDistribusiTab />
@@ -1458,7 +1452,7 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
         <div className="space-y-1">
           <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">② Master Data</span>
           {sidebarBtn('data_pusat', <Building2 className="w-4 h-4" />, '🏛️ Data Pusat')}
-          {sidebarBtn('materials', <Package className="w-4 h-4" />, '📦 Bahan Baku')}
+          {sidebarBtn('materials', <Package className="w-4 h-4" />, '📦 Bahan (Read-Only)')}
           {sidebarBtn('recipes', <FolderTree className="w-4 h-4" />, '📝 Formulasi Resep')}
         </div>
         <div className="space-y-1">
@@ -1490,7 +1484,6 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
           {sidebarBtn('erp_rd', <FlaskConical className="w-4 h-4" />, '🔬 Sandbox R&D')}
           {sidebarBtn('erp_compliance', <ShieldAlert className="w-4 h-4" />, '🧊 Recall Pangan')}
           {sidebarBtn('erp_iot', <Cpu className="w-4 h-4" />, '🤖 Smart IoT')}
-          {sidebarBtn('erp_image_gen', <Image className="w-4 h-4" />, '🎨 Image Gen')}
         </div>
         <div className="space-y-1">
           <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑦ Backup</span>

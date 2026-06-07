@@ -63,6 +63,17 @@ export default function BranchDashboard({
   const branchSOs = suratOrders.filter(s => s.cabangId === cabang.id);
   const branchWasteLogs = wasteLogs.filter(w => w.location === `Cabang ${cabang.nama}`);
 
+  // Filter: cabang hanya lihat bahan yang pernah mereka terima via SO (relevan)
+  const orderedBahanNames = [...new Set(
+    branchSOs
+      .filter(s => s.status === 'diterima')
+      .flatMap(s => s.items)
+      .map(i => i.bahanNama)
+  )];
+  const displayBahanForOrder = orderedBahanNames.length > 0
+    ? bahanBaku.filter(b => orderedBahanNames.includes(b.nama))
+    : bahanBaku; // Show all if branch has never received anything yet
+
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
@@ -291,11 +302,17 @@ export default function BranchDashboard({
         {activeModul === 'minta' && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-5">
             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">📦 Minta Barang ke Pusat</h3>
-            {bahanBaku.length === 0 ? (
+            {displayBahanForOrder.length === 0 ? (
               <p className="text-xs text-gray-400 text-center py-8">Belum ada bahan baku terdaftar.</p>
             ) : (
+              <>
+              {orderedBahanNames.length > 0 && (
+                <p className="text-[10px] text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-3">
+                  📋 Menampilkan <strong>{displayBahanForOrder.length} bahan</strong> yang relevan (pernah diterima sebelumnya).
+                </p>
+              )}
               <div className="space-y-2 max-h-80 overflow-y-auto mb-4">
-                {bahanBaku.map(b => {
+                {displayBahanForOrder.map(b => {
                   const item = mintaItems.find(i => i.bahanNama === b.nama);
                   return (
                     <div key={b.nama} className="flex items-center justify-between p-2.5 border border-gray-100 rounded-xl">
@@ -321,6 +338,7 @@ export default function BranchDashboard({
                   );
                 })}
               </div>
+              </>
             )}
             <button onClick={handleMintaBarang}
               disabled={mintaItems.filter(i => i.qty > 0).length === 0}
@@ -658,7 +676,52 @@ export default function BranchDashboard({
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-5">
-              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Riwayat Surat Order</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Riwayat Surat Order</h3>
+                {branchSOs.length > 0 && (
+                  <button onClick={() => {
+                    const html = `
+                      <html><head><title>Cetak Surat Order - ${cabang.nama}</title>
+                        <style>
+                          body{font-family:'Segoe UI',Arial,sans-serif;max-width:700px;margin:0 auto;padding:40px;color:#1f2937;}
+                          h1{font-size:20px;color:#065f46;border-bottom:2px solid #065f46;padding-bottom:8px;}
+                          .meta{font-size:11px;color:#6b7280;margin-bottom:20px;}
+                          table{width:100%;border-collapse:collapse;margin:16px 0;}
+                          th{background:#f3f4f6;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;}
+                          td{padding:8px 10px;border-bottom:1px solid #e5e7eb;font-size:11px;}
+                          .sign{margin-top:50px;display:flex;justify-content:space-between;font-size:10px;}
+                          @media print{body{padding:20px;}@page{margin:15mm;}}
+                        </style>
+                      </head><body>
+                        <h1>📋 SURAT ORDER BARANG</h1>
+                        <div class="meta">${cabang.nama} — Dicetak: ${new Date().toLocaleDateString('id-ID',{year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+                        <p><strong>Cabang:</strong> ${cabang.nama}<br><strong>Alamat:</strong> ${cabang.alamat || '-'}</p>
+                        <table>
+                          <thead><tr><th>No</th><th>Tanggal</th><th>Item</th><th>Status</th></tr></thead>
+                          <tbody>
+                            ${branchSOs.map((so, i) => `<tr>
+                              <td>${i + 1}</td>
+                              <td>${new Date(so.tanggalKirim).toLocaleDateString('id-ID')}</td>
+                              <td>${so.items.map(it => `${it.bahanNama}: ${it.qty}`).join(', ')}</td>
+                              <td>${so.status === 'diterima' ? '✅ Diterima' : so.status === 'dikirim' ? '📦 Dikirim' : '🕐 Minta'}</td>
+                            </tr>`).join('')}
+                          </tbody>
+                        </table>
+                        <div class="sign">
+                          <div>_____________<br>Pembuat</div>
+                          <div>_____________<br>Mengetahui</div>
+                        </div>
+                        <p style="margin-top:40px;text-align:center;color:#9ca3af;font-size:9px;">Near Bakery & Co. ERP — ${cabang.nama}</p>
+                        <script>window.print();setTimeout(()=>window.close(),500);<\/script>
+                      </body></html>`;
+                    const pw = window.open('', '_blank');
+                    if (pw) { pw.document.write(html); pw.document.close(); }
+                  }}
+                    className="inline-flex items-center gap-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer">
+                    <Printer className="w-3 h-3" /> Cetak Surat Order
+                  </button>
+                )}
+              </div>
               {branchSOs.length === 0 ? (
                 <p className="text-xs text-gray-400 text-center py-4">Belum ada SO.</p>
               ) : (

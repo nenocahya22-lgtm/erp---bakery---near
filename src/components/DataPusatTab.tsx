@@ -29,7 +29,7 @@ export default function DataPusatTab({
   suratOrders, onAddSuratOrder, onUpdateSuratOrder,
   cabangStok, branchTransactions, wasteLogs,
 }: DataPusatTabProps) {
-  const [activeSection, setActiveSection] = useState<'cabang' | 'bahan' | 'stok' | 'sod' | 'stok_cabang' | 'supplier' | 'logistik' | 'stok_opname'>('cabang');
+  const [activeSection, setActiveSection] = useState<'cabang' | 'bahan' | 'stok' | 'stok_cabang' | 'supplier' | 'pengiriman' | 'stok_opname'>('cabang');
 
   // ─── CABANG STATE ───
   const [showCabangModal, setShowCabangModal] = useState(false);
@@ -143,12 +143,82 @@ export default function DataPusatTab({
   const [poHarga, setPoHarga] = useState('');
   const [poSearch, setPoSearch] = useState('');
   const [stokOpnameFilter, setStokOpnameFilter] = useState<string>('all');
+  const [soCabangFilter, setSoCabangFilter] = useState<string>('all');
+  const [showExportHistory, setShowExportHistory] = useState(false);
+  const [exportHistory, setExportHistory] = useState<{type:string;format:string;timestamp:string;count:number}[]>(() => {
+    const saved = localStorage.getItem('pusat_export_history');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   // ─── BAHAN MODAL STATE ───
   const [bahanSearch, setBahanSearch] = useState('');
   const [showBahanModal, setShowBahanModal] = useState(false);
   const [editingBahan, setEditingBahan] = useState<BahanBaku | null>(null);
-  const [bahanForm, setBahanForm] = useState({kode:'',nama:'',satuan:'gr',isiKemasan:1000,hargaBeliReal:0,markupPercent:25,kategori:''});
+  const [bahanForm, setBahanForm] = useState({kode:'',nama:'',satuan:'gr',isiKemasan:1000,hargaBeliReal:0,markupPercent:25,kategori:'Produk'});
+  
+  // ─── KATEGORI DINAMIS ───
+  const [bahanKategoriList, setBahanKategoriList] = useState<string[]>(() => {
+    const saved = localStorage.getItem('bahan_kategori_list');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return ['Semua', ...parsed];
+    }
+    return ['Semua', 'Produk', 'Minuman', 'Alat'];
+  });
+  const [bahanKategoriFilter, setBahanKategoriFilter] = useState<string>('Semua');
+  const [showKategoriManager, setShowKategoriManager] = useState(false);
+  const [editingKategori, setEditingKategori] = useState('');
+  const [newKategoriName, setNewKategoriName] = useState('');
+
+  // Save kategori to localStorage
+  useEffect(() => {
+    const catsForStorage = bahanKategoriList.filter(c => c !== 'Semua');
+    localStorage.setItem('bahan_kategori_list', JSON.stringify(catsForStorage));
+  }, [bahanKategoriList]);
+
+  const handleAddKategori = () => {
+    const name = newKategoriName.trim();
+    if (!name) return;
+    if (bahanKategoriList.some(c => c.toLowerCase() === name.toLowerCase())) {
+      alert(`Kategori "${name}" sudah ada!`);
+      return;
+    }
+    setBahanKategoriList(prev => {
+      const withoutSemua = prev.filter(c => c !== 'Semua');
+      return ['Semua', ...withoutSemua, name].sort((a, b) => {
+        if (a === 'Semua') return -1;
+        if (b === 'Semua') return 1;
+        return a.localeCompare(b);
+      });
+    });
+    setNewKategoriName('');
+  };
+
+  const handleDeleteKategori = (cat: string) => {
+    if (cat === 'Semua') return;
+    if (!window.confirm(`Hapus kategori "${cat}"? Bahan dengan kategori ini akan tetap ada — ubah kategorinya secara manual.`)) return;
+    setBahanKategoriList(prev => prev.filter(c => c !== cat));
+    if (bahanKategoriFilter === cat) setBahanKategoriFilter('Semua');
+  };
+
+  const handleRenameKategori = (oldName: string) => {
+    const newName = editingKategori.trim();
+    if (!newName || oldName === 'Semua') return;
+    if (bahanKategoriList.some(c => c.toLowerCase() === newName.toLowerCase() && c !== oldName)) {
+      alert(`Kategori "${newName}" sudah ada!`);
+      return;
+    }
+    // Rename in list
+    setBahanKategoriList(prev => prev.map(c => c === oldName ? newName : c));
+    // Also rename in bahanBaku items
+    bahanBaku.forEach(b => {
+      if ((b.kategori || 'Produk') === oldName) {
+        onEditMaterial(b.nama, { ...b, kategori: newName });
+      }
+    });
+    if (bahanKategoriFilter === oldName) setBahanKategoriFilter(newName);
+    setEditingKategori('');
+  };
 
   // ─── TEMPLATE CETAK ───
   const cetakLaporanHtml = (judul: string, headers: string[], rows: string[][], footer?: string): string => {
@@ -248,31 +318,44 @@ export default function DataPusatTab({
     );
   };
 
+  const handleExportHistoryAdd = (type: string, format: string, count: number) => {
+    const newEntry = { type, format, timestamp: new Date().toISOString(), count };
+    setExportHistory(prev => {
+      const updated = [newEntry, ...prev].slice(0, 50);
+      localStorage.setItem('pusat_export_history', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const handleCetakLaporanLogistik = () => {
+    const filtered = suratOrders.filter(so => soCabangFilter === 'all' || so.cabangId === soCabangFilter);
     const headers = ['Tanggal','No SO','Tujuan','Item','Status'];
-    const rows = suratOrders.map(so => [
+    const rows = filtered.map(so => [
       new Date(so.tanggalKirim).toLocaleDateString('id-ID'),
       so.id.substring(0,10)+'...',
       so.cabangNama,
       so.items.map(i=>`${i.bahanNama}:${i.qty}`).join(', '),
       so.status==='diterima'?'✅ Sampai':so.status==='dikirim'?'📦 Dikirim':'🕐 Minta'
     ]);
-    cetakDokumen('Laporan_Logistik', cetakLaporanHtml('LAPORAN LOGISTIK & PENGIRIMAN', headers, rows,
-      `Total Pengiriman: ${suratOrders.length} | Sampai: ${suratOrders.filter(s=>s.status==='diterima').length} | Dalam Perjalanan: ${suratOrders.filter(s=>s.status==='dikirim').length}`
+    handleExportHistoryAdd('Pengiriman', 'Cetak', filtered.length);
+    cetakDokumen('Laporan_Pengiriman', cetakLaporanHtml('LAPORAN PENGIRIMAN & SURAT ORDER', headers, rows,
+      `Total Pengiriman: ${filtered.length} | Sampai: ${filtered.filter(s=>s.status==='diterima').length} | Dalam Perjalanan: ${filtered.filter(s=>s.status==='dikirim').length}`
     ));
   };
 
-  const handleExportPDFLogistik = () => {
+  const handleExportPDFLogistik = async () => {
+    const filtered = suratOrders.filter(so => soCabangFilter === 'all' || so.cabangId === soCabangFilter);
     const headers = ['Tanggal','No SO','Tujuan','Item','Status'];
-    const rows = suratOrders.map(so => [
+    const rows = filtered.map(so => [
       new Date(so.tanggalKirim).toLocaleDateString('id-ID'),
       so.id.substring(0,10)+'...',
       so.cabangNama,
       so.items.map(i=>`${i.bahanNama}:${i.qty}`).join(', '),
       so.status==='diterima'?'✅ Sampai':so.status==='dikirim'?'📦 Dikirim':'🕐 Minta'
     ]);
-    exportPdfLaporan('LAPORAN LOGISTIK & PENGIRIMAN', headers, rows,
-      `Total Pengiriman: ${suratOrders.length} | Sampai: ${suratOrders.filter(s=>s.status==='diterima').length} | Dalam Perjalanan: ${suratOrders.filter(s=>s.status==='dikirim').length}`
+    handleExportHistoryAdd('Pengiriman', 'PDF', filtered.length);
+    await exportPdfLaporan('LAPORAN PENGIRIMAN & SURAT ORDER', headers, rows,
+      `Total Pengiriman: ${filtered.length} | Sampai: ${filtered.filter(s=>s.status==='diterima').length} | Dalam Perjalanan: ${filtered.filter(s=>s.status==='dikirim').length}`
     );
   };
 
@@ -496,9 +579,8 @@ export default function DataPusatTab({
           {sectionBtn('stok', 'Stok Pusat', <Package className="w-3.5 h-3.5 inline" />)}
           {sectionBtn('stok_cabang', 'Stok Cabang', <BarChart3 className="w-3.5 h-3.5 inline" />)}
           {sectionBtn('supplier', 'Supplier & PO', <Star className="w-3.5 h-3.5 inline" />)}
-          {sectionBtn('logistik', 'Logistik', <Truck className="w-3.5 h-3.5 inline" />)}
+          {sectionBtn('pengiriman', `Pengiriman (${suratOrders.length})`, <Truck className="w-3.5 h-3.5 inline" />)}
           {sectionBtn('stok_opname', 'Stok Opname', <ClipboardCheck className="w-3.5 h-3.5 inline" />)}
-          {sectionBtn('sod', `SO (${suratOrders.length})`, <ClipboardCheck className="w-3.5 h-3.5 inline" />)}
         </div>
       </div>
 
@@ -580,8 +662,8 @@ export default function DataPusatTab({
 
       {/* ─── SECTION: BAHAN BAKU ─── */}
       {activeSection === 'bahan' && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">            <div className="p-4 border-b border-gray-100 space-y-3">
+            <div className="flex justify-between items-center">
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
               <input type="text" placeholder="Cari bahan..." value={bahanSearch}
@@ -591,12 +673,70 @@ export default function DataPusatTab({
             <button onClick={() => {
               const autoKode = `BB-${Date.now().toString(36).toUpperCase()}`;
               setEditingBahan(null);
-              setBahanForm({kode: autoKode, nama: '', satuan: 'gr', isiKemasan: 1000, hargaBeliReal: 0, markupPercent: 25, kategori: ''});
+              setBahanForm({kode: autoKode, nama: '', satuan: 'gr', isiKemasan: 1000, hargaBeliReal: 0, markupPercent: 25, kategori: 'Produk'});
               setShowBahanModal(true);
             }}
               className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer">
               <Plus className="w-3.5 h-3.5" /> Tambah Bahan Baru
             </button>
+            </div>
+            {/* Kategori Filter Tabs — Dinamis */}
+            <div className="space-y-2">
+              <div className="flex gap-2 flex-wrap">
+                {bahanKategoriList.map(cat => {
+                  const count = cat === 'Semua' ? bahanBaku.length : bahanBaku.filter(b => (b.kategori || 'Produk') === cat).length;
+                  return (
+                    <div key={cat} className="group relative flex items-center">
+                      <button onClick={() => setBahanKategoriFilter(cat)}
+                        className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition cursor-pointer ${
+                          bahanKategoriFilter === cat ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}>
+                        {cat} ({count})
+                      </button>
+                      {showKategoriManager && cat !== 'Semua' && (
+                        <div className="flex items-center gap-0.5 ml-0.5">
+                          {editingKategori === cat ? (
+                            <>
+                              <input
+                                type="text"
+                                value={editingKategori}
+                                onChange={(e) => setEditingKategori(e.target.value)}
+                                className="w-16 p-0.5 text-[9px] border border-emerald-500 rounded bg-white text-black"
+                                autoFocus
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleRenameKategori(cat); if (e.key === 'Escape') setEditingKategori(''); }}
+                              />
+                              <button onClick={() => handleRenameKategori(cat)} className="text-emerald-600 hover:text-emerald-500 p-0.5 cursor-pointer text-[9px]">✓</button>
+                            </>
+                          ) : (
+                            <>
+                              <button onClick={() => { setEditingKategori(cat); }} className="text-gray-400 hover:text-emerald-600 text-[9px] p-0.5 opacity-0 group-hover:opacity-100 transition cursor-pointer">✏️</button>
+                              <button onClick={() => handleDeleteKategori(cat)} className="text-gray-400 hover:text-red-500 text-[9px] p-0.5 opacity-0 group-hover:opacity-100 transition cursor-pointer">🗑️</button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => { setShowKategoriManager(!showKategoriManager); setEditingKategori(''); }}
+                  className={`text-[9px] font-bold uppercase px-2 py-1 rounded-lg transition cursor-pointer ${
+                    showKategoriManager ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                  }`}>
+                  {showKategoriManager ? 'Selesai' : '✏️ Kelola Kategori'}
+                </button>
+                {showKategoriManager && (
+                  <div className="flex items-center gap-1 flex-1">
+                    <input type="text" placeholder="Nama kategori baru" value={newKategoriName}
+                      onChange={(e) => setNewKategoriName(e.target.value)}
+                      className="flex-1 p-1.5 text-[10px] border border-gray-200 rounded-lg bg-white"
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddKategori(); }} />
+                    <button onClick={handleAddKategori} className="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer">+ Tambah</button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
           {bahanBaku.length === 0 ? (
             <p className="text-xs text-gray-400 text-center py-8">Belum ada bahan terdaftar.</p>
@@ -606,6 +746,7 @@ export default function DataPusatTab({
                 <thead>
                   <tr className="border-b bg-gray-50 text-[10px] font-bold text-gray-500 uppercase">
                     <th className="px-4 py-3">Kode</th>
+                    <th className="px-4 py-3">Kategori</th>
                     <th className="px-4 py-3">Nama Bahan</th>
                     <th className="px-4 py-3">Kemasan</th>
                     <th className="px-4 py-3">Satuan</th>
@@ -617,11 +758,16 @@ export default function DataPusatTab({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {bahanBaku.filter(b => b.nama.toLowerCase().includes(bahanSearch.toLowerCase())).map((b, idx) => {
+                  {bahanBaku.filter(b => {
+                    const matchSearch = b.nama.toLowerCase().includes(bahanSearch.toLowerCase());
+                    const matchKategori = bahanKategoriFilter === 'Semua' || (b.kategori || 'Produk') === bahanKategoriFilter;
+                    return matchSearch && matchKategori;
+                  }).map((b, idx) => {
                     const hargaMarkup = b.hargaBeliReal > 0 ? b.hargaBeliReal * (1 + (b.markupPercent||25)/100) : b.hargaBeli;
                     return (
                       <tr key={b.nama} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-mono text-gray-500">{b.kode || `BB-${String(idx + 1).padStart(3, '0')}`}</td>
+                        <td className="px-4 py-3"><span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full font-bold">{b.kategori || 'Produk'}</span></td>
                         <td className="px-4 py-3 font-semibold text-gray-900">{b.nama}</td>
                         <td className="px-4 py-3 font-mono">{b.isiKemasan}</td>
                         <td className="px-4 py-3">{b.satuan}</td>
@@ -631,7 +777,7 @@ export default function DataPusatTab({
                         <td className="px-4 py-3 text-right font-mono text-gray-500">{formatCurrency(b.hargaSatuan)}/{b.satuan}</td>
                         <td className="px-4 py-3 text-center">
                           <div className="flex justify-center gap-1">
-                            <button onClick={() => { setEditingBahan(b); setBahanForm({kode:b.kode||'',nama:b.nama,satuan:b.satuan,isiKemasan:b.isiKemasan,hargaBeliReal:b.hargaBeliReal||b.hargaBeli,markupPercent:b.markupPercent||25,kategori:b.kategori||''}); setShowBahanModal(true); }}
+                            <button onClick={() => { setEditingBahan(b); setBahanForm({kode:b.kode||'',nama:b.nama,satuan:b.satuan,isiKemasan:b.isiKemasan,hargaBeliReal:b.hargaBeliReal||b.hargaBeli,markupPercent:b.markupPercent||25,kategori:b.kategori||'Produk'}); setShowBahanModal(true); }}
                               className="p-1.5 text-gray-400 hover:text-emerald-600 rounded-lg hover:bg-gray-100 cursor-pointer" title="Edit">
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
@@ -1107,15 +1253,16 @@ export default function DataPusatTab({
         </div>
       )}
 
-      {/* ─── SECTION: LOGISTIK & SURAT JALAN ─── */}
-      {activeSection === 'logistik' && (
+      {/* ─── SECTION: PENGIRIMAN (MERGED SO + LOGISTIK) ─── */}
+      {activeSection === 'pengiriman' && (
         <div className="space-y-4">
+          {/* HEADER: Buat SO + Action Buttons */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-5">
             <div className="flex items-center gap-2.5 mb-4">
               <Truck className="w-5 h-5 text-emerald-600" />
               <div className="flex-1">
-                <h3 className="text-sm font-bold text-gray-900">🚚 Logistik & Surat Jalan</h3>
-                <p className="text-[10px] text-gray-500">Cetak surat jalan untuk SO, tracking pengiriman ke cabang.</p>
+                <h3 className="text-sm font-bold text-gray-900">🚚 Pengiriman & Surat Order</h3>
+                <p className="text-[10px] text-gray-500">Buat SO, setujui permintaan cabang, cetak surat jalan, dan tracking pengiriman.</p>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={handleCetakLaporanLogistik}
@@ -1126,99 +1273,69 @@ export default function DataPusatTab({
                   className="inline-flex items-center gap-1 bg-blue-100 hover:bg-blue-200 text-blue-800 text-[9px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer">
                   <FileText className="w-3 h-3" /> Export PDF
                 </button>
+                <button onClick={openAddSO}
+                  disabled={cabangList.length === 0 || bahanBaku.length === 0}
+                  className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer disabled:cursor-not-allowed">
+                  <Plus className="w-3.5 h-3.5" /> Kirim Barang
+                </button>
               </div>
             </div>
 
-            {suratOrders.length === 0 ? (
-              <div className="text-center py-8">
-                <Truck className="w-12 h-12 text-gray-200 mx-auto stroke-1 mb-3" />
-                <p className="text-xs text-gray-500">Belum ada surat order.</p>
-                <p className="text-[10px] text-gray-400 mt-1">Buat SO dulu di bagian Surat Order.</p>
+            {/* Stat cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+                <p className="text-[9px] uppercase font-bold text-blue-800">Permintaan Pending</p>
+                <p className="text-lg font-black text-blue-700 font-mono">{suratOrders.filter(s => s.status === 'minta').length}</p>
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50">
-                      <th className="px-3 py-2.5 rounded-l-lg">Tanggal</th>
-                      <th className="px-3 py-2.5">No. SO</th>
-                      <th className="px-3 py-2.5">Tujuan</th>
-                      <th className="px-3 py-2.5">Item</th>
-                      <th className="px-3 py-2.5 text-center">Status</th>
-                      <th className="px-3 py-2.5 text-center rounded-r-lg">Surat Jalan</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {suratOrders.map(so => (
-                      <tr key={so.id} className="hover:bg-gray-50">
-                        <td className="px-3 py-2.5 font-mono text-gray-500">
-                          {new Date(so.tanggalKirim).toLocaleDateString('id-ID')}
-                        </td>
-                        <td className="px-3 py-2.5 font-mono font-bold text-gray-700">{so.id.substring(0, 12)}</td>
-                        <td className="px-3 py-2.5 font-semibold text-gray-900">{so.cabangNama}</td>
-                        <td className="px-3 py-2.5">
-                          {so.items.map((item, idx) => (
-                            <span key={idx} className="inline-block bg-gray-100 rounded px-1.5 py-0.5 mr-1 mb-0.5 text-[9px]">
-                              {item.bahanNama}: {item.qty}
-                            </span>
-                          ))}
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold ${
-                            so.status === 'diterima' ? 'bg-emerald-100 text-emerald-800' :
-                            so.status === 'dikirim' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
-                          }`}>
-                            {so.status === 'diterima' ? '✅ Sampai' : so.status === 'dikirim' ? '📦 Dikirim' : '🕐 Minta'}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          {so.status === 'dikirim' && (
-                            <button onClick={() => handleCetakSuratJalan(so)}
-                              className="inline-flex items-center gap-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[9px] font-bold px-2 py-1 rounded-lg transition cursor-pointer">
-                              <Printer className="w-3 h-3" /> Cetak Surat Jalan
-                            </button>
-                          )}
-                          {so.status === 'diterima' && (
-                            <span className="text-[9px] text-gray-400">Selesai</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-100">
+                <p className="text-[9px] uppercase font-bold text-amber-800">Dikirim</p>
+                <p className="text-lg font-black text-amber-700 font-mono">{suratOrders.filter(s => s.status === 'dikirim').length}</p>
               </div>
-            )}
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                <p className="text-[9px] uppercase font-bold text-emerald-800">Diterima</p>
+                <p className="text-lg font-black text-emerald-700 font-mono">{suratOrders.filter(s => s.status === 'diterima').length}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                <p className="text-[9px] uppercase font-bold text-gray-600">Total SO</p>
+                <p className="text-lg font-black text-gray-700 font-mono">{suratOrders.length}</p>
+              </div>
+            </div>
           </div>
 
-          {/* Info alur logistik */}
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-[10px] text-blue-800">
-            <strong>🚚 Alur Logistik:</strong><br />
-            1. Cabang minta barang → SO status <strong>"Minta"</strong><br />
-            2. Owner setujui → SO status <strong>"Dikirim"</strong> → Stok Pusat -QTY<br />
-            3. Cetak <strong>Surat Jalan</strong> → serahkan ke kurir/logistik<br />
-            4. Barang sampai → Owner/Terima → SO status <strong>"Diterima"</strong> → Stok Cabang +QTY ✅<br />
-            <span className="text-blue-600 font-semibold">Surat jalan tercetak otomatis dengan format resmi, siap tanda tangan.</span>
-          </div>
-        </div>
-      )}
-
-      {/* ─── SECTION: SURAT ORDER ─── */}
-      {activeSection === 'sod' && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
-            <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
-                <Truck className="w-4 h-4 text-emerald-600" /> Surat Order ke Cabang
-              </h3>
-              <button onClick={openAddSO}
-                disabled={cabangList.length === 0 || bahanBaku.length === 0}
-                className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer disabled:cursor-not-allowed">
-                <Plus className="w-3.5 h-3.5" /> Kirim Barang
+          {/* Filter Cabang + History Toggle */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-bold text-gray-500 uppercase">Filter Cabang:</span>
+                <button onClick={() => setSoCabangFilter('all')}
+                  className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition cursor-pointer ${
+                    soCabangFilter === 'all' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}>Semua ({suratOrders.length})</button>
+                {cabangList.filter(c => c.isActive).map(cabang => {
+                  const count = suratOrders.filter(so => so.cabangId === cabang.id).length;
+                  return (
+                    <button key={cabang.id} onClick={() => setSoCabangFilter(cabang.id)}
+                      className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition cursor-pointer ${
+                        soCabangFilter === cabang.id ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}>{cabang.nama} ({count})</button>
+                  );
+                })}
+              </div>
+              <button onClick={() => setShowExportHistory(true)}
+                className="inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[9px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer">
+                <FileText className="w-3 h-3" /> History Export ({exportHistory.length})
               </button>
             </div>
+          </div>
 
+          {/* SO Table — Combined with actions: Setujui, Terima, Cetak Surat Jalan */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
             {suratOrders.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-8">Belum ada surat order.</p>
+              <div className="text-center py-12">
+                <Truck className="w-12 h-12 text-gray-200 mx-auto stroke-1 mb-3" />
+                <p className="text-xs text-gray-500 font-semibold">Belum ada surat order.</p>
+                <p className="text-[10px] text-gray-400 mt-1">Klik "Kirim Barang" untuk membuat SO baru, atau cabang bisa minta barang dari dashboard mereka.</p>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
@@ -1232,7 +1349,7 @@ export default function DataPusatTab({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {suratOrders.map(so => (
+                    {suratOrders.filter(so => soCabangFilter === 'all' || so.cabangId === soCabangFilter).map(so => (
                       <tr key={so.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-mono text-gray-500">
                           {new Date(so.tanggalKirim).toLocaleDateString('id-ID')}
@@ -1247,28 +1364,36 @@ export default function DataPusatTab({
                         </td>
                         <td className="px-4 py-3 text-center">
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
-                            so.status === 'diterima'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : so.status === 'dikirim'
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-blue-100 text-blue-800'
+                            so.status === 'diterima' ? 'bg-emerald-100 text-emerald-800' :
+                            so.status === 'dikirim' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
                           }`}>
-                            {so.status === 'diterima' ? 'Diterima' : so.status === 'dikirim' ? 'Dikirim' : '🕐 Minta'}
+                            {so.status === 'diterima' ? '✅ Diterima' : so.status === 'dikirim' ? '📦 Dikirim' : '🕐 Minta'}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-center">
-                          {so.status === 'minta' && (
-                            <button onClick={() => handleSetujuiSO(so.id)}
-                              className="inline-flex items-center gap-1 bg-blue-100 hover:bg-blue-200 text-blue-800 text-[10px] font-bold px-2 py-1 rounded-lg transition cursor-pointer">
-                              <CheckCircle2 className="w-3 h-3" /> Setujui & Kirim
-                            </button>
-                          )}
-                          {so.status === 'dikirim' && (
-                            <button onClick={() => handleTerimaSO(so.id)}
-                              className="inline-flex items-center gap-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[10px] font-bold px-2 py-1 rounded-lg transition cursor-pointer">
-                              <CheckCircle2 className="w-3 h-3" /> Terima
-                            </button>
-                          )}
+                          <div className="flex items-center justify-center gap-1 flex-wrap">
+                            {so.status === 'minta' && (
+                              <button onClick={() => handleSetujuiSO(so.id)}
+                                className="inline-flex items-center gap-1 bg-blue-100 hover:bg-blue-200 text-blue-800 text-[10px] font-bold px-2 py-1 rounded-lg transition cursor-pointer">
+                                <CheckCircle2 className="w-3 h-3" /> Setujui & Kirim
+                              </button>
+                            )}
+                            {so.status === 'dikirim' && (
+                              <>
+                                <button onClick={() => handleTerimaSO(so.id)}
+                                  className="inline-flex items-center gap-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[10px] font-bold px-2 py-1 rounded-lg transition cursor-pointer">
+                                  <CheckCircle2 className="w-3 h-3" /> Terima
+                                </button>
+                                <button onClick={() => handleCetakSuratJalan(so)}
+                                  className="inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] font-bold px-2 py-1 rounded-lg transition cursor-pointer">
+                                  <Printer className="w-3 h-3" /> Surat Jalan
+                                </button>
+                              </>
+                            )}
+                            {so.status === 'diterima' && (
+                              <span className="text-[10px] text-gray-400 font-semibold">Selesai</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1276,6 +1401,70 @@ export default function DataPusatTab({
                 </table>
               </div>
             )}
+          </div>
+
+          {suratOrders.filter(so => soCabangFilter === 'all' || so.cabangId === soCabangFilter).length === 0 && suratOrders.length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-8 text-center">
+              <Truck className="w-10 h-10 text-gray-200 mx-auto stroke-1 mb-2" />
+              <p className="text-xs text-gray-500 font-semibold">Tidak ada SO untuk cabang ini.</p>
+              <p className="text-[10px] text-gray-400 mt-1">Coba pilih cabang lain atau "Semua".</p>
+            </div>
+          )}
+
+          {/* Info alur */}
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-[10px] text-blue-800">
+            <strong>🚚 Alur Pengiriman:</strong><br />
+            1. Cabang minta barang → Status <strong>"🕐 Minta"</strong> (pending)<br />
+            2. Owner setujui → Status <strong>"📦 Dikirim"</strong> → <strong>Stok Pusat berkurang</strong> otomatis<br />
+            3. Cetak <strong>Surat Jalan</strong> → serahkan ke kurir<br />
+            4. Barang sampai → Klik <strong>"Terima"</strong> → Status <strong>"✅ Diterima"</strong> → <strong>Stok Cabang bertambah</strong>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL EXPORT HISTORY ─── */}
+      {showExportHistory && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl border border-gray-100 overflow-hidden max-h-[70vh] flex flex-col">
+            <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-emerald-600" /> History Export Laporan
+              </h3>
+              <button onClick={() => setShowExportHistory(false)} className="text-gray-400 hover:text-gray-600 p-1 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {exportHistory.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-8">Belum ada export. Cetak laporan atau export PDF untuk mulai mencatat history.</p>
+              ) : (
+                <div className="space-y-2">
+                  {exportHistory.map((entry, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 border border-gray-100 rounded-xl hover:bg-gray-50">
+                      <div className="flex items-center gap-3">
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                          entry.format === 'PDF' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}>{entry.format}</span>
+                        <div>
+                          <p className="text-xs font-semibold text-gray-800">Laporan {entry.type}</p>
+                          <p className="text-[10px] text-gray-500">{entry.count} data • {new Date(entry.timestamp).toLocaleString('id-ID')}</p>
+                        </div>
+                      </div>
+                      <span className="text-[9px] text-gray-400 font-mono">{new Date(entry.timestamp).toLocaleTimeString('id-ID')}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-3 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
+              <span className="text-[10px] text-gray-500">Menyimpan {exportHistory.length} record terakhir</span>
+              <button onClick={() => {
+                if (window.confirm('Hapus semua history export?')) {
+                  setExportHistory([]);
+                  localStorage.removeItem('pusat_export_history');
+                }
+              }} className="text-[10px] text-red-500 hover:text-red-700 font-bold cursor-pointer">Hapus Semua</button>
+            </div>
           </div>
         </div>
       )}
@@ -1481,10 +1670,14 @@ export default function DataPusatTab({
                     className="w-full text-xs border border-gray-200 rounded-xl p-2.5" />
                 </div>
                 <div>
-                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Kategori (opsional)</label>
-                  <input type="text" placeholder="Roti, Cake, dll" value={bahanForm.kategori}
+                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Kategori *</label>
+                  <select value={bahanForm.kategori}
                     onChange={e => setBahanForm(f => ({...f, kategori: e.target.value}))}
-                    className="w-full text-xs border border-gray-200 rounded-xl p-2.5" />
+                    className="w-full text-xs border border-gray-200 rounded-xl p-2.5">
+                    {bahanKategoriList.filter(c => c !== 'Semua').map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div>

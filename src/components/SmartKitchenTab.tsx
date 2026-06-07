@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Layers, Flame, AlarmClock, Users, RefreshCw, Calendar, Gauge, Plus, Trash2, CheckCircle } from 'lucide-react';
+import { Gauge, Thermometer, Droplets, Cpu, Wifi, WifiOff, ShieldCheck, RefreshCw, AlertTriangle, CheckCircle2, Plus, Trash2, Users, Calendar } from 'lucide-react';
+
+interface IoTDevice {
+  id: string;
+  name: string;
+  type: 'oven' | 'freezer' | 'scale' | 'mixer' | 'humidity' | 'timer';
+  value: number;
+  unit: string;
+  status: 'online' | 'offline' | 'warning';
+  lastUpdate: string;
+  location: string;
+  minThreshold?: number;
+  maxThreshold?: number;
+}
 
 interface WorkOrder {
   assetName: string;
@@ -10,28 +23,71 @@ interface WorkOrder {
 }
 
 export default function SmartKitchenTab() {
-  // Oven IoT telemetry states
-  const [ovenTemp, setOvenTemp] = useState(0);
-  const [scaleWeight, setScaleWeight] = useState(0); // grams
-  const [freezerTemp, setFreezerTemp] = useState(0);
+  // ─── IOT DEVICES ───
+  const [devices, setDevices] = useState<IoTDevice[]>([
+    { id: 'iot-oven-1', name: 'Deck Oven Gas', type: 'oven', value: 185, unit: '°C', status: 'online', lastUpdate: new Date().toISOString(), location: 'Dapur Pusat', minThreshold: 160, maxThreshold: 220 },
+    { id: 'iot-oven-2', name: 'Convection Oven', type: 'oven', value: 175, unit: '°C', status: 'online', lastUpdate: new Date().toISOString(), location: 'Dapur Pusat', minThreshold: 150, maxThreshold: 200 },
+    { id: 'iot-freezer-1', name: 'Freezer Mentega', type: 'freezer', value: -18, unit: '°C', status: 'online', lastUpdate: new Date().toISOString(), location: 'Gudang', minThreshold: -22, maxThreshold: -12 },
+    { id: 'iot-freezer-2', name: 'Chiller Susu & Telur', type: 'freezer', value: 4, unit: '°C', status: 'online', lastUpdate: new Date().toISOString(), location: 'Dapur', minThreshold: 1, maxThreshold: 6 },
+    { id: 'iot-scale-1', name: 'Timbangan Adonan', type: 'scale', value: 0, unit: 'gr', status: 'online', lastUpdate: new Date().toISOString(), location: 'Meja Kerja' },
+    { id: 'iot-scale-2', name: 'Timbangan Bahan', type: 'scale', value: 0, unit: 'gr', status: 'offline', lastUpdate: new Date().toISOString(), location: 'Gudang' },
+    { id: 'iot-humidity-1', name: 'Kelembaban Proofing', type: 'humidity', value: 75, unit: '%', status: 'online', lastUpdate: new Date().toISOString(), location: 'Ruang Proofing', minThreshold: 65, maxThreshold: 85 },
+    { id: 'iot-mixer-1', name: 'Mixer Spiral 20L', type: 'mixer', value: 1420, unit: 'rpm', status: 'online', lastUpdate: new Date().toISOString(), location: 'Dapur Pusat' },
+  ]);
 
-  // Mixer operative hours log
+  // ─── WORK ORDERS (EAM) ───
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
-
-  // Baker shift state optimizer
-  const [dailyDonutsTarget, setDailyDonutsTarget] = useState(200);
-
-  // New Work Order form state
   const [newAssetName, setNewAssetName] = useState('');
   const [newAssetLimit, setNewAssetLimit] = useState('500');
   const [newAssetTargetDate, setNewAssetTargetDate] = useState('');
 
+  // ─── BAKER SHIFT ───
+  const [dailyDonutsTarget, setDailyDonutsTarget] = useState(200);
+
+  // IoT data simulation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDevices(prev => prev.map(d => {
+        let newValue = d.value;
+        const fluctuation = (Math.random() - 0.5) * 4;
+        
+        if (d.type === 'oven') {
+          newValue = Math.round(Math.max(140, Math.min(240, d.value + fluctuation)));
+        } else if (d.type === 'freezer') {
+          newValue = Math.round((d.value + fluctuation) * 10) / 10;
+          newValue = d.value > 0 ? Math.max(0, Math.min(10, newValue)) : Math.max(-25, Math.min(-10, newValue));
+        } else if (d.type === 'scale') {
+          newValue = Math.round(Math.max(0, d.value + (Math.random() - 0.5) * 2));
+        } else if (d.type === 'humidity') {
+          newValue = Math.round(Math.max(40, Math.min(95, d.value + fluctuation)));
+        } else if (d.type === 'mixer') {
+          newValue = Math.round(Math.max(0, d.value + (Math.random() - 0.5) * 10));
+        }
+
+        let status: 'online' | 'offline' | 'warning' = d.status;
+        if (d.status !== 'offline') {
+          if (d.minThreshold !== undefined && newValue < d.minThreshold) status = 'warning';
+          else if (d.maxThreshold !== undefined && newValue > d.maxThreshold) status = 'warning';
+          else status = 'online';
+        }
+
+        return { ...d, value: newValue, status, lastUpdate: new Date().toISOString() };
+      }));
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleToggleDevice = (id: string) => {
+    setDevices(prev => prev.map(d => d.id === id ? { ...d, status: d.status === 'offline' ? 'online' : 'offline' } : d));
+  };
+
+  // ─── WORK ORDER HANDLERS ───
   const handleAddWorkOrder = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAssetName.trim()) return;
     const newWO: WorkOrder = {
       assetName: newAssetName.trim(),
-      opHours: 0, // Baru didaftarkan, belum ada jam operasional
+      opHours: 0,
       limitHours: parseInt(newAssetLimit) || 500,
       status: 'Aman',
       targetDate: newAssetTargetDate || new Date().toISOString().substring(0, 10),
@@ -43,258 +99,217 @@ export default function SmartKitchenTab() {
   };
 
   const handleDeleteWorkOrder = (assetName: string) => {
-    if (!window.confirm(`Hapus "${assetName}" dari daftar aset?`)) return;
+    if (!window.confirm(`Hapus "${assetName}"?`)) return;
     setWorkOrders(prev => prev.filter(w => w.assetName !== assetName));
   };
 
-  // Auto fluctuating IoT numbers simulation in client
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setOvenTemp(prev => Math.round(prev + (Math.random() - 0.5) * 4));
-      setScaleWeight(prev => Math.round(prev + (Math.random() - 0.5) * 1));
-      setFreezerTemp(prev => Math.round(prev + (Math.random() - 0.5) * 0.5));
-    }, 4000);
-    return () => clearInterval(interval);
-  }, []);
-
   const handleMaintenanceComplete = (asset: string) => {
-    setWorkOrders(prev =>
-      prev.map(w => w.assetName === asset ? { ...w, opHours: 0, status: 'Aman' } : w)
-    );
-    alert(`Rapor perawatan mesin ${asset} diperbarui sukses! Jam operasional di-reset ke 0.`);
+    setWorkOrders(prev => prev.map(w => w.assetName === asset ? { ...w, opHours: 0, status: 'Aman' } : w));
+    alert(`✅ Perawatan ${asset} selesai! Jam operasional di-reset ke 0.`);
   };
 
-  // Roster logic
-  const getStaffRecommendation = () => {
-    // 1 baker handles 150 donuts daily max
-    const calculated = Math.ceil(dailyDonutsTarget / 150);
-    return calculated > 1 ? calculated : 1;
+  const getStaffRecommendation = () => Math.max(1, Math.ceil(dailyDonutsTarget / 150));
+
+  const totalOnline = devices.filter(d => d.status === 'online').length;
+  const totalWarning = devices.filter(d => d.status === 'warning').length;
+  const totalOffline = devices.filter(d => d.status === 'offline').length;
+
+  const formatTime = (iso: string) => {
+    try { return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
   };
 
   return (
-    <div id="smart-kitchen-tab" className="space-y-6">
-      
-      {/* HEADER SECTION PANEL */}
-      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Gauge className="w-6 h-6 text-emerald-600" />
-            Otomatisasi IoT Dapur, HRIS Roster & Aset Perawatan (EAM)
-          </h2>
-          <p className="text-xs text-gray-500 mt-1">
-            Terhubung langsung ke IoT timbangan berat adonan presisi, alarm freezer pengaman kulkas mentega, preventif mixer, dan optimasi shift karyawan.
-          </p>
+    <div className="space-y-6">
+      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100">
+        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+          <Cpu className="w-6 h-6 text-emerald-600" /> Smart IoT — Monitoring Dapur & EAM
+        </h2>
+        <p className="text-xs text-gray-500 mt-1">
+          Monitoring IoT real-time (suhu oven, freezer, timbangan, mixer, kelembaban) + EAM perawatan aset + optimasi shift baker.
+        </p>
+      </div>
+
+      {/* STAT CARDS */}
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+        <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-center">
+          <span className="text-[9px] uppercase font-bold text-emerald-700 block">Online</span>
+          <span className="text-xl font-black text-emerald-800 font-mono">{totalOnline}</span>
+        </div>
+        <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 text-center">
+          <span className="text-[9px] uppercase font-bold text-amber-700 block">Warning</span>
+          <span className="text-xl font-black text-amber-800 font-mono">{totalWarning}</span>
+        </div>
+        <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 text-center">
+          <span className="text-[9px] uppercase font-bold text-gray-600 block">Offline</span>
+          <span className="text-xl font-black text-gray-700 font-mono">{totalOffline}</span>
+        </div>
+        <div className="bg-purple-50 p-3 rounded-xl border border-purple-100 text-center">
+          <span className="text-[9px] uppercase font-bold text-purple-700 block">Aset</span>
+          <span className="text-xl font-black text-purple-800 font-mono">{workOrders.length}</span>
+        </div>
+        <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center">
+          <span className="text-[9px] uppercase font-bold text-blue-700 block">Baker</span>
+          <span className="text-xl font-black text-blue-800 font-mono">{getStaffRecommendation()}</span>
         </div>
       </div>
 
+      {/* IoT DEVICES GRID */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {devices.map(device => (
+          <div key={device.id} className={`bg-white p-4 rounded-2xl border shadow-xs transition-all ${
+            device.status === 'warning' ? 'border-amber-300 ring-1 ring-amber-200' :
+            device.status === 'offline' ? 'border-gray-200 opacity-70' : 'border-gray-100'
+          }`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className={`p-2 rounded-xl ${
+                device.type === 'oven' ? 'bg-orange-100 text-orange-700' :
+                device.type === 'freezer' ? 'bg-blue-100 text-blue-700' :
+                device.type === 'scale' ? 'bg-emerald-100 text-emerald-700' :
+                device.type === 'humidity' ? 'bg-cyan-100 text-cyan-700' :
+                'bg-purple-100 text-purple-700'
+              }`}>
+                {device.type === 'oven' || device.type === 'freezer' ? <Thermometer className="w-4 h-4" /> :
+                 device.type === 'scale' ? <Gauge className="w-4 h-4" /> :
+                 device.type === 'humidity' ? <Droplets className="w-4 h-4" /> : <Cpu className="w-4 h-4" />}
+              </div>
+              <button onClick={() => handleToggleDevice(device.id)}
+                className={`p-1.5 rounded-lg cursor-pointer transition ${
+                  device.status === 'online' ? 'text-emerald-600 bg-emerald-50' :
+                  device.status === 'offline' ? 'text-gray-400 bg-gray-100' : 'text-amber-600 bg-amber-50'
+                }`}>
+                {device.status === 'online' ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+              </button>
+            </div>
+            <p className="text-[10px] font-semibold text-gray-500 truncate">{device.name}</p>
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <span className={`text-xl font-black font-mono ${device.status === 'warning' ? 'text-amber-700' : 'text-gray-900'}`}>{device.value}</span>
+              <span className="text-[10px] text-gray-500">{device.unit}</span>
+            </div>
+            <div className="flex items-center justify-between mt-1">
+              <span className={`inline-flex items-center gap-1 text-[8px] px-1.5 py-0.5 rounded-full font-bold ${
+                device.status === 'online' ? 'bg-emerald-100 text-emerald-800' :
+                device.status === 'offline' ? 'bg-gray-100 text-gray-500' : 'bg-amber-100 text-amber-800'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  device.status === 'online' ? 'bg-emerald-500' : device.status === 'offline' ? 'bg-gray-400' : 'bg-amber-500 animate-pulse'
+                }`} />
+                {device.status}
+              </span>
+              <span className="text-[8px] text-gray-400">{device.location}</span>
+            </div>
+            {device.status === 'warning' && device.minThreshold !== undefined && (
+              <div className="mt-1 pt-1 border-t border-amber-100 text-[8px] text-amber-700 flex items-center gap-1">
+                <AlertTriangle className="w-2.5 h-2.5" />
+                {device.value < device.minThreshold ? `Min: ${device.minThreshold}${device.unit}` : `Max: ${device.maxThreshold}${device.unit}`}
+              </div>
+            )}
+            <div className="text-[7px] text-gray-400 font-mono mt-1">{formatTime(device.lastUpdate)}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* EAM + HRIS SECTION */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* LEFT COLUMN: IOT TELEMETRY & PREVENTIVE WORK ORDERS */}
-        <div className="lg:col-span-8 space-y-6">
-          
-          {/* IOT TELEMETRY INTEGRATION GRID */}
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-gray-50">
-              <RefreshCw className="w-4 h-4 text-emerald-600" />
-              Sensor IoT Real-Time (Internet of Things)
+        {/* EAM Work Orders */}
+        <div className="lg:col-span-8 space-y-4">
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 mb-4">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" /> EAM — Perawatan Aset Dapur
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              
-              {/* Telemetry 1: Oven temp */}
-              <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 text-center">
-                <Flame className="w-7 h-7 text-orange-600 mx-auto" />
-                <span className="text-[10px] uppercase font-bold text-orange-700 block mt-1">Suhu Decks Oven Gas</span>
-                <span className="text-2xl font-mono font-extrabold text-orange-850 block">{ovenTemp} °C</span>
-                <span className="text-[9px] text-orange-600 font-medium">Suhu baking stabil otomatis</span>
-              </div>
+            <form onSubmit={handleAddWorkOrder} className="flex flex-col sm:flex-row gap-3 mb-4 text-xs">
+              <input type="text" required placeholder="Nama Mesin" value={newAssetName}
+                onChange={(e) => setNewAssetName(e.target.value)}
+                className="flex-1 border border-gray-200 rounded-lg p-2" />
+              <input type="number" required min="10" placeholder="Batas Servis (jam)" value={newAssetLimit}
+                onChange={(e) => setNewAssetLimit(e.target.value)}
+                className="w-28 border border-gray-200 rounded-lg p-2 font-mono" />
+              <input type="date" value={newAssetTargetDate}
+                onChange={(e) => setNewAssetTargetDate(e.target.value)}
+                className="w-36 border border-gray-200 rounded-lg p-2" />
+              <button type="submit"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition cursor-pointer">
+                <Plus className="w-3.5 h-3.5 inline" /> Tambah Aset
+              </button>
+            </form>
 
-              {/* Telemetry 2: Digitial Scale */}
-              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-center">
-                <Gauge className="w-7 h-7 text-emerald-600 mx-auto" />
-                <span className="text-[10px] uppercase font-bold text-emerald-700 block mt-1">Timbangan Pintas IoT</span>
-                <span className="text-2xl font-mono font-extrabold text-emerald-850 block">{scaleWeight} gr</span>
-                <span className="text-[9px] text-emerald-600 font-medium">Melindungi konsistensi rasa roti</span>
-              </div>
-
-              {/* Telemetry 3: Freezer safety */}
-              <div className={`rounded-xl p-4 text-center border ${freezerTemp > -12 ? 'bg-red-50 border-red-150 animate-pulse' : 'bg-blue-50 border-blue-105'}`}>
-                <AlarmClock className={`w-7 h-7 mx-auto ${freezerTemp > -12 ? 'text-red-650' : 'text-blue-600'}`} />
-                <span className={`text-[10px] uppercase font-bold block mt-1 ${freezerTemp > -12 ? 'text-red-700' : 'text-blue-700'}`}>Suhu Chiller Freezer</span>
-                <span className="text-2xl font-mono font-extrabold block text-blue-900">{freezerTemp.toFixed(1)} °C</span>
-                <span className={`text-[9px] font-medium block ${freezerTemp > -12 ? 'text-red-650 font-bold' : 'text-blue-600'}`}>
-                  {freezerTemp > -12 ? '⚠️ ALARM PANAS! FREEZER MATI!' : 'Suhu aman penyimpanan mentega'}
-                </span>
-              </div>
-
-            </div>
-          </div>
-
-          {/* ADD WORK ORDER FORM */}
-          <form onSubmit={handleAddWorkOrder} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-3">
-            <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
-              <Plus className="w-4 h-4 text-emerald-600" /> Daftarkan Aset Baru
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Nama Mesin</label>
-                <input type="text" required value={newAssetName} onChange={(e) => setNewAssetName(e.target.value)}
-                  placeholder="Misal: Mixer Bosch 20L"
-                  className="w-full border border-gray-200 rounded-lg p-2" />
-              </div>
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Batas Servis (jam)</label>
-                <input type="number" required min="10" value={newAssetLimit} onChange={(e) => setNewAssetLimit(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg p-2 font-mono" />
-              </div>
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Target Servis</label>
-                <input type="date" value={newAssetTargetDate} onChange={(e) => setNewAssetTargetDate(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg p-2" />
-              </div>
-              <div className="flex items-end">
-                <button type="submit"
-                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-1">
-                  <Plus className="w-3.5 h-3.5" /> Tambah
-                </button>
-              </div>
-            </div>
-          </form>
-
-          {/* PREVENTIVE MAINTENANCE EAM */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
-            <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
-                <ShieldCheck className="w-4.5 h-4.5 text-emerald-600" />
-                Perawatan Preventif Mesin Dapur (Work Order EAM)
-              </h3>
-              <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full font-bold">
-                Aset Utama Aktif
-              </span>
-            </div>
-
-            <div className="overflow-x-auto text-xs sm:text-sm">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50/20 text-[10px] uppercase font-bold text-gray-500">
-                    <th className="px-5 py-3.5">Nama Mesin Aset</th>
-                    <th className="px-4 py-3.5 text-center">Operasional Jam Kerja</th>
-                    <th className="px-4 py-3.5 text-center">Batas Servis (Siklus)</th>
-                    <th className="px-4 py-3.5 text-center">Rencana Jadwal Servis</th>
-                    <th className="px-4 py-3.5 text-center">Status Keamanan</th>
-                    <th className="px-5 py-3.5 text-center">Tindakan Reset</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 text-gray-700">
-                  {workOrders.map((w, idx) => {
-                    const progress = Math.min(100, (w.opHours / w.limitHours) * 100);
-                    return (
-                      <tr key={idx} className="hover:bg-slate-55 hover:bg-emerald-50/10">
-                        <td className="px-5 py-4 font-semibold text-gray-950">{w.assetName}</td>
-                        <td className="px-4 py-4 text-center font-mono">
-                          {w.opHours} jam
-                        </td>
-                        <td className="px-4 py-4 text-center font-mono text-gray-450">{w.limitHours} jam</td>
-                        <td className="px-4 py-4 text-center font-bold font-sans text-gray-600">{w.targetDate}</td>
-                        <td className="px-4 py-4 text-center">
-                          <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+            {workOrders.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-4">Belum ada aset terdaftar.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50">
+                      <th className="px-3 py-2">Aset</th>
+                      <th className="px-3 py-2 text-center">Jam Operasi</th>
+                      <th className="px-3 py-2 text-center">Batas Servis</th>
+                      <th className="px-3 py-2 text-center">Target</th>
+                      <th className="px-3 py-2 text-center">Status</th>
+                      <th className="px-3 py-2 text-center">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {workOrders.map((w, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="px-3 py-2.5 font-semibold">{w.assetName}</td>
+                        <td className="px-3 py-2.5 text-center font-mono">{w.opHours} jam</td>
+                        <td className="px-3 py-2.5 text-center font-mono text-gray-500">{w.limitHours} jam</td>
+                        <td className="px-3 py-2.5 text-center text-gray-600">{w.targetDate}</td>
+                        <td className="px-3 py-2.5 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
                             w.status === 'Aman' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
                             w.status === 'Butuh Pelumasan' ? 'bg-amber-50 text-amber-700 border-amber-100' :
                             'bg-red-50 text-red-700 border-red-100 animate-pulse'
-                          }`}>
-                            {w.status}
-                          </span>
+                          }`}>{w.status}</span>
                         </td>
-                        <td className="px-5 py-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            {w.status !== 'Aman' ? (
-                              <button
-                                onClick={() => handleMaintenanceComplete(w.assetName)}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-2 py-1 rounded"
-                              >
-                                Selesai Servis
-                              </button>
-                            ) : (
-                              <span className="text-gray-400 font-semibold text-xs">-</span>
+                        <td className="px-3 py-2.5 text-center">
+                          <div className="flex justify-center gap-1">
+                            {w.status !== 'Aman' && (
+                              <button onClick={() => handleMaintenanceComplete(w.assetName)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold px-2 py-1 rounded cursor-pointer">Selesai</button>
                             )}
-                            <button
-                              onClick={() => handleDeleteWorkOrder(w.assetName)}
-                              className="text-gray-400 hover:text-red-600 p-1 cursor-pointer"
-                              title="Hapus Aset"
-                            >
+                            <button onClick={() => handleDeleteWorkOrder(w.assetName)}
+                              className="text-gray-400 hover:text-red-600 p-1 cursor-pointer">
                               <Trash2 className="w-3 h-3" />
                             </button>
                           </div>
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* RIGHT COLUMN: HRIS SHIFT OPTIMIZER ROSTER */}
+        {/* HRIS Shift Optimizer */}
         <div className="lg:col-span-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
-          <div className="pb-2 border-b border-gray-50">
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-emerald-600" />
-              Optimasi Shift Dapur & HRIS
-            </h3>
-            <p className="text-[11px] text-gray-400 mt-0.5">Penjadwalan baker otomatis berdasarkan pesanan target.</p>
+          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+            <Users className="w-4 h-4 text-emerald-600" /> Optimasi Shift Baker
+          </h3>
+          <div>
+            <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Target Produksi Harian</label>
+            <input type="number" value={dailyDonutsTarget}
+              onChange={(e) => setDailyDonutsTarget(parseInt(e.target.value) || 100)}
+              className="w-full border border-gray-200 rounded-lg p-2.5 font-mono font-bold" />
           </div>
-
-          <div className="space-y-4">
-            
-            {/* Target order planner */}
-            <div>
-              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1.5">
-                Target Produksi Roti/Donat (Donuts/Bread Target)
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  value={dailyDonutsTarget}
-                  onChange={(e) => setDailyDonutsTarget(parseInt(e.target.value) || 100)}
-                  className="w-full text-xs font-mono font-bold border border-gray-200 rounded-lg p-2.5"
-                />
-                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px] font-bold">PCS/HARI</span>
-              </div>
+          <div className="bg-slate-50 p-4 rounded-xl space-y-2 text-xs">
+            <div className="flex justify-between">
+              <span className="text-gray-500">Baker Dibutuhkan:</span>
+              <span className="font-bold">{getStaffRecommendation()} orang</span>
             </div>
-
-            {/* Calculations results */}
-            <div className="bg-slate-50 border border-gray-150 p-4 rounded-xl space-y-3.5 text-xs">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Estimasi Optimasi Karyawan Shift:</span>
-              
-              <div className="space-y-1.5">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Baker Pengadon Aktif:</span>
-                  <span className="font-bold text-gray-800">{getStaffRecommendation()} Baker</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Tenaga Labor Cost Harian:</span>
-                  <span className="font-mono font-bold text-emerald-800">
-                    Rp {(getStaffRecommendation() * 150000).toLocaleString('id-ID')}
-                  </span>
-                </div>
-                <div className="text-[10px] text-gray-400 mt-2 block italic leading-relaxed">
-                  *Rantai labor cost langsung didistribusikan ke draf overhead HPP produk demi akurasi total margin bersih bisnis roti Anda.
-                </div>
-              </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">Estimasi Biaya:</span>
+              <span className="font-mono font-bold text-emerald-800">Rp {(getStaffRecommendation() * 150000).toLocaleString('id-ID')}</span>
             </div>
-
-            <button
-              onClick={() => alert(`Jadwal shift baker untuk target ${dailyDonutsTarget} donat berhasil dipublikasikan!`)}
-              className="w-full text-center bg-gray-950 text-white font-bold text-xs py-2.5 rounded-lg border border-black cursor-pointer shadow-xs"
-            >
-              🔑 Publikasikan Jadwal Roster Baker
-            </button>
           </div>
+          <button onClick={() => alert(`Jadwal shift untuk ${dailyDonutsTarget} produk berhasil dipublikasikan!`)}
+            className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-2.5 rounded-lg transition cursor-pointer">
+            Publikasikan Jadwal
+          </button>
         </div>
-
       </div>
-
     </div>
   );
 }

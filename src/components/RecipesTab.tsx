@@ -15,7 +15,7 @@ import {
   Coins,
   Check
 } from 'lucide-react';
-import { getSavedRecipeImage, saveRecipeImage, getFoodImageForPrompt } from '../lib/image-generator';
+import { getSavedRecipeImage, saveRecipeImage, deleteRecipeImage, getFoodImageForPrompt, buildAutoPrompt } from '../lib/image-generator';
 
 interface RecipesTabProps {
   bahanBaku: BahanBaku[];
@@ -101,6 +101,7 @@ export default function RecipesTab({
   const [imagePrompt, setImagePrompt] = useState('');
   const [recipeImage, setRecipeImage] = useState('');
   const [generatingImage, setGeneratingImage] = useState(false);
+  const [isPromptManual, setIsPromptManual] = useState(false);
 
   // New product formulation state with category
   const [showAddForm, setShowAddForm] = useState(false);
@@ -159,19 +160,35 @@ export default function RecipesTab({
     }
     if (selectedProductName) {
       setRecipeImage(getSavedRecipeImage(selectedProductName));
-      setImagePrompt(selectedProductName);
+      // Auto-generate prompt from product name + kategori (unless user has manually edited)
+      if (!isPromptManual) {
+        const autoPrompt = buildAutoPrompt(selectedProductName, activeProduct?.kategori);
+        setImagePrompt(autoPrompt);
+      }
     }
   }, [selectedProductName, productHpp, activeProduct]);
 
   const handleGenerateImage = () => {
-    if (!selectedProductName || !imagePrompt.trim()) return;
+    if (!selectedProductName) return;
+    const promptToUse = imagePrompt.trim() || buildAutoPrompt(selectedProductName, activeProduct?.kategori);
     setGeneratingImage(true);
     setTimeout(() => {
-      const newImg = getFoodImageForPrompt(imagePrompt);
+      const newImg = getFoodImageForPrompt(promptToUse);
       saveRecipeImage(selectedProductName, newImg);
       setRecipeImage(newImg);
       setGeneratingImage(false);
-    }, 1000);
+    }, 800);
+  };
+
+  const handleDeleteImage = () => {
+    if (!selectedProductName) return;
+    if (!window.confirm('Hapus foto produk ini? Gambar akan dikembalikan ke default.')) return;
+    deleteRecipeImage(selectedProductName);
+    const autoPrompt = buildAutoPrompt(selectedProductName, activeProduct?.kategori);
+    setImagePrompt(autoPrompt);
+    setIsPromptManual(false);
+    setRecipeImage(getFoodImageForPrompt(autoPrompt));
+    showToastLocal('Foto produk dihapus.', 'info');
   };
 
   // Filter products by category
@@ -426,6 +443,18 @@ export default function RecipesTab({
     setToppings((prev) => prev.filter((t) => t.id !== id));
   };
 
+  // Hitung Total HPP = sum of semua ingredients * qty + overhead
+  const getTotalHPP = (productName: string) => {
+    const product = productHpp.find(p => p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim());
+    if (!product) return 0;
+    const details = detailResep.filter(r => r.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim());
+    const bahanCost = details.reduce((sum, d) => {
+      const bahan = bahanBaku.find(b => b.nama.toLowerCase().trim() === d.namaBahan.toLowerCase().trim());
+      return sum + (d.takaran * (bahan?.hargaSatuan || 0));
+    }, 0);
+    return bahanCost + product.overhead;
+  };
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
@@ -653,6 +682,8 @@ export default function RecipesTab({
                         <div className="flex items-center gap-2 mt-1.5 text-[10px] font-medium text-gray-400">
                           <span className="font-bold text-emerald-800">{ingredientsCount} Bahan</span>
                           <span>•</span>
+                          <span>HPP: <span className="font-mono text-gray-600 font-semibold">{formatCurrency(getTotalHPP(p.namaProduk))}</span></span>
+                          <span>•</span>
                           <span>Yield: <span className="font-mono text-gray-600 font-semibold">{p.porsiJual} porsi</span></span>
                         </div>
                       </div>
@@ -797,6 +828,17 @@ export default function RecipesTab({
                 <div className="absolute top-2 left-2 bg-emerald-900/80 text-white text-[8px] font-mono px-2 py-0.5 rounded-full uppercase font-bold">
                   Foto Menu
                 </div>
+                {/* DELETE IMAGE — X button top-right */}
+                {recipeImage && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteImage}
+                    className="absolute top-2 right-2 w-6 h-6 bg-red-600/90 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer shadow-lg"
+                    title="Hapus Foto"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
               
               <div className="md:col-span-9 space-y-2">
@@ -806,11 +848,27 @@ export default function RecipesTab({
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="Contoh: Kue brownies panggang lumer premium cokelat keju mewah"
+                    placeholder="Prompt otomatis dari nama produk — edit untuk custom"
                     value={imagePrompt}
-                    onChange={(e) => setImagePrompt(e.target.value)}
+                    onChange={(e) => {
+                      setImagePrompt(e.target.value);
+                      setIsPromptManual(true);
+                    }}
                     className="flex-1 text-xs border border-gray-200 rounded-xl px-3 py-2.5 bg-white focus:ring-1 focus:ring-emerald-500 focus:outline-none focus:border-emerald-500 font-medium"
                   />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Reset to auto-prompt
+                      const autoPrompt = buildAutoPrompt(selectedProductName, activeProduct?.kategori);
+                      setImagePrompt(autoPrompt);
+                      setIsPromptManual(false);
+                    }}
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-600 text-[11px] font-bold uppercase px-2.5 py-2 rounded-xl flex items-center gap-1 shadow-xs shrink-0 cursor-pointer transition-colors"
+                    title="Reset ke prompt otomatis"
+                  >
+                    🔄
+                  </button>
                   <button
                     type="button"
                     onClick={handleGenerateImage}
@@ -828,7 +886,7 @@ export default function RecipesTab({
                   </button>
                 </div>
                 <p className="text-[10px] text-gray-400 leading-normal">
-                  Ketik nama hidangan di atas, lalu klik <strong>Generate</strong> untuk melampirkan foto makanan HD hasil visualisasi AI.
+                  Prompt di-generate otomatis dari nama produk + kategori. Edit manual untuk hasil lebih spesifik, lalu klik <strong>Generate</strong>.
                 </p>
               </div>
             </div>

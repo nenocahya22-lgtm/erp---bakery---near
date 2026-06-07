@@ -1,6 +1,0 @@
-{
-  "name": "Near Bakery & Co.",
-  "description": "Premium Bakery & Pastry e-commerce applet with real-time stock sync, fresh bakery checkout, live barista-chat, automated delivery tracking, and reviews.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

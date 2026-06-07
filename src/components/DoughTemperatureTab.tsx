@@ -35,11 +35,17 @@ export default function DoughTemperatureTab() {
     <div className="space-y-6">
       <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100">
         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <Thermometer className="w-6 h-6 text-emerald-600" /> Dough Temperature Control
+          <Thermometer className="w-6 h-6 text-emerald-600" /> Dough Temperature Calculator
         </h2>
         <p className="text-xs text-gray-500 mt-1">
-          Hitung suhu air ideal berdasarkan suhu ruangan, tepung, dan gesekan mixer — jaga kualitas fermentasi ragi.
+          Kalkulator suhu adonan — hitung suhu air ideal berdasarkan suhu ruangan, tepung, dan gesekan mixer untuk menjaga kualitas fermentasi ragi.
         </p>
+        <div className="mt-3 bg-blue-50 border border-blue-100 rounded-xl p-3 text-[10px] text-blue-800 flex items-start gap-2">
+          <Thermometer className="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            <strong>KALKULATOR — Tidak perlu alat/sensor tambahan.</strong> Modul ini hanya kalkulator untuk membantu baker menghitung suhu air ideal. Cukup input suhu ruangan, suhu tepung, dan faktor gesekan mixer — sistem otomatis menghitung suhu air yang dibutuhkan dan merekomendasikan es batu atau air hangat jika diperlukan.
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

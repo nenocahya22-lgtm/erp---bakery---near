@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { CalculationResult } from '../types';
-import { Megaphone, RefreshCw, Sparkles, Send, Users, Mail, Compass, TrendingUp, ShoppingCart, BarChart3, AlertTriangle, Star, Tag } from 'lucide-react';
+import { Megaphone, RefreshCw, Sparkles, Send, Users, Mail, Compass, TrendingUp, ShoppingCart, BarChart3, AlertTriangle, Star, Tag, Cloud, Globe, FileText } from 'lucide-react';
 
 interface CrmMarketingTabProps {
   calculatedProducts: CalculationResult[];
@@ -20,7 +20,7 @@ export default function CrmMarketingTab({ calculatedProducts }: CrmMarketingTabP
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
-  // Ambil data revenue real-time dari localStorage
+  // ─── AMBIL DATA REAL DARI SELURUH SISTEM ───
   const revenueData = useMemo(() => {
     try {
       const saved = localStorage.getItem('revenue_tracker_data');
@@ -28,7 +28,6 @@ export default function CrmMarketingTab({ calculatedProducts }: CrmMarketingTabP
     } catch { return { transactions: [], dailyTotals: {} }; }
   }, []);
 
-  // Ambil data orders
   const ordersData = useMemo(() => {
     try {
       const saved = localStorage.getItem('pos_orders_data');
@@ -36,26 +35,60 @@ export default function CrmMarketingTab({ calculatedProducts }: CrmMarketingTabP
     } catch { return []; }
   }, []);
 
-  // Auto-analysis based on real data
+  const wasteData = useMemo(() => {
+    try {
+      const saved = localStorage.getItem('waste_logs_data');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  }, []);
+
+  const cabangList = useMemo(() => {
+    try {
+      const saved = localStorage.getItem('cabang_list_data');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  }, []);
+
+  const suratOrders = useMemo(() => {
+    try {
+      const saved = localStorage.getItem('surat_orders_data');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  }, []);
+
+  // ─── AUTO-ANALYSIS ───
   const autoAnalysis = useMemo(() => {
     const analysis: {
       totalRevenue: number;
       totalOrders: number;
+      totalWaste: number;
+      totalBranches: number;
+      pendingSO: number;
       topProducts: { name: string; revenue: number; qty: number }[];
       lowMarginProducts: { name: string; margin: number; hpp: number; price: number }[];
       suggestions: string[];
     } = {
       totalRevenue: 0,
       totalOrders: 0,
+      totalWaste: 0,
+      totalBranches: 0,
+      pendingSO: 0,
       topProducts: [],
       lowMarginProducts: [],
       suggestions: [],
     };
 
-    // Hitung dari revenue tracker
+    // Revenue
     const txs = revenueData.transactions || [];
     analysis.totalRevenue = txs.reduce((s: number, t: any) => s + (t.amount || 0), 0);
     analysis.totalOrders = txs.length;
+
+    // Waste
+    analysis.totalWaste = wasteData.reduce((s: number, w: any) => s + (w.lossValue || 0), 0);
+
+    // Cabang & SO
+    analysis.totalBranches = cabangList.filter((c: any) => c.isActive).length;
+    analysis.pendingSO = suratOrders.filter((s: any) => s.status === 'minta').length;
 
     // Top products
     const prodMap: Record<string, { revenue: number; qty: number }> = {};
@@ -69,56 +102,66 @@ export default function CrmMarketingTab({ calculatedProducts }: CrmMarketingTabP
       .slice(0, 5)
       .map(([name, data]) => ({ name, ...data }));
 
-    // Low margin products
+    // Low margin
     calculatedProducts.forEach(p => {
-      const margin = p.marginPersen;
-      if (margin < 20) {
+      if (p.marginPersen < 20) {
         analysis.lowMarginProducts.push({
           name: p.namaProduk,
-          margin,
+          margin: p.marginPersen,
           hpp: p.hppPerPorsi,
           price: p.hargaJualPerPorsi,
         });
       }
     });
 
-    // Auto suggestions based on data
-    if (analysis.lowMarginProducts.length > 0) {
-      analysis.suggestions.push(`⚠️ ${analysis.lowMarginProducts.length} produk dengan margin di bawah 20% — review harga jual atau kurangi biaya bahan.`);
-      analysis.lowMarginProducts.slice(0, 3).forEach(p => {
-        analysis.suggestions.push(`📉 ${p.name}: margin ${p.margin.toFixed(1)}% (HPP ${formatCurrency(p.hpp)}, Jual ${formatCurrency(p.price)}). Naikkan harga minimal ${formatCurrency(Math.round(p.hpp / 0.8))} untuk margin 20%.`);
-      });
-    }
-
-    if (analysis.topProducts.length > 0) {
-      const top = analysis.topProducts[0];
-      analysis.suggestions.push(`🏆 Produk terlaris: ${top.name} (${formatCurrency(top.revenue)}). Optimalkan stok dan promosi!`);
+    // ─── SUGGESTIONS BASED ON REAL SYSTEM DATA ───
+    if (analysis.totalRevenue === 0) {
+      analysis.suggestions.push('📊 Belum ada data penjualan. Mulai transaksi POS untuk melihat analisis marketing.');
+    } else {
+      analysis.suggestions.push(`📈 Total Revenue: ${formatCurrency(analysis.totalRevenue)} dari ${analysis.totalOrders} transaksi.`);
       
-      if (analysis.topProducts.length >= 2) {
-        const worst = analysis.topProducts[analysis.topProducts.length - 1];
-        if (worst.revenue < top.revenue * 0.3) {
-          analysis.suggestions.push(`🔄 ${worst.name} penjualan rendah (${formatCurrency(worst.revenue)} vs ${formatCurrency(top.revenue)}). Coba: (1) Turunkan harga 15% (2) Ganti nama jadi lebih menarik (3) Update foto produk.`);
-        }
+      if (analysis.topProducts.length > 0) {
+        const top = analysis.topProducts[0];
+        analysis.suggestions.push(`🏆 Produk terlaris: ${top.name} (${formatCurrency(top.revenue)}). Optimalkan produksi & promosi!`);
       }
     }
 
-    // Rekomendasi diskon
-    analysis.suggestions.push(`💡 Strategi Diskon: Buat promo "Beli 2 Gratis 1" untuk produk dengan stok tinggi atau margin > 40%.`);
-    analysis.suggestions.push(`📸 Update foto produk dengan AI Generator di tab Image Gen untuk tampilan lebih profesional di menu.`);
-    analysis.suggestions.push(`🏷️ Ganti nama produk dengan kata-kata menarik: "Roti Cokelat" → "Roti Cokelat Belgian Premium Lumer" untuk meningkatkan persepsi nilai.`);
+    if (analysis.lowMarginProducts.length > 0) {
+      analysis.suggestions.push(`⚠️ ${analysis.lowMarginProducts.length} produk dengan margin di bawah 20% — review harga jual atau efisiensi bahan.`);
+      analysis.lowMarginProducts.slice(0, 3).forEach(p => {
+        analysis.suggestions.push(`📉 ${p.name}: margin ${p.margin.toFixed(1)}% (HPP ${formatCurrency(p.hpp)}, Jual ${formatCurrency(p.price)}). Target harga: ${formatCurrency(Math.round(p.hpp / 0.8))}`);
+      });
+    } else {
+      analysis.suggestions.push('✅ Semua produk punya margin sehat di atas 20%!');
+    }
+
+    if (analysis.pendingSO > 0) {
+      analysis.suggestions.push(`🚚 ${analysis.pendingSO} permintaan barang cabang pending — setujui di Data Pusat untuk menjaga stok cabang.`);
+    }
+
+    if (analysis.totalWaste > 0) {
+      analysis.suggestions.push(`🗑️ Total waste tercatat: ${formatCurrency(analysis.totalWaste)} — cek Manajemen Waste untuk optimasi produksi.`);
+    }
+
+    analysis.suggestions.push('💡 Strategi: Bundle produk margin tinggi + rendah, update foto produk dengan AI Generator, review harga berkala.');
+    analysis.suggestions.push('🏪 Cabang aktif: ' + analysis.totalBranches + ' — pastikan stok tiap cabang terpantau via Stok Opname.');
 
     return analysis;
-  }, [revenueData, calculatedProducts, ordersData]);
+  }, [revenueData, calculatedProducts, ordersData, wasteData, cabangList, suratOrders]);
 
   const handleAutoAnalyze = () => {
     setShowAutoAnalysis(true);
-    // Generate marketing advice based on real data
-    let advice = '📊 **ANALISIS OTOMATIS CRM & SARAN MARKETING**\n\n';
-    advice += `📈 Total Revenue: ${formatCurrency(autoAnalysis.totalRevenue)}\n`;
-    advice += `🛒 Total Transaksi: ${autoAnalysis.totalOrders}\n\n`;
+    let advice = '📊 **ANALISIS OTOMATIS MARKETING — LAPORAN LENGKAP**\n\n';
+    advice += `📈 **TOTAL REVENUE:** ${formatCurrency(autoAnalysis.totalRevenue)}\n`;
+    advice += `🛒 **TOTAL TRANSAKSI:** ${autoAnalysis.totalOrders}\n`;
+    advice += `🏪 **CABANG AKTIF:** ${autoAnalysis.totalBranches}\n`;
+    advice += `🚚 **SO PENDING:** ${autoAnalysis.pendingSO}\n`;
+    advice += `🗑️ **TOTAL WASTE:** ${formatCurrency(autoAnalysis.totalWaste)}\n\n`;
+
+    advice += '━━━━━━━━━━━━━━━━━━━━━━\n\n';
 
     if (autoAnalysis.topProducts.length > 0) {
-      advice += '🏆 **TOP 5 PRODUK TERLARIS:**\n';
+      advice += '🏆 **TOP PRODUK TERLARIS:**\n';
       autoAnalysis.topProducts.forEach((p, i) => {
         advice += `  ${i + 1}. ${p.name} — ${formatCurrency(p.revenue)} (${p.qty} pcs)\n`;
       });
@@ -126,29 +169,30 @@ export default function CrmMarketingTab({ calculatedProducts }: CrmMarketingTabP
     }
 
     if (autoAnalysis.lowMarginProducts.length > 0) {
-      advice += '⚠️ **PRODUK MARGIN RENDAH (PERLU DITINJAU):**\n';
+      advice += '⚠️ **PRODUK MARGIN RENDAH (PERLU TINJAUAN):**\n';
       autoAnalysis.lowMarginProducts.forEach(p => {
-        advice += `  • ${p.name}: Margin ${p.margin.toFixed(1)}% — HPP ${formatCurrency(p.hpp)}, Jual ${formatCurrency(p.price)}\n`;
-        advice += `    → Sarankan harga jual baru: ${formatCurrency(Math.round(p.hpp / 0.75))} (margin 25%)\n`;
-        advice += `    → Atau ganti nama jadi lebih premium untuk justify kenaikan harga\n`;
+        advice += `  • ${p.name}: Margin ${p.margin.toFixed(1)}%\n`;
+        advice += `    → HPP: ${formatCurrency(p.hpp)} | Jual: ${formatCurrency(p.price)}\n`;
+        advice += `    → Rekomendasi harga baru: ${formatCurrency(Math.round(p.hpp / 0.75))} (margin 25%)\n`;
       });
       advice += '\n';
     }
 
-    advice += '💡 **REKOMENDASI MARKETING:**\n';
+    advice += '💡 **REKOMENDASI STRATEGIS:**\n';
     autoAnalysis.suggestions.forEach(s => {
       advice += `  • ${s}\n`;
     });
 
-    advice += '\n🎯 **STRATEGI DISKON:**\n';
-    advice += `  • Produk dengan margin > 40%: Berani diskon 20-30%\n`;
-    advice += `  • Produk dengan margin < 20%: JANGAN diskon, naikkan harga dulu\n`;
-    advice += `  • Bundle deal: "Paket Hemat 3 Roti + 1 Coffee" untuk naikkan AOV\n`;
+    advice += '\n🎯 **STRATEGI DISKON & PROMOSI:**\n';
+    advice += `  • Produk margin > 40%: Berani diskon 20-30% untuk boost penjualan\n`;
+    advice += `  • Produk margin < 20%: JANGAN diskon, naikkan harga dulu\n`;
+    advice += `  • Bundle deal: Paket Hemat 3 Roti + 1 Coffee untuk naikkan AOV\n`;
+    advice += `  • Member loyalty: Setiap 10x beli gratis 1 produk\n\n`;
 
-    advice += '\n📸 **REBRANDING PRODUK:**\n';
-    advice += `  • Ganti nama produk: Tambahkan kata "Premium", "Signature", "Artisan"\n`;
-    advice += `  • Update deskripsi: Ceritakan bahan premium yang dipakai\n`;
-    advice += `  • Generate foto baru pakai AI Image Generator di tab Tools\n`;
+    advice += '📸 **REBRANDING & FOTO PRODUK:**\n';
+    advice += `  • Update nama produk: Tambahkan "Premium", "Signature", "Artisan"\n`;
+    advice += `  • Generate foto baru pakai AI Generator (di tab Resep → Generate)\n`;
+    advice += `  • Tambah deskripsi menarik: ceritakan bahan premium yang dipakai\n`;
 
     setMarketingAdvice(advice);
   };
@@ -158,6 +202,7 @@ export default function CrmMarketingTab({ calculatedProducts }: CrmMarketingTabP
     setMarketingAdvice('');
     setShowAutoAnalysis(false);
     try {
+      // Try API first
       const res = await fetch('/api/marketing/consult', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -168,68 +213,54 @@ export default function CrmMarketingTab({ calculatedProducts }: CrmMarketingTabP
           productMetrics: calculatedProducts.map(p => ({ name: p.namaProduk, margin: p.marginPersen, price: p.hargaJualPerPorsi })),
         })
       });
-      const data = await res.json();
-      if (data.text) {
-        setMarketingAdvice(data.text);
-      } else {
-        throw new Error('Empty response');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.text) { setMarketingAdvice(data.text); return; }
       }
-    } catch (err: any) {
-      // Fallback lokal: generate analisis berdasarkan input user
+      throw new Error('API not available');
+    } catch {
+      // Fallback lokal
       let localAdvice = '📋 **ANALISIS LOKAL — SARAN MARKETING**\n';
-      localAdvice += '━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
-      localAdvice += `🔍 **Input Anda:**\n`;
-      if (salesDropReason) localAdvice += `  • Drop Penjualan: ${salesDropReason}\n`;
-      if (competitorFactor) localAdvice += `  • Faktor Kompetitor: ${competitorFactor}\n`;
-      if (costChanges) localAdvice += `  • Kenaikan Harga: ${costChanges}\n`;
-      localAdvice += '\n';
-
-      localAdvice += '📊 **DATA PENJUALAN REAL-TIME:**\n';
-      localAdvice += `  • Total Revenue: ${formatCurrency(autoAnalysis.totalRevenue)}\n`;
-      localAdvice += `  • Total Transaksi: ${autoAnalysis.totalOrders}\n`;
-      if (autoAnalysis.topProducts.length > 0) {
-        localAdvice += `  • Produk Terlaris: ${autoAnalysis.topProducts[0].name} (${formatCurrency(autoAnalysis.topProducts[0].revenue)})\n`;
-      }
-      localAdvice += '\n';
-
+      localAdvice += '━━━━━━━━━━━━━━━━━━━━━━\n\n';
+      
       if (salesDropReason || competitorFactor || costChanges) {
-        localAdvice += '💡 **STRATEGI BERDASARKAN KONDISI ANDA:**\n';
+        localAdvice += '📋 **KONSULTASI BERDASARKAN INPUT ANDA:**\n';
+        if (salesDropReason) localAdvice += `📉 Penurunan: ${salesDropReason}\n`;
+        if (competitorFactor) localAdvice += `🏪 Kompetitor: ${competitorFactor}\n`;
+        if (costChanges) localAdvice += `💰 Kenaikan Biaya: ${costChanges}\n`;
+        localAdvice += '\n';
+
         if (salesDropReason) {
-          localAdvice += `\n📉 **Masalah: ${salesDropReason}**\n`;
-          localAdvice += `  • Lakukan survei singkat ke pelanggan: tanya langsung kenapa kurang suka\n`;
-          localAdvice += `  • Coba variasi baru: tambah topping atau ganti resep sedikit\n`;
-          localAdvice += `  • Bundling dengan produk best seller untuk perkenalkan lagi\n`;
+          localAdvice += '📉 **Strategi Atasi Penurunan Penjualan:**\n';
+          localAdvice += '  • Survei pelanggan: tanya langsung kenapa kurang suka\n';
+          localAdvice += '  • Coba variasi baru atau bundling dengan best seller\n';
+          localAdvice += '  • Beri diskon terbatas untuk produk yang kurang laku\n\n';
         }
         if (competitorFactor) {
-          localAdvice += `\n🏪 **Masalah: ${competitorFactor}**\n`;
-          localAdvice += `  • Perkuat loyalitas: kartu member digital (setiap 10x beli gratis 1)\n`;
-          localAdvice += `  • Fokus ke kualitas & pelayanan: bedakan dari kompetitor\n`;
-          localAdvice += `  • Promo khusus pelanggan setia: diskon 15% untuk pembelian > 3 item\n`;
+          localAdvice += '🏪 **Strategi Hadapi Kompetitor:**\n';
+          localAdvice += '  • Fokus ke kualitas & pelayanan (beda dari kompetitor)\n';
+          localAdvice += '  • Loyalty program: kartu member digital\n';
+          localAdvice += '  • Promo khusus pelanggan setia\n\n';
         }
         if (costChanges) {
-          localAdvice += `\n💰 **Masalah: ${costChanges}**\n`;
-          localAdvice += `  • Jangan naikkan harga langsung — kecilkan porsi 10% dulu (hidden调整)\n`;
-          localAdvice += `  • Cari supplier alternatif dengan harga lebih murah\n`;
-          localAdvice += `  • Bundling produk margin tinggi + rendah untuk subsidi silang\n`;
+          localAdvice += '💰 **Strategi Atasi Kenaikan Biaya:**\n';
+          localAdvice += '  • Jangan naikkan harga langsung — kecilkan porsi 10%\n';
+          localAdvice += '  • Cari supplier alternatif dengan harga lebih murah\n';
+          localAdvice += '  • Bundling produk margin tinggi + rendah\n\n';
         }
-        localAdvice += '\n';
       }
 
-      localAdvice += '🎯 **REKOMENDASI PEMASARAN:**\n';
+      localAdvice += '📊 **ANALISIS SISTEM REAL-TIME:**\n';
+      localAdvice += `  • Revenue: ${formatCurrency(autoAnalysis.totalRevenue)}\n`;
+      localAdvice += `  • Transaksi: ${autoAnalysis.totalOrders}\n`;
+      localAdvice += `  • Cabang: ${autoAnalysis.totalBranches}\n`;
+      localAdvice += `  • Waste: ${formatCurrency(autoAnalysis.totalWaste)}\n`;
+      localAdvice += `  • SO Pending: ${autoAnalysis.pendingSO}\n\n`;
+
+      localAdvice += '💡 **REKOMENDASI LANGSUNG:**\n';
       autoAnalysis.suggestions.forEach(s => {
         localAdvice += `  • ${s}\n`;
       });
-      localAdvice += '\n';
-
-      localAdvice += '📸 **TIPS REBRANDING:**\n';
-      localAdvice += `  • Ganti nama produk: tambahkan "Premium", "Signature", "Artisan"\n`;
-      localAdvice += `  • Update foto produk pakai AI Image Generator (sidebar → Tools)\n`;
-      localAdvice += `  • Tambah deskripsi menarik: ceritakan bahan premium yang dipakai\n`;
-      localAdvice += '\n';      
-      localAdvice += '⚙️ **Catatan:** Untuk analisis AI yang lebih dalam, jalankan server backend:\n';
-      localAdvice += '  • Buka terminal → `npm run dev` (start backend + frontend)\n';
-      localAdvice += '  • Pastikan file `.env` berisi `GEMINI_API_KEY=...`\n';
-      localAdvice += '  • Atau hubungi admin untuk setup server AI.\n';
 
       setMarketingAdvice(localAdvice);
     } finally {
@@ -241,7 +272,7 @@ export default function CrmMarketingTab({ calculatedProducts }: CrmMarketingTabP
     setBlastSending(true);
     setTimeout(() => {
       setBlastSending(false);
-      alert(`✅ Promosi terkirim ke segmen "${blastTarget}"!\n\nPesan promosi:\n🔥 PROMO SPESIAL NEAR BAKERY!\n${autoAnalysis.topProducts.length > 0 ? `Produk terlaris kami: ${autoAnalysis.topProducts[0].name}` : 'Diskon spesial untuk Anda!'}\nKunjungi toko kami sekarang!`);
+      alert(`✅ Promosi terkirim ke segmen "${blastTarget}"!\n\n🔥 PROMO SPESIAL NEAR BAKERY!\n${autoAnalysis.topProducts.length > 0 ? `Produk terlaris kami: ${autoAnalysis.topProducts[0].name}` : 'Diskon spesial untuk Anda!'}\nKunjungi toko kami sekarang!`);
     }, 1500);
   };
 
@@ -250,82 +281,54 @@ export default function CrmMarketingTab({ calculatedProducts }: CrmMarketingTabP
       {/* HEADER */}
       <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100">
         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <Megaphone className="w-6 h-6 text-indigo-600" /> CRM & Marketing
+          <Megaphone className="w-6 h-6 text-indigo-600" /> AI Marketing — Ujung Tombak Bisnis
         </h2>
-        <p className="text-xs text-gray-500 mt-1">Analisis penjualan otomatis, rekomendasi AI marketing, dan broadcast promosi.</p>
+        <p className="text-xs text-gray-500 mt-1">
+          Asisten AI yang memonitor seluruh sistem (pusat hingga cabang), menganalisis data penjualan, margin, waste, dan memberikan rekomendasi marketing taktis.
+        </p>
+      </div>
+
+      {/* SYSTEM OVERVIEW */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-xs text-center">
+          <TrendingUp className="w-5 h-5 text-emerald-600 mx-auto mb-1" />
+          <span className="text-[9px] uppercase font-bold text-gray-500 block">Revenue</span>
+          <span className="text-sm font-black text-emerald-800 font-mono">{formatCurrency(autoAnalysis.totalRevenue)}</span>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-xs text-center">
+          <ShoppingCart className="w-5 h-5 text-blue-600 mx-auto mb-1" />
+          <span className="text-[9px] uppercase font-bold text-gray-500 block">Transaksi</span>
+          <span className="text-sm font-black text-blue-800 font-mono">{autoAnalysis.totalOrders}</span>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-xs text-center">
+          <Globe className="w-5 h-5 text-purple-600 mx-auto mb-1" />
+          <span className="text-[9px] uppercase font-bold text-gray-500 block">Cabang Aktif</span>
+          <span className="text-sm font-black text-purple-800 font-mono">{autoAnalysis.totalBranches}</span>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-xs text-center">
+          <AlertTriangle className={`w-5 h-5 mx-auto mb-1 ${autoAnalysis.totalWaste > 0 ? 'text-amber-600' : 'text-emerald-600'}`} />
+          <span className="text-[9px] uppercase font-bold text-gray-500 block">Total Waste</span>
+          <span className="text-sm font-black text-amber-800 font-mono">{formatCurrency(autoAnalysis.totalWaste)}</span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* KIRI: AI CMO + Auto Analysis */}
+        {/* LEFT: Analysis */}
         <div className="lg:col-span-7 space-y-6">
-          {/* AUTO ANALYSIS CARD */}
+          {/* AUTO ANALYSIS */}
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-100 pb-2.5">
-              <TrendingUp className="w-4 h-4 text-emerald-600" /> Analisis Penjualan Real-time
+              <TrendingUp className="w-4 h-4 text-emerald-600" /> Analisis Sistem Real-time
             </h3>
-
-            <div className="grid grid-cols-3 gap-3 text-xs">
-              <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-center">
-                <span className="text-[9px] text-gray-500 uppercase font-bold">Revenue</span>
-                <div className="font-black text-emerald-800 font-mono mt-0.5">{formatCurrency(autoAnalysis.totalRevenue)}</div>
-              </div>
-              <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center">
-                <span className="text-[9px] text-gray-500 uppercase font-bold">Transaksi</span>
-                <div className="font-black text-blue-800 font-mono mt-0.5">{autoAnalysis.totalOrders}</div>
-              </div>
-              <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 text-center">
-                <span className="text-[9px] text-gray-500 uppercase font-bold">Produk</span>
-                <div className="font-black text-amber-800 font-mono mt-0.5">{calculatedProducts.length}</div>
-              </div>
-            </div>
-
-            {/* Top Products */}
-            {autoAnalysis.topProducts.length > 0 && (
-              <div>
-                <h4 className="text-[10px] uppercase font-bold text-gray-500 mb-2 flex items-center gap-1">
-                  <Star className="w-3 h-3 text-yellow-500" /> Produk Terlaris
-                </h4>
-                <div className="space-y-1.5">
-                  {autoAnalysis.topProducts.map((p, i) => (
-                    <div key={p.name} className="flex items-center justify-between bg-gray-50 p-2 rounded-lg text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-[8px] font-bold">{i + 1}</span>
-                        <span className="font-semibold text-gray-800">{p.name}</span>
-                      </div>
-                      <div className="flex gap-3 text-right">
-                        <span className="text-gray-500">{p.qty} pcs</span>
-                        <span className="font-mono font-bold text-emerald-700">{formatCurrency(p.revenue)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Low margin alerts */}
-            {autoAnalysis.lowMarginProducts.length > 0 && (
-              <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-xs">
-                <span className="font-bold text-red-800 flex items-center gap-1">
-                  <AlertTriangle className="w-4 h-4" /> {autoAnalysis.lowMarginProducts.length} Produk Margin Rendah
-                </span>
-                <div className="mt-1.5 space-y-1">
-                  {autoAnalysis.lowMarginProducts.slice(0, 3).map(p => (
-                    <div key={p.name} className="flex justify-between text-red-700">
-                      <span>{p.name}</span>
-                      <span className="font-mono font-bold">{p.margin.toFixed(1)}%</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <p className="text-[10px] text-gray-500">Data diambil dari seluruh modul: POS, Waste, Cabang, SO, dan Resep. Dengan ini AI Marketing bisa melihat gambaran utuh perusahaan.</p>
 
             <button onClick={handleAutoAnalyze}
               className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-yellow-300" /> Analisis Otomatis & Saran Marketing
+              <Sparkles className="w-4 h-4 text-yellow-300" /> Analisis Sistem & Saran Marketing
             </button>
 
             {marketingAdvice && showAutoAnalysis && (
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 text-xs text-slate-200 whitespace-pre-wrap max-h-[400px] overflow-y-auto font-mono leading-relaxed">
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 text-xs text-slate-200 whitespace-pre-wrap max-h-[500px] overflow-y-auto font-mono leading-relaxed">
                 {marketingAdvice}
               </div>
             )}
@@ -336,6 +339,7 @@ export default function CrmMarketingTab({ calculatedProducts }: CrmMarketingTabP
             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-100 pb-2.5">
               <Compass className="w-4 h-4 text-indigo-600" /> Konsultan AI Marketing (Virtual CMO)
             </h3>
+            <p className="text-[10px] text-gray-500">Ceritakan kondisi bisnis Anda — AI akan memberikan rekomendasi spesifik berbasis data real sistem.</p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
               <div>
@@ -349,22 +353,19 @@ export default function CrmMarketingTab({ calculatedProducts }: CrmMarketingTabP
                 </select>
               </div>
               <div>
-                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Drop Penjualan</label>
+                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Penurunan Penjualan</label>
                 <input type="text" value={salesDropReason} onChange={(e) => setSalesDropReason(e.target.value)}
-                  placeholder="Misal: Roti kurang manis..."
-                  className="w-full border border-gray-200 rounded-lg p-2.5 bg-white" />
+                  placeholder="Misal: Roti kurang laku..." className="w-full border border-gray-200 rounded-lg p-2.5 bg-white" />
               </div>
               <div>
                 <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Aksi Kompetitor</label>
                 <input type="text" value={competitorFactor} onChange={(e) => setCompetitorFactor(e.target.value)}
-                  placeholder="Outlet baru 100m..."
-                  className="w-full border border-gray-200 rounded-lg p-2.5 bg-white" />
+                  placeholder="Outlet baru 100m..." className="w-full border border-gray-200 rounded-lg p-2.5 bg-white" />
               </div>
               <div>
-                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Kenaikan Harga</label>
+                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Kenaikan Biaya</label>
                 <input type="text" value={costChanges} onChange={(e) => setCostChanges(e.target.value)}
-                  placeholder="Mentega naik 10%..."
-                  className="w-full border border-gray-200 rounded-lg p-2.5 bg-white" />
+                  placeholder="Mentega naik 10%..." className="w-full border border-gray-200 rounded-lg p-2.5 bg-white" />
               </div>
             </div>
 
@@ -373,65 +374,62 @@ export default function CrmMarketingTab({ calculatedProducts }: CrmMarketingTabP
               {marketingLoading ? (
                 <><RefreshCw className="w-4 h-4 animate-spin" /> Merumuskan Strategi...</>
               ) : (
-                <><Sparkles className="w-4 h-4 text-yellow-300" /> Saran Spesifik Virtual AI CMO</>
+                <><Sparkles className="w-4 h-4 text-yellow-300" /> Konsultasi Virtual CMO</>
               )}
             </button>
 
             {marketingAdvice && !showAutoAnalysis && (
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 text-xs text-slate-200 whitespace-pre-wrap max-h-[300px] overflow-y-auto">
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 text-xs text-slate-200 whitespace-pre-wrap max-h-[400px] overflow-y-auto">
                 {marketingAdvice}
               </div>
             )}
           </div>
         </div>
 
-        {/* KANAN: SUGGESTIONS + WA BLAST */}
+        {/* RIGHT: Suggestions & Broadcast */}
         <div className="lg:col-span-5 space-y-6">
-          {/* Automated Suggestions */}
+          {/* Suggestions */}
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-100 pb-2">
               <Tag className="w-4 h-4 text-emerald-600" /> Saran Marketing Otomatis
             </h3>
-            <div className="space-y-3 max-h-[300px] overflow-y-auto">
+            <div className="space-y-3 max-h-[350px] overflow-y-auto">
               {autoAnalysis.suggestions.map((s, i) => (
                 <div key={i} className="p-3 bg-gray-50 border border-gray-150 rounded-xl text-[11px] leading-relaxed">
                   <span className="font-medium text-gray-700">{s}</span>
                 </div>
               ))}
               {autoAnalysis.suggestions.length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-4">Data penjualan masih kosong. Lakukan transaksi POS dulu.</p>
+                <p className="text-xs text-gray-400 text-center py-4">Data masih kosong — lakukan transaksi POS dulu.</p>
               )}
             </div>
           </div>
 
-          {/* RFM */}
+          {/* Segmentasi */}
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-100 pb-2">
-              <Users className="w-4 h-4 text-emerald-600" /> Segmentasi Pelanggan (RFM)
+              <Users className="w-4 h-4 text-emerald-600" /> Segmentasi Pelanggan
             </h3>
-            <p className="text-xs text-gray-500">Berdasarkan data transaksi POS.</p>
             <div className="space-y-3">
-              {/* Generate RFM from real data */}
               {(() => {
                 const segments = [
-                  { segment: '💎 VIP (Top Spender)', size: Math.max(1, Math.round(ordersData.length * 0.1)), description: 'Pelanggan dengan transaksi tertinggi. Prioritaskan layanan!', actionCode: 'Give loyalty card + free item' },
-                  { segment: '⭐ Regular', size: Math.max(1, Math.round(ordersData.length * 0.3)), description: 'Pelanggan setia yang sering belanja.', actionCode: 'Beri diskon 10% tiap kunjungan ke-5' },
-                  { segment: '📢 At Risk', size: Math.max(1, Math.round(ordersData.length * 0.2)), description: 'Sudah lama tidak bertransaksi.', actionCode: 'Kirim promo reaktivasi via WA' },
-                  { segment: '🆕 New Customer', size: Math.max(1, Math.round(ordersData.length * 0.15)), description: 'Pelanggan baru yang perlu di-retensi.', actionCode: 'Welcome offer: diskon 20% pembelian kedua' },
+                  { segment: '💎 VIP (Top Spender)', size: Math.max(1, Math.round(ordersData.length * 0.1)), action: 'Loyalty card + free item' },
+                  { segment: '⭐ Regular', size: Math.max(1, Math.round(ordersData.length * 0.3)), action: 'Diskon 10% tiap kunjungan ke-5' },
+                  { segment: '📢 At Risk', size: Math.max(1, Math.round(ordersData.length * 0.2)), action: 'Kirim promo reaktivasi via WA' },
+                  { segment: '🆕 New Customer', size: Math.max(1, Math.round(ordersData.length * 0.15)), action: 'Welcome offer: diskon 20%' },
                 ];
                 return segments.map((g, idx) => (
-                  <div key={idx} className="p-3.5 bg-gray-50 border border-gray-150 rounded-xl space-y-1.5 text-xs">
+                  <div key={idx} className="p-3 bg-gray-50 border border-gray-150 rounded-xl text-xs">
                     <div className="flex justify-between items-center font-bold">
                       <span className="text-gray-900">{g.segment}</span>
-                      <span className="font-mono text-emerald-800 bg-white border px-2 py-0.5 rounded text-[10px]">{g.size} member</span>
+                      <span className="font-mono text-emerald-800 px-2 py-0.5 rounded text-[10px]">{g.size} member</span>
                     </div>
-                    <p className="text-gray-500 text-[11px]">{g.description}</p>
-                    <p className="text-[10px] text-indigo-600 font-semibold">🎯 {g.actionCode}</p>
+                    <p className="text-[10px] text-indigo-600 font-semibold mt-1">🎯 {g.action}</p>
                   </div>
                 ));
               })()}
               {ordersData.length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-4">Data pelanggan akan muncul setelah ada transaksi POS.</p>
+                <p className="text-xs text-gray-400 text-center py-4">Data akan muncul setelah ada transaksi POS.</p>
               )}
             </div>
           </div>
@@ -442,28 +440,20 @@ export default function CrmMarketingTab({ calculatedProducts }: CrmMarketingTabP
               <Mail className="w-4 h-4 text-emerald-600" /> Broadcast Promosi
             </h3>
             <div className="space-y-3 text-xs">
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Target Segmen</label>
-                <select value={blastTarget} onChange={(e) => setBlastTarget(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg p-2.5 bg-white">
-                  <option value="Semua">Semua Pelanggan</option>
-                  <option value="VIP (Top Spender)">💎 VIP</option>
-                  <option value="Regular">⭐ Regular</option>
-                  <option value="At Risk">📢 At Risk</option>
-                  <option value="New Customer">🆕 New Customer</option>
-                </select>
-              </div>
-
-              {/* Preview promosi */}
+              <select value={blastTarget} onChange={(e) => setBlastTarget(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg p-2.5 bg-white">
+                <option value="Semua">Semua Pelanggan</option>
+                <option value="VIP">💎 VIP</option>
+                <option value="Regular">⭐ Regular</option>
+                <option value="At Risk">📢 At Risk</option>
+                <option value="New Customer">🆕 New Customer</option>
+              </select>
               <div className="bg-green-50 p-3 rounded-xl border border-green-100 text-[10px] text-green-800">
-                <span className="font-bold block mb-1">📱 Pratinjau Pesan:</span>
+                <span className="font-bold block mb-1">📱 Pratinjau:</span>
                 🔥 PROMO SPESIAL NEAR BAKERY!<br />
-                {autoAnalysis.topProducts.length > 0 
-                  ? `💫 ${autoAnalysis.topProducts[0].name} — our best seller!` 
-                  : '✨ Diskon spesial untuk Anda!'}<br />
+                {autoAnalysis.topProducts.length > 0 ? `💫 ${autoAnalysis.topProducts[0].name} — our best seller!` : '✨ Diskon spesial!'}<br />
                 Kunjungi toko kami sekarang! 🏪
               </div>
-
               <button onClick={handleBlastWhatsApp} disabled={blastSending}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5">
                 {blastSending ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Mengirim...</> : <><Send className="w-3.5 h-3.5" /> Kirim Broadcast WA</>}

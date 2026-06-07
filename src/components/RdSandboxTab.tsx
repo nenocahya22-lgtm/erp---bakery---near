@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BahanBaku } from '../types';
-import { FlaskConical, Plus, Trash2, Sparkles, Sliders, ArrowUpRight } from 'lucide-react';
+import { FlaskConical, Plus, Trash2, Sparkles, Sliders, ArrowUpRight, Scale, FolderOpen, Tag, ChevronRight, Edit2, X, Check, AlertTriangle } from 'lucide-react';
 
 export interface RDExperiment {
   id: string;
@@ -25,15 +25,8 @@ interface RdSandboxTabProps {
 }
 
 export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDeleteRD }: RdSandboxTabProps) {
-  // Format currency helper
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
 
   // State draft Formulation
   const [newRDName, setNewRDName] = useState('');
@@ -41,14 +34,13 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
   const [newRDOverhead, setNewRDOverhead] = useState('10000');
   const [newRDPrice, setNewRDPrice] = useState('22000');
   const [rdIngredients, setRdIngredients] = useState<{ bahanName: string; takaran: number }[]>([]);
-
-  // Selection single ingredient draft
   const [selectedBahanIdx, setSelectedBahanIdx] = useState('0');
   const [addonTakaran, setAddonTakaran] = useState('100');
+  const [selectedExp, setSelectedExp] = useState<string>('');
 
   const getIngredientCost = (bahanName: string, takaran: number) => {
     const found = bahanBaku.find(b => b.nama.toLowerCase().trim() === bahanName.toLowerCase().trim());
-    return found ? takaran * found.hargaSatuan : takaran * 12; // default fallback cost
+    return found ? takaran * found.hargaSatuan : takaran * 12;
   };
 
   const getBahanSatuan = (bahanName: string) => {
@@ -60,7 +52,6 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
     if (bahanBaku.length === 0) return;
     const material = bahanBaku[parseInt(selectedBahanIdx)];
     if (!material) return;
-
     const qty = parseFloat(addonTakaran) || 0;
     if (qty <= 0) return;
 
@@ -77,17 +68,17 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
     setAddonTakaran('100');
   };
 
+  const handleRemoveIngredient = (bahanName: string) => {
+    setRdIngredients(prev => prev.filter(i => i.bahanName !== bahanName));
+  };
+
   const handleCreateRDSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRDName.trim()) return;
     if (rdIngredients.length === 0) {
-      alert('Silakan tambahkan minimal satu bahan baku ke dalam racikan R&D!');
+      alert('Silakan tambahkan minimal satu bahan baku!');
       return;
     }
-
-    const outputPorsi = parseFloat(newRDPortion) || 1;
-    const overheadCost = parseFloat(newRDOverhead) || 0;
-    const testSellPrice = parseFloat(newRDPrice) || 0;
 
     const formattedComponents = rdIngredients.map(ing => {
       const bDetail = bahanBaku.find(b => b.nama === ing.bahanName);
@@ -102,9 +93,9 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
     const newExperiment: RDExperiment = {
       id: `rd-${Date.now()}`,
       projectName: newRDName,
-      targetOutputPorsi: outputPorsi,
-      estOverhead: overheadCost,
-      estHargaJual: testSellPrice,
+      targetOutputPorsi: parseFloat(newRDPortion) || 1,
+      estOverhead: parseFloat(newRDOverhead) || 0,
+      estHargaJual: parseFloat(newRDPrice) || 0,
       components: formattedComponents,
       dateCreated: new Date().toISOString().substring(0, 10)
     };
@@ -115,227 +106,261 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
     setNewRDOverhead('10000');
     setNewRDPrice('22000');
     setRdIngredients([]);
+    setSelectedExp(newExperiment.id);
   };
 
+  const activeExp = rdExperiments.find(e => e.id === selectedExp);
+
   return (
-    <div id="rd-sandbox-tab-container" className="space-y-6">
-      
-      {/* HEADER SECTION */}
-      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <FlaskConical className="w-6 h-6 text-emerald-600" />
-            Litbang (R&D) & Sandbox Formulasi Menu Baru
-          </h2>
-          <p className="text-xs text-gray-500 mt-1">
-            Lekas simulasikan resep baru sebelum dirilis resmi. Dapatkan HPP instan, persentase laba kotor, dan kelayakan finansial.
-          </p>
-        </div>
-        <div className="text-right text-xs bg-emerald-50 text-emerald-800 border border-emerald-100 font-bold px-3 py-1.5 rounded-xl font-mono">
-          {rdExperiments.length} Proyek Trial Terdaftar
-        </div>
+    <div className="space-y-6">
+      {/* HEADER */}
+      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100">
+        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+          <FlaskConical className="w-6 h-6 text-emerald-600" /> R&D Sandbox — Formulasi & Eksperimen
+        </h2>
+        <p className="text-xs text-gray-500 mt-1">
+          Simulasi resep eksperimen baru sebelum rilis resmi. Struktur sama seperti modul Resep — dengan kolom: Nama, Bahan, Takaran, Satuan, Harga Satuan, Subtotal.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* FORM Racikan */}
+        {/* LEFT: Form */}
         <div className="lg:col-span-5 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
-          <div className="pb-2 border-b border-gray-50">
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
-              <Plus className="w-4.5 h-4.5 text-emerald-600" />
-              Rancang Produk Percobaan
-            </h3>
-            <p className="text-[11px] text-gray-400 mt-0.5">Atur takaran, estimasi overhead dan perkiraan target harga jual porsi baru.</p>
-          </div>
+          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-50 pb-2">
+            <Plus className="w-4 h-4 text-emerald-600" /> Racik Eksperimen Baru
+          </h3>
 
-          <form onSubmit={handleCreateRDSubmit} className="space-y-4 text-xs font-semibold">
+          <form onSubmit={handleCreateRDSubmit} className="space-y-3 text-xs">
             <div>
-              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Nama Produk Percobaan</label>
-              <input 
-                type="text"
-                required
-                placeholder="Contoh: Roti Sourdough Charcoal Premium V1"
-                value={newRDName}
+              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Nama Proyek</label>
+              <input type="text" required placeholder="Roti Sourdough V2" value={newRDName}
                 onChange={(e) => setNewRDName(e.target.value)}
-                className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-xs"
-              />
+                className="w-full border border-gray-200 rounded-lg p-2.5 text-xs" />
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className="block text-[9px] uppercase font-bold text-gray-400 mb-1">Target Porsi</label>
-                <input 
-                  type="number"
-                  required
-                  value={newRDPortion}
-                  onChange={(e) => setNewRDPortion(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-mono font-bold"
-                />
+                <input type="number" required value={newRDPortion} onChange={(e) => setNewRDPortion(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono font-bold" />
               </div>
-
               <div>
-                <label className="block text-[9px] uppercase font-bold text-gray-400 mb-1">Est. Overhead</label>
-                <input 
-                  type="number"
-                  required
-                  value={newRDOverhead}
-                  onChange={(e) => setNewRDOverhead(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-mono font-bold"
-                />
+                <label className="block text-[9px] uppercase font-bold text-gray-400 mb-1">Overhead (Rp)</label>
+                <input type="number" required value={newRDOverhead} onChange={(e) => setNewRDOverhead(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono" />
               </div>
-
               <div>
-                <label className="block text-[9px] uppercase font-bold text-gray-400 mb-1">Est. Jual /Porsi</label>
-                <input 
-                  type="number"
-                  required
-                  value={newRDPrice}
-                  onChange={(e) => setNewRDPrice(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-mono font-bold"
-                />
+                <label className="block text-[9px] uppercase font-bold text-gray-400 mb-1">Harga Jual</label>
+                <input type="number" required value={newRDPrice} onChange={(e) => setNewRDPrice(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono" />
               </div>
             </div>
 
-            {/* Timbanng Bahan */}
-            <div className="bg-slate-50 p-3.5 rounded-xl border border-gray-150 space-y-3">
-              <span className="text-[10px] uppercase font-bold text-gray-500 block">Timbang Komposisi Bahan</span>
+            {/* Table-like ingredients input */}
+            <div className="bg-slate-50 rounded-xl border border-gray-150 p-3 space-y-2">
+              <span className="text-[10px] uppercase font-bold text-gray-500 block">Daftar Bahan (sama seperti modul Resep)</span>
               
               <div className="flex gap-2">
-                <select 
-                  value={selectedBahanIdx}
-                  onChange={(e) => setSelectedBahanIdx(e.target.value)}
-                  className="flex-1 px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold"
-                >
-                  {bahanBaku.length === 0 ? (
-                    <option value="">Database bahan kosong</option>
-                  ) : (
-                    bahanBaku.map((b, idx) => (
-                      <option key={b.nama} value={idx}>{b.nama} ({formatCurrency(b.hargaSatuan)}/{b.satuan})</option>
-                    ))
-                  )}
+                <select value={selectedBahanIdx} onChange={(e) => setSelectedBahanIdx(e.target.value)}
+                  className="flex-1 border border-gray-200 rounded-lg p-2 text-xs bg-white">
+                  {bahanBaku.map((b, idx) => (
+                    <option key={b.nama} value={idx}>{b.nama} ({b.satuan})</option>
+                  ))}
                 </select>
-
-                <input 
-                  type="number" 
-                  value={addonTakaran} 
-                  onChange={(e) => setAddonTakaran(e.target.value)}
-                  className="w-20 px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-mono font-bold text-center" 
-                  placeholder="Qty"
-                />
-
-                <button
-                  type="button"
-                  onClick={handleAddIngredientDraft}
-                  className="px-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-xs font-bold transition-all cursor-pointer flex items-center"
-                >
+                <input type="number" value={addonTakaran} onChange={(e) => setAddonTakaran(e.target.value)}
+                  className="w-20 border border-gray-200 rounded-lg p-2 text-xs font-mono text-center" placeholder="Takaran" />
+                <button type="button" onClick={handleAddIngredientDraft}
+                  className="px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer">
                   <Plus className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Added draft lists */}
+              {/* Ingredients table */}
               {rdIngredients.length > 0 ? (
-                <div className="bg-white border border-gray-150 rounded-lg overflow-hidden text-[10px] font-medium text-gray-600 divide-y divide-gray-100">
-                  <div className="bg-gray-50/50 p-2 font-bold text-gray-400 flex justify-between">
-                    <span>Nama Komponen</span>
-                    <span>Takaran & Est Biaya</span>
-                  </div>
-                  {rdIngredients.map((ing, idx) => {
-                    const cost = getIngredientCost(ing.bahanName, ing.takaran);
-                    return (
-                      <div key={idx} className="p-2 flex justify-between font-sans">
-                        <span className="font-semibold text-gray-950">{ing.bahanName}</span>
-                        <span className="font-mono text-gray-500">
-                          {ing.takaran} {getBahanSatuan(ing.bahanName)} / {formatCurrency(cost)}
-                        </span>
-                      </div>
-                    );
-                  })}
+                <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                  <table className="w-full text-left text-[10px]">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-500 uppercase font-bold">
+                        <th className="p-2">Nama Bahan</th>
+                        <th className="p-2 text-right">Takaran</th>
+                        <th className="p-2 text-right">Harga Satuan</th>
+                        <th className="p-2 text-right">Subtotal</th>
+                        <th className="p-2 text-center"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {rdIngredients.map((ing, idx) => {
+                        const cost = getIngredientCost(ing.bahanName, ing.takaran);
+                        const satuan = getBahanSatuan(ing.bahanName);
+                        const hargaSatuan = bahanBaku.find(b => b.nama === ing.bahanName)?.hargaSatuan || 0;
+                        return (
+                          <tr key={idx} className="hover:bg-gray-50">
+                            <td className="p-2 font-semibold text-gray-900">{ing.bahanName}</td>
+                            <td className="p-2 text-right font-mono">{ing.takaran} {satuan}</td>
+                            <td className="p-2 text-right font-mono text-gray-500">{formatCurrency(hargaSatuan)}/{satuan}</td>
+                            <td className="p-2 text-right font-mono font-bold text-emerald-700">{formatCurrency(cost)}</td>
+                            <td className="p-2 text-center">
+                              <button type="button" onClick={() => handleRemoveIngredient(ing.bahanName)}
+                                className="text-gray-400 hover:text-red-600 cursor-pointer">
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      <tr className="bg-emerald-50 font-bold">
+                        <td colSpan={3} className="p-2 text-right text-emerald-800">Total Bahan:</td>
+                        <td className="p-2 text-right font-mono text-emerald-800">
+                          {formatCurrency(rdIngredients.reduce((s, i) => s + getIngredientCost(i.bahanName, i.takaran), 0))}
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               ) : (
-                <p className="text-[10px] text-gray-400 italic text-center py-2">Belum ada komposisi adonan diracik.</p>
+                <p className="text-[10px] text-gray-400 italic text-center py-3">Belum ada bahan — tambahkan dari form di atas.</p>
               )}
             </div>
 
-            <button
-              type="submit"
-              className="w-full py-2.5 bg-emerald-605 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs transition-all tracking-wider uppercase cursor-pointer"
-            >
-              Simpan & Rekon Margin Percobaan
+            <button type="submit"
+              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition cursor-pointer">
+              <FlaskConical className="w-3.5 h-3.5 inline mr-1" /> Simpan Eksperimen
             </button>
           </form>
         </div>
 
-        {/* ACTIVE TRIAL PROJECTS */}
-        <div className="lg:col-span-7 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
-          <div className="pb-2 border-b border-gray-50">
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles className="w-4.5 h-4.5 text-emerald-600" />
-              Arsip Litbang & Portofolio Formulasi Eksperimental
-            </h3>
+        {/* RIGHT: Daftar & Detail Eksperimen */}
+        <div className="lg:col-span-7 space-y-4">
+          {/* Daftar Eksperimen */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-gray-100">
+              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+                <FolderOpen className="w-3.5 h-3.5 text-emerald-600" /> Daftar Eksperimen ({rdExperiments.length})
+              </h3>
+            </div>
+            {rdExperiments.length === 0 ? (
+              <div className="p-8 text-center">
+                <FlaskConical className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                <p className="text-xs text-gray-500 font-semibold">Belum ada eksperimen</p>
+                <p className="text-[10px] text-gray-400 mt-1">Buat eksperimen baru di panel samping.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100 max-h-[300px] overflow-y-auto">
+                {rdExperiments.map(exp => {
+                  const totalMatCost = exp.components.reduce((acc, curr) => acc + (curr.takaran * curr.unitPrice), 0);
+                  const totalHpp = totalMatCost + exp.estOverhead;
+                  const hppPerUnit = totalHpp / exp.targetOutputPorsi;
+                  const profitPerUnit = exp.estHargaJual - hppPerUnit;
+                  const margin = exp.estHargaJual > 0 ? (profitPerUnit / exp.estHargaJual) * 100 : 0;
+                  const isSelected = exp.id === selectedExp;
+
+                  return (
+                    <div key={exp.id}
+                      onClick={() => setSelectedExp(exp.id)}
+                      className={`p-4 cursor-pointer transition ${
+                        isSelected ? 'bg-emerald-50/50 border-l-2 border-emerald-500' : 'hover:bg-gray-50 border-l-2 border-transparent'
+                      }`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-gray-900">{exp.projectName}</span>
+                            <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full font-mono">{exp.id.slice(-6)}</span>
+                          </div>
+                          <div className="flex items-center gap-3 mt-1 text-[10px] text-gray-500">
+                            <span>{exp.components.length} bahan</span>
+                            <span>•</span>
+                            <span>HPP: {formatCurrency(hppPerUnit)}/porsi</span>
+                            <span>•</span>
+                            <span className={margin >= 30 ? 'text-emerald-700 font-bold' : 'text-amber-700'}>{margin.toFixed(1)}% margin</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-bold text-gray-900">{formatCurrency(exp.estHargaJual)}</span>
+                          <ChevronRight className={`w-4 h-4 text-gray-400 transition ${isSelected ? 'text-emerald-600' : ''}`} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          {rdExperiments.length === 0 ? (
-            <div className="p-12 text-center border border-dashed border-gray-150 rounded-xl bg-gray-50/50">
-              <p className="text-xs text-gray-400 font-bold italic">Belum ada portofolio R&D terdaftar saat ini.</p>
-            </div>
-          ) : (
-            <div className="space-y-4 max-h-[450px] overflow-y-auto pr-1 text-xs">
-              {rdExperiments.map((exp) => {
-                const totalMatCost = exp.components.reduce((acc, curr) => acc + (curr.takaran * curr.unitPrice), 0);
-                const totalHppExp = totalMatCost + exp.estOverhead;
-                const hppPerUnit = totalHppExp / exp.targetOutputPorsi;
-                const profitPerUnit = exp.estHargaJual - hppPerUnit;
-                const marginPercent = exp.estHargaJual > 0 ? (profitPerUnit / exp.estHargaJual) * 100 : 0;
+          {/* Detail Eksperimen Terpilih */}
+          {activeExp && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+              <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">{activeExp.projectName}</h3>
+                  <p className="text-[10px] text-gray-500">Dibuat: {activeExp.dateCreated}</p>
+                </div>
+                <button onClick={() => { if (window.confirm(`Hapus "${activeExp.projectName}"?`)) onDeleteRD(activeExp.id); }}
+                  className="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 cursor-pointer">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
 
-                return (
-                  <div key={exp.id} className="bg-slate-50 p-4 rounded-xl border border-gray-150 space-y-3 relative">
-                    <button 
-                      onClick={() => onDeleteRD(exp.id)}
-                      className="absolute top-4 right-4 p-1 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-colors cursor-pointer"
-                      title="Hapus Proyek"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+              <div className="p-4 space-y-3">
+                {/* Summary */}
+                {(() => {
+                  const totalMatCost = activeExp.components.reduce((acc, curr) => acc + (curr.takaran * curr.unitPrice), 0);
+                  const totalHpp = totalMatCost + activeExp.estOverhead;
+                  const hppPerUnit = totalHpp / activeExp.targetOutputPorsi;
+                  const profitPerUnit = activeExp.estHargaJual - hppPerUnit;
+                  const margin = activeExp.estHargaJual > 0 ? (profitPerUnit / activeExp.estHargaJual) * 100 : 0;
 
-                    <div>
-                      <h4 className="font-bold text-gray-900 pr-8">{exp.projectName}</h4>
-                      <span className="text-[9px] text-gray-400 font-semibold font-mono tracking-wider">LAB REF: {exp.id} | Tanggal: {exp.dateCreated}</span>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-3 text-center bg-white border border-gray-150 rounded-xl p-3 font-mono font-bold leading-relaxed text-xs">
-                      <div>
-                        <span className="block text-[8px] text-gray-400 uppercase font-bold tracking-wider">HPP / Unit</span>
-                        <span className="text-gray-900">{formatCurrency(hppPerUnit)}</span>
+                  return (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                      <div className="bg-gray-50 p-2.5 rounded-lg text-center">
+                        <span className="text-[9px] text-gray-500 block uppercase font-bold">Yield</span>
+                        <span className="font-bold font-mono text-gray-900">{activeExp.targetOutputPorsi} porsi</span>
                       </div>
-                      <div>
-                        <span className="block text-[8px] text-gray-400 uppercase font-bold tracking-wider font-sans">Harga Jual</span>
-                        <span className="text-emerald-700">{formatCurrency(exp.estHargaJual)}</span>
+                      <div className="bg-gray-50 p-2.5 rounded-lg text-center">
+                        <span className="text-[9px] text-gray-500 block uppercase font-bold">HPP/Porsi</span>
+                        <span className="font-bold font-mono text-emerald-700">{formatCurrency(hppPerUnit)}</span>
                       </div>
-                      <div>
-                        <span className="block text-[8px] text-gray-400 uppercase font-bold tracking-wider">Margin Laba</span>
-                        <span className={marginPercent >= 40 ? 'text-emerald-600' : 'text-amber-600'}>{marginPercent.toFixed(1)}%</span>
+                      <div className="bg-gray-50 p-2.5 rounded-lg text-center">
+                        <span className="text-[9px] text-gray-500 block uppercase font-bold">Harga Jual</span>
+                        <span className="font-bold font-mono text-blue-700">{formatCurrency(activeExp.estHargaJual)}</span>
                       </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Bahan Karbon Formulasi:</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {exp.components.map((c, i) => (
-                          <span key={i} className="text-[9px] bg-white border border-gray-200 text-gray-700 px-2 py-0.5 rounded font-mono font-bold">
-                            {c.bahanName}: {c.takaran} {c.satuan}
-                          </span>
-                        ))}
+                      <div className="bg-gray-50 p-2.5 rounded-lg text-center">
+                        <span className="text-[9px] text-gray-500 block uppercase font-bold">Margin</span>
+                        <span className={`font-bold font-mono ${margin >= 30 ? 'text-emerald-700' : 'text-amber-700'}`}>{margin.toFixed(1)}%</span>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })()}
+
+                {/* Tabel Bahan */}
+                <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Komposisi Bahan</h4>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-gray-100 text-[10px] uppercase font-bold text-gray-500">
+                        <th className="px-3 py-2">Nama Bahan</th>
+                        <th className="px-3 py-2 text-right">Takaran</th>
+                        <th className="px-3 py-2 text-right">Harga Satuan</th>
+                        <th className="px-3 py-2 text-right">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {activeExp.components.map((c, i) => (
+                        <tr key={i} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 font-medium text-gray-900">{c.bahanName}</td>
+                          <td className="px-3 py-2 text-right font-mono">{c.takaran} {c.satuan}</td>
+                          <td className="px-3 py-2 text-right font-mono text-gray-500">{formatCurrency(c.unitPrice)}/{c.satuan}</td>
+                          <td className="px-3 py-2 text-right font-mono font-bold text-emerald-700">{formatCurrency(c.takaran * c.unitPrice)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
         </div>
-
       </div>
-
     </div>
   );
 }
