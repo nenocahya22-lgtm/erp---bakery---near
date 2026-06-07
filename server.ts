@@ -73,7 +73,141 @@ app.post('/api/marketing/consult', async (req, res) => {
   }
 });
 
-// AI Automated Dashboard Marketing Assistant API Route
+// ─── AI FULL SYSTEM ANALYSIS — UJUNG TOMBAK & OTAK MARKETING ───
+// Endpoint ini menerima SEMUA data sistem dan memberikan rekomendasi
+// realistis, actionable, berbasis data nyata dari seluruh modul ERP.
+app.post('/api/marketing/full-analysis', async (req, res) => {
+  try {
+    const {
+      products,        // calculatedProducts (full calculation results)
+      bahanBaku,       // all raw materials
+      productHpp,      // product HPP records
+      detailResep,     // recipe details
+      wasteLogs,       // waste records
+      cabangList,      // branch list
+      suratOrders,     // delivery orders
+      revenueData,     // revenue tracker
+      ordersData,      // POS orders
+      analysisType,    // 'full' | 'quick' | 'crisis'
+      userQuery,       // optional user question
+    } = req.body;
+
+    const client = getAiClient();
+
+    // Hitung statistik agregat untuk konteks AI
+    const wasteTotal = (wasteLogs || []).reduce((s: number, w: any) => s + (w.lossValue || 0), 0);
+    const wasteByLocation: Record<string, number> = {};
+    (wasteLogs || []).forEach((w: any) => {
+      const loc = w.location || 'Unknown';
+      wasteByLocation[loc] = (wasteByLocation[loc] || 0) + (w.lossValue || 0);
+    });
+
+    const totalRevenue = (revenueData?.transactions || []).reduce((s: number, t: any) => s + (t.amount || 0), 0);
+    const totalOrders = (revenueData?.transactions || []).length;
+
+    const lowStockBahan = (bahanBaku || []).filter((b: any) => b.isiKemasan < 100).map((b: any) => b.nama);
+    const lowMarginProducts = (products || []).filter((p: any) => p.marginPersen < 20);
+    const highMarginProducts = (products || []).filter((p: any) => p.marginPersen > 40);
+    const pendingSO = (suratOrders || []).filter((s: any) => s.status === 'minta').length;
+
+    // Cari bahan paling mahal per produk (untuk rekomendasi efisiensi)
+    const productCostDetails = (products || []).map((p: any) => {
+      const topCostIngredients = (p.bahanList || [])
+        .sort((a: any, b: any) => b.totalBiayaBahan - a.totalBiayaBahan)
+        .slice(0, 3);
+      return {
+        nama: p.namaProduk,
+        hpp: p.hppPerPorsi,
+        hargaJual: p.hargaJualPerPorsi,
+        margin: p.marginPersen,
+        topIngredients: topCostIngredients,
+      };
+    });
+
+    const prompt = `
+      Anda adalah **CHIEF MARKETING OFFICER (CMO)** dan **KONSULTAN OPERASIONAL** untuk **Near Bakery & Co.**, sebuah bakery premium di Indonesia.
+
+      Anda adalah UJUNG TOMBAK dan OTAK pemasaran perusahaan. Anda membaca SEMUA DATA dari seluruh sistem ERP secara real-time dan memberikan rekomendasi yang REALISTIS, SPESIFIK, dan SIAP EKSEKUSI — seperti marketing manager sungguhan yang duduk di kantor pusat setiap hari.
+
+      === DATA SISTEM LENGKAP (REAL-TIME) ===
+
+      📊 **PRODUK & MARGIN:**
+      ${JSON.stringify(productCostDetails, null, 2)}
+
+      📦 **BAHAN BAKU (STOK PUSAT):**
+      ${JSON.stringify((bahanBaku || []).map((b: any) => ({ nama: b.nama, stok: b.isiKemasan, satuan: b.satuan, hargaSatuan: b.hargaSatuan })), null, 2)}
+
+      🗑️ **TOTAL WASTE:** Rp ${wasteTotal.toLocaleString('id-ID')}
+      **Rincian Waste per Lokasi:**
+      ${JSON.stringify(wasteByLocation, null, 2)}
+      **Data Waste Lengkap:** ${JSON.stringify((wasteLogs || []).slice(0, 10), null, 2)}
+
+      💰 **TOTAL REVENUE:** Rp ${totalRevenue.toLocaleString('id-ID')}
+      **TOTAL TRANSAKSI:** ${totalOrders}
+
+      🏪 **CABANG AKTIF:** ${(cabangList || []).filter((c: any) => c.isActive).length}
+      🚚 **SO PENDING:** ${pendingSO}
+
+      ⚠️ **BAHAN STOK RENDAH:** ${lowStockBahan.length > 0 ? lowStockBahan.join(', ') : 'Tidak ada'}
+      ⚠️ **PRODUK MARGIN RENDAH (< 20%):** ${lowMarginProducts.length}
+      ✅ **PRODUK MARGIN TINGGI (> 40%):** ${highMarginProducts.length}
+
+      **DATA DETAIL RESEP:**
+      ${JSON.stringify((detailResep || []).slice(0, 30), null, 2)}
+
+      **DATA ALL WASTE LOGS (terbaru):**
+      ${JSON.stringify((wasteLogs || []).slice(0, 15), null, 2)}
+
+      **PERTANYAAN / KONTEKS KHUSUS:**
+      ${userQuery || '(Tidak ada — berikan analisis lengkap berdasarkan data)'}
+
+      === TUGAS ANDA ===
+
+      Berdasarkan DATA LENGKAP DI ATAS, berikan analisis dan rekomendasi dalam format MARKDOWN yang TERSTRUKTUR, SIAP PAKAI:
+
+      ## 📊 1. DIAGNOSIS SISTEM — Deteksi Masalah
+      - Produk mana yang marginnya bermasalah? Sebutkan nama produk spesifik, HPP, harga jual, margin %.
+      - Waste tertinggi ada di mana? Berapa nilai yang hilang? Apakah ada pola?
+      - Stok bahan apa yang kritis? Apa dampaknya ke produksi?
+      - Apakah ada permintaan cabang pending yang perlu segera disetujui?
+
+      ## 🛠️ 2. REKOMENDASI OPERASIONAL & EFISIENSI
+      - **Efisiensi Resep:** Untuk produk margin rendah, sebutkan bahan baku TERMAHAL di resepnya dan rekomendasi pengurangan takaran secara realistis (misal: "Roti Coklat: kurangi cokelat dari 50gr ke 40gr — turunkan HPP Rp 500 tanpa mengubah rasa"). Berikan ANGKA SPESIFIK.
+      - **Manajemen Waste:** Saran konkret mengurangi waste di lokasi dengan kerugian tertinggi.
+      - **Supply Chain:** Bahan apa yang perlu re-order? Supplier mana?
+
+      ## 🎯 3. STRATEGI HARGA & PROMOSI
+      - Produk margin tinggi (>40%) yang BISA diberi diskon untuk boosting penjualan. Hitung diskon maksimal agar margin tetap >20%.
+      - Produk margin rendah yang HARUS naik harga. Berapa kenaikannya?
+      - **Rekomendasi Bundling:** Produk margin tinggi + margin rendah yang bisa dijual sebagai paket.
+
+      ## 📱 4. KAMPANYE PEMASARAN SIAP PAKAI
+      - **Draf Broadcast WhatsApp (300 karakter, bahasa Indonesia informal-natural, siap copy-paste):**
+      - **Caption Instagram (100 karakter + 3 hashtag):**
+      - **Promo Ojol / Delivery (GoFood/Grab):**
+
+      ## 📅 5. RENCANA AKSI 7 HARI
+      Langkah konkret hari per hari (Hari 1 sampai Hari 7) yang harus dilakukan owner/manager.
+
+      ---
+      **GAYA BAHASA:** Bahasa Indonesia profesional, hangat, meyakinkan, seperti sedang bicara dengan pemilik bakery secara langsung. Gunakan data dan angka dari laporan di atas untuk membuat argumen yang kuat. JANGAN memberi saran umum — setip rekomendasi harus spesifik dengan angka.
+
+      **Jika ada data yang kosong (0 transaksi, 0 waste, dll), beri tahu dengan sopan dan tetap berikan rekomendasi untuk memulai.**
+    `;
+
+    const response = await client.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: prompt,
+    });
+
+    res.json({ text: response.text });
+  } catch (error: any) {
+    console.error('Gemini full analysis error:', error);
+    res.status(500).json({ error: error.message || 'Error communicating with AI services' });
+  }
+});
+
+// AI Automated Dashboard Marketing Assistant API Route (enhanced)
 app.post('/api/marketing/assistant-auto', async (req, res) => {
   try {
     const { products, summaryStats } = req.body;

@@ -1249,7 +1249,15 @@ export default function App() {
               />
             )}
             {activeTab === 'erp_crm' && (
-              <CrmMarketingTab calculatedProducts={calculatedProducts} />
+              <CrmMarketingTab 
+                calculatedProducts={calculatedProducts}
+                bahanBaku={bahanBaku}
+                productHpp={productHpp}
+                detailResep={detailResep}
+                wasteLogs={wasteLogs}
+                cabangList={cabangList}
+                suratOrders={suratOrders}
+              />
             )}
             {activeTab === 'erp_budget' && (
               <BudgetTab
