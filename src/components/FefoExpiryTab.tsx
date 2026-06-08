@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ShieldAlert, Calendar, AlertTriangle, Clock, Package, Trash2, Plus, Printer, RefreshCw, AlertOctagon, Database, Zap, CheckCircle2, Truck } from 'lucide-react';
-import { BahanBaku, ProductHpp, WasteLog, Cabang, SuratOrder } from '../types';
+import { BahanBaku, ProductHpp, WasteLog, Cabang, SuratOrder, SATUAN_OPTIONS } from '../types';
 
 interface BatchLog {
   id: string;
@@ -40,6 +40,7 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog, ca
   const [formBahan, setFormBahan] = useState('');
   const [formBatch, setFormBatch] = useState('');
   const [formQty, setFormQty] = useState('');
+  const [formSatuan, setFormSatuan] = useState('gr');
   const [formSupplier, setFormSupplier] = useState('');
   const [formExpiry, setFormExpiry] = useState('');
   const [safetyStock, setSafetyStock] = useState<Record<string, number>>(() => {
@@ -104,19 +105,18 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog, ca
     e.preventDefault();
     if (!formBahan || !formBatch || !formExpiry) return;
     const qty = parseFloat(formQty) || 0;
-    const bahanInfo = bahanBaku.find(b => b.nama === formBahan);
-    const newBatch: BatchLog = {
-      id: `batch-${Date.now()}`,
-      batchNo: formBatch,
-      bahanNama: formBahan,
-      qty: qty,
-      satuan: bahanInfo?.satuan || 'gr',
-      supplier: formSupplier,
-      expiryDate: formExpiry,
-      dateAdded: new Date().toISOString().substring(0, 10),
-    };
+    const bahanInfo = bahanBaku.find(b => b.nama === formBahan);      const newBatch: BatchLog = {
+        id: `batch-${Date.now()}`,
+        batchNo: formBatch,
+        bahanNama: formBahan,
+        qty: qty,
+        satuan: formSatuan,
+        supplier: formSupplier,
+        expiryDate: formExpiry,
+        dateAdded: new Date().toISOString().substring(0, 10),
+      };
     setBatches(prev => [newBatch, ...prev]);
-    setFormBatch(''); setFormQty(''); setFormSupplier(''); setFormExpiry('');
+    setFormBatch(''); setFormQty(''); setFormSatuan('gr'); setFormSupplier(''); setFormExpiry('');
     setShowForm(false);
   };
 
@@ -342,17 +342,27 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog, ca
           {showForm && (
             <form onSubmit={handleAddBatch} className="p-4 bg-emerald-50 border-b border-emerald-100 space-y-3">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                <select required value={formBahan} onChange={(e) => setFormBahan(e.target.value)}
+                <select required value={formBahan} onChange={(e) => {
+                  setFormBahan(e.target.value);
+                  const b = bahanBaku.find(x => x.nama === e.target.value);
+                  if (b) setFormSatuan(b.satuan);
+                }}
                   className="border border-gray-200 rounded-lg p-2 bg-white">
                   <option value="">-- Bahan --</option>
-                  {bahanBaku.map(b => <option key={b.nama} value={b.nama}>{b.nama}</option>)}
+                  {bahanBaku.map(b => <option key={b.nama} value={b.nama}>{b.nama} ({b.satuan})</option>)}
                 </select>
                 <input type="text" required placeholder="No. Batch" value={formBatch}
                   onChange={(e) => setFormBatch(e.target.value)}
                   className="border border-gray-200 rounded-lg p-2" />
-                <input type="number" required min="1" placeholder="Qty" value={formQty}
-                  onChange={(e) => setFormQty(e.target.value)}
-                  className="border border-gray-200 rounded-lg p-2 font-mono" />
+                <div className="flex items-center gap-1">
+                  <input type="number" required min="1" placeholder="Qty" value={formQty}
+                    onChange={(e) => setFormQty(e.target.value)}
+                    className="flex-1 border border-gray-200 rounded-lg p-2 font-mono" />
+                  <select value={formSatuan} onChange={e => setFormSatuan(e.target.value)}
+                    className="border border-gray-200 rounded-lg p-2 font-bold bg-white min-w-[60px] text-center">
+                    {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
                 <input type="date" required value={formExpiry}
                   onChange={(e) => setFormExpiry(e.target.value)}
                   className="border border-gray-200 rounded-lg p-2" />

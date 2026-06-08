@@ -1394,11 +1394,14 @@ export default function DataPusatTab({
                         </td>
                         <td className="px-4 py-3 font-semibold text-gray-900">{so.cabangNama}</td>
                         <td className="px-4 py-3">
-                          {so.items.map((item, idx) => (
-                            <span key={idx} className="inline-block bg-gray-100 rounded px-1.5 py-0.5 mr-1 mb-1 text-[10px]">
-                              {item.bahanNama}: <strong>{item.qty}</strong>
-                            </span>
-                          ))}
+                          {so.items.map((item, idx) => {
+                const satuan = bahanBaku.find(b => b.nama === item.bahanNama)?.satuan || 'pcs';
+                return (
+                  <span key={idx} className="inline-block bg-gray-100 rounded px-1.5 py-0.5 mr-1 mb-1 text-[10px]">
+                    {item.bahanNama}: <strong>{item.qty} {satuan}</strong>
+                  </span>
+                );
+              })}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${

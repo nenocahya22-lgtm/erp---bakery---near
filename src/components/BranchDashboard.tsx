@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cabang, BahanBaku, SuratOrder, WasteLog, CalculationResult, DetailResep, ProductHpp, BranchStock, BranchTransaction } from '../types';
+import { Cabang, BahanBaku, SuratOrder, WasteLog, CalculationResult, DetailResep, ProductHpp, BranchStock, BranchTransaction, SATUAN_OPTIONS } from '../types';
 import {
   ShoppingCart, Package, ClipboardList, Trash2, TrendingUp,
   Plus, X, Truck, LogOut, Building2, AlertTriangle, BarChart3, ClipboardCheck,
@@ -52,6 +52,7 @@ export default function BranchDashboard({
   // ─── WASTE STATE ───
   const [wasteBahan, setWasteBahan] = useState('');
   const [wasteQty, setWasteQty] = useState('');
+  const [wasteSatuan, setWasteSatuan] = useState('gr');
   const [wasteAlasan, setWasteAlasan] = useState('');
 
   // ─── WORK ORDER STATE ───
@@ -173,15 +174,16 @@ export default function BranchDashboard({
       id: `waste-${Date.now()}`,
       bahanNama: wasteBahan,
       qtyWasted: qty,
-      satuan: bahan?.satuan || 'kg',
+      satuan: wasteSatuan,
       lossValue: qty * (bahan?.hargaSatuan || 0),
       location: `Cabang ${cabang.nama}` as any,
       reason: wasteAlasan || 'Tidak ada alasan',
       dateLogged: new Date().toISOString(),
     }, cabang.id);
-    showLocalToast(`Waste ${wasteBahan} ${qty} dicatat!`, 'success');
+    showLocalToast(`Waste ${wasteBahan} ${qty} ${wasteSatuan} dicatat!`, 'success');
     setWasteBahan('');
     setWasteQty('');
+    setWasteSatuan('gr');
     setWasteAlasan('');
   };
 
@@ -317,7 +319,7 @@ export default function BranchDashboard({
                   return (
                     <div key={b.nama} className="flex items-center justify-between p-2.5 border border-gray-100 rounded-xl">
                       <span className="text-xs font-medium text-gray-700">{b.nama}</span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <input type="number" min="0" step="0.1" placeholder="0"
                           value={item?.qty || ''}
                           onChange={e => {
@@ -332,7 +334,7 @@ export default function BranchDashboard({
                             }
                           }}
                           className="w-20 border border-gray-200 rounded-lg p-1.5 text-xs text-right font-mono" />
-                        <span className="text-[10px] text-gray-400 w-6">{b.satuan}</span>
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-1 rounded-md min-w-[36px] text-center">{b.satuan}</span>
                       </div>
                     </div>
                   );
@@ -410,17 +412,27 @@ export default function BranchDashboard({
               <div className="space-y-3">
                 <div>
                   <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Bahan</label>
-                  <select value={wasteBahan} onChange={e => setWasteBahan(e.target.value)}
+                  <select value={wasteBahan} onChange={e => {
+                    setWasteBahan(e.target.value);
+                    const b = bahanBaku.find(x => x.nama === e.target.value);
+                    if (b) setWasteSatuan(b.satuan);
+                  }}
                     className="w-full text-xs border border-gray-200 rounded-xl p-2.5">
                     <option value="">-- Pilih Bahan --</option>
-                    {bahanBaku.map(b => <option key={b.nama} value={b.nama}>{b.nama}</option>)}
+                    {bahanBaku.map(b => <option key={b.nama} value={b.nama}>{b.nama} ({b.satuan})</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Jumlah (Qty)</label>
-                  <input type="number" min="0" step="0.1" placeholder="0"
-                    value={wasteQty} onChange={e => setWasteQty(e.target.value)}
-                    className="w-full text-xs border border-gray-200 rounded-xl p-2.5" />
+                  <div className="flex items-center gap-1">
+                    <input type="number" min="0" step="0.1" placeholder="0"
+                      value={wasteQty} onChange={e => setWasteQty(e.target.value)}
+                      className="flex-1 text-xs border border-gray-200 rounded-xl p-2.5" />
+                    <select value={wasteSatuan} onChange={e => setWasteSatuan(e.target.value)}
+                      className="text-xs border border-gray-200 rounded-xl p-2.5 font-bold bg-white min-w-[60px]">
+                      {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Alasan</label>

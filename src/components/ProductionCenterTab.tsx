@@ -4,7 +4,7 @@ import {
   Plus, X, Scale, Package, AlertTriangle, CheckCircle2, Thermometer,
   Clock, ChevronRight, Flame, Percent
 } from 'lucide-react';
-import { ProductHpp, DetailResep, CalculationResult, BahanBaku, ProductionCalendarEntry } from '../types';
+import { ProductHpp, DetailResep, CalculationResult, BahanBaku, ProductionCalendarEntry, SATUAN_OPTIONS } from '../types';
 
 interface ProductionCenterTabProps {
   productHpp: ProductHpp[];
@@ -147,6 +147,7 @@ export default function ProductionCenterTab({
   const [blStart, setBlStart] = useState(new Date().toTimeString().substring(0, 5));
   const [blEnd, setBlEnd] = useState('');
   const [blNotes, setBlNotes] = useState('');
+  const [blSatuan, setBlSatuan] = useState('pcs');
 
   const handleAddBakingLog = (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,6 +157,7 @@ export default function ProductionCenterTab({
       date: new Date().toISOString().substring(0, 10),
       productName: blProduct,
       batchQty: blBatch,
+      satuan: blSatuan,
       doughTemp: parseFloat(blDoughTemp) || 0,
       ovenTemp: parseFloat(blOvenTemp) || 0,
       startTime: blStart,
@@ -173,6 +175,7 @@ export default function ProductionCenterTab({
     setBlStart(new Date().toTimeString().substring(0, 5));
     setBlEnd('');
     setBlNotes('');
+    setBlSatuan('pcs');
   };
 
   const handleDeleteBakingLog = (id: string) => {
@@ -872,9 +875,15 @@ export default function ProductionCenterTab({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Batch Qty</label>
-                  <input type="number" min="0.5" step="0.5" value={blBatch}
-                    onChange={e => setBlBatch(parseFloat(e.target.value) || 1)}
-                    className="w-full border border-gray-200 rounded-xl p-2.5 font-mono font-bold" />
+                  <div className="flex items-center gap-1">
+                    <input type="number" min="0.5" step="0.5" value={blBatch}
+                      onChange={e => setBlBatch(parseFloat(e.target.value) || 1)}
+                      className="flex-1 border border-gray-200 rounded-xl p-2.5 font-mono font-bold" />
+                    <select value={blSatuan} onChange={e => setBlSatuan(e.target.value)}
+                      className="border border-gray-200 rounded-xl p-2.5 font-bold bg-white min-w-[60px]">
+                      {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Suhu Oven (°C)</label>

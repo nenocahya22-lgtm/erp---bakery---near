@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Trash2, Plus, AlertTriangle, ShoppingCart, Camera, Printer } from 'lucide-react';
+import { Trash2, Plus, AlertTriangle, ShoppingCart, Camera, Printer, X } from 'lucide-react';
 import { CalculationResult, WriteOffLog } from '../types';
 
 interface WasteControlTabProps {
@@ -23,6 +23,7 @@ export default function WasteControlTab({
   const [wasteReason, setWasteReason] = useState('');
   const [wastePhoto, setWastePhoto] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
 
   // Write-off states
   const [woProduct, setWoProduct] = useState('');
@@ -130,8 +131,13 @@ export default function WasteControlTab({
               ))}
             </select>
             <div className="grid grid-cols-2 gap-3">
-              <input type="number" required value={wasteQty} onChange={(e) => setWasteQty(e.target.value)}
-                className="border border-gray-200 rounded-lg p-2 font-mono" placeholder="Qty" />
+              <div className="flex items-center gap-1">
+                <input type="number" required value={wasteQty} onChange={(e) => setWasteQty(e.target.value)}
+                  className="flex-1 border border-gray-200 rounded-lg p-2 font-mono" placeholder="Qty" />
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-2 rounded-lg min-w-[40px] text-center">
+                  {bahanBaku[parseInt(selectedBahanIdx)]?.satuan || 'gr'}
+                </span>
+              </div>
               <select value={wasteLocation} onChange={(e) => setWasteLocation(e.target.value as any)}
                 className="border border-gray-200 rounded-lg p-2">
                 <option>Dapur Pusat</option><option>Gudang Utama</option><option>Storefront / Kasir</option>
@@ -154,9 +160,15 @@ export default function WasteControlTab({
                 <Camera className="w-4 h-4" /> {wastePhoto ? 'Ganti Foto' : '📸 Foto Kerusakan'}
               </button>
               {wastePhoto && (
-                <div className="relative">
-                  <img src={wastePhoto} alt="Waste" className="w-10 h-10 rounded-lg object-cover border border-gray-200" />
-                  <button onClick={() => setWastePhoto(null)} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[8px] font-bold cursor-pointer">×</button>
+                <div className="relative group">
+                  <img src={wastePhoto} alt="Waste"
+                    onClick={() => setPreviewPhoto(wastePhoto)}
+                    className="w-10 h-10 rounded-lg object-cover border border-gray-200 cursor-pointer hover:opacity-80 transition" />
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                    onClick={() => setPreviewPhoto(wastePhoto)}>
+                    <span className="text-[9px] font-bold bg-black/50 text-white px-1.5 py-0.5 rounded">🔍</span>
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); setWastePhoto(null); }} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[8px] font-bold cursor-pointer hover:bg-red-600">×</button>
                 </div>
               )}
             </div>
@@ -226,9 +238,15 @@ export default function WasteControlTab({
                 <Camera className="w-4 h-4" /> {woPhoto ? 'Ganti Foto' : '📸 Foto Produk'}
               </button>
               {woPhoto && (
-                <div className="relative">
-                  <img src={woPhoto} alt="Write off" className="w-10 h-10 rounded-lg object-cover border border-gray-200" />
-                  <button onClick={() => setWoPhoto(null)} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[8px] font-bold cursor-pointer">×</button>
+                <div className="relative group">
+                  <img src={woPhoto} alt="Write off"
+                    onClick={() => setPreviewPhoto(woPhoto)}
+                    className="w-10 h-10 rounded-lg object-cover border border-gray-200 cursor-pointer hover:opacity-80 transition" />
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                    onClick={() => setPreviewPhoto(woPhoto)}>
+                    <span className="text-[9px] font-bold bg-black/50 text-white px-1.5 py-0.5 rounded">🔍</span>
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); setWoPhoto(null); }} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[8px] font-bold cursor-pointer hover:bg-red-600">×</button>
                 </div>
               )}
             </div>
@@ -265,6 +283,19 @@ export default function WasteControlTab({
           </div>
         </div>
       </div>
+
+      {/* ─── FOTO PREVIEW MODAL ─── */}
+      {previewPhoto && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4" onClick={() => setPreviewPhoto(null)}>
+          <div className="relative max-w-2xl w-full max-h-[90vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            <img src={previewPhoto} alt="Preview" className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl border border-white/10 object-contain" />
+            <button onClick={() => setPreviewPhoto(null)}
+              className="absolute -top-3 -right-3 w-8 h-8 bg-gray-900/90 hover:bg-gray-900 text-white rounded-full flex items-center justify-center shadow-lg transition cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

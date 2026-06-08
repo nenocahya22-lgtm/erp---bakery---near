@@ -185,6 +185,11 @@ export interface PurchaseOrder {
   status: 'Draft' | 'Disetujui' | 'Dikirim ke Supplier' | 'Diterima';
 }
 
+// === SATUAN OPTIONS ===
+export const SATUAN_OPTIONS = ['gr', 'kg', 'pcs', 'ml', 'liter', 'ons', 'sdm', 'sdt', 'cup', 'bungkus', 'pack', 'box', 'krat', 'ikat', 'ekor'];
+
+export const getSatuanFromBahan = (bahan: BahanBaku | undefined): string => bahan?.satuan || 'gr';
+
 // === WEB STORE CONFIG ===
 export interface PaymentMethod {
   id: string;
