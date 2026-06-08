@@ -186,6 +186,22 @@ export interface PurchaseOrder {
 }
 
 // === WEB STORE CONFIG ===
+export interface PaymentMethod {
+  id: string;
+  type: 'transfer_bank' | 'ewallet' | 'cod';
+  name: string;
+  label: string;
+  active: boolean;
+  // For transfer bank
+  bankName?: string;
+  accountNumber?: string;
+  accountName?: string;
+  // For e-wallet
+  phoneNumber?: string;
+  // Sort order
+  order: number;
+}
+
 export interface WebStoreProduct {
   productName: string;
   active: boolean;
@@ -230,6 +246,13 @@ export interface WebStoreConfig {
   // Promotions
   promos: WebStorePromo[];
   
+  // Payment Methods
+  paymentMethods: PaymentMethod[];
+
+  // Branch
+  cabangId: string;
+  branchSubdomain: string;
+
   // Footer
   footerText: string;
   facebookUrl: string;
@@ -240,7 +263,38 @@ export interface WebStoreConfig {
 }
 
 // Default config factory
-export const createDefaultWebStoreConfig = (products: { namaProduk: string; kategori?: string }[]): WebStoreConfig => ({
+export const createDefaultPaymentMethods = (): PaymentMethod[] => [
+  {
+    id: 'bca-transfer',
+    type: 'transfer_bank',
+    name: 'Transfer Bank (BCA)',
+    label: 'Transfer Bank BCA (Verifikasi Otomatis Admin)',
+    active: true,
+    bankName: 'Bank BCA',
+    accountNumber: '77359182301',
+    accountName: 'Near Bakery & Co. PT',
+    order: 1,
+  },
+  {
+    id: 'cod',
+    type: 'cod',
+    name: 'COD (Cash On Delivery)',
+    label: 'COD - Pembayaran Cash saat Roti Diantarkan Kurir',
+    active: true,
+    order: 2,
+  },
+  {
+    id: 'ewallet-gopay',
+    type: 'ewallet',
+    name: 'E-Wallet (Gopay/OVO)',
+    label: 'Dompet Digital Gopay, OVO, atau ShopeePay',
+    active: true,
+    phoneNumber: '6281234567890',
+    order: 3,
+  },
+];
+
+export const createDefaultWebStoreConfig = (products: { namaProduk: string; kategori?: string }[], cabangId?: string): WebStoreConfig => ({
   storeName: 'Near Bakery & Co.',
   slogan: 'Fresh Baked Daily with Love',
   logo: '',
@@ -264,6 +318,9 @@ export const createDefaultWebStoreConfig = (products: { namaProduk: string; kate
   primaryColor: '#059669',
   secondaryColor: '#f59e0b',
   promos: [],
+  paymentMethods: createDefaultPaymentMethods(),
+  cabangId: cabangId || 'pusat',
+  branchSubdomain: 'pusat',
   footerText: '© 2026 Near Bakery & Co. All rights reserved.',
   facebookUrl: '',
   twitterUrl: '',

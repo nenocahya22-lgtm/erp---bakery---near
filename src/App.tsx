@@ -14,6 +14,7 @@ import {
   loadRevenueFromSheets,
 } from './lib/sheets';
 import { calculateAllProducts } from './lib/calculations';
+import { listenNewOrders, listenNotifications, syncProductsToFirestore } from './lib/firestore-bridge';
 import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, WasteLog, Cabang, SuratOrder, BranchStock, BranchTransaction, ProductTopping } from './types';
 
 import OwnerLogin from './components/OwnerLogin';
@@ -922,6 +923,60 @@ export default function App() {
   const wasteTotalLoss = wasteLogs.reduce((acc, curr) => acc + curr.lossValue, 0);
   const rdTotalCost = rdExperiments.reduce((acc, curr) => acc + curr.components.reduce((sum, c) => sum + (c.takaran * c.unitPrice), 0) + curr.estOverhead, 0);
 
+  // ─── FIRESTORE LISTENER — Notifikasi & Auto-Deduct Stok dari Web Store ───
+  useEffect(() => {
+    // Listen for new orders from web store
+    const unsubOrders = listenNewOrders((order) => {
+      // Show notification toast
+      const totalStr = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(order.totalAmount);
+      showToast(`🛒 Pesanan Baru dari Web Store! ${order.userName} — ${totalStr}`, 'success');
+
+      // Auto-deduct bahan baku stok berdasarkan resep — single pass untuk hindari overlap
+      const newBahanBaku = JSON.parse(JSON.stringify(bahanBaku)) as typeof bahanBaku;
+      order.items.forEach((item) => {
+        const ingredientsForProduct = detailResep.filter(
+          (r) => r.namaProduk.toLowerCase().trim() === item.name.toLowerCase().trim()
+        );
+        const productInfo = productHpp.find(
+          (p) => p.namaProduk.toLowerCase().trim() === item.name.toLowerCase().trim()
+        );
+        const yieldPortions = productInfo?.porsiJual || 1;
+
+        ingredientsForProduct.forEach((ing) => {
+          const idx = newBahanBaku.findIndex((b) => b.nama.toLowerCase().trim() === ing.namaBahan.toLowerCase().trim());
+          if (idx !== -1) {
+            const consumedAmount = (ing.takaran / yieldPortions) * item.quantity;
+            const oldStock = newBahanBaku[idx].isiKemasan;
+            const newStock = oldStock - consumedAmount;
+            newBahanBaku[idx] = { ...newBahanBaku[idx], isiKemasan: Math.max(0, Number(newStock.toFixed(2))) };
+            if (newStock < 50 && oldStock >= 50) {
+              showToast(`⚠️ Stok ${newBahanBaku[idx].nama} menipis (sisa ${Math.round(newStock)} ${newBahanBaku[idx].satuan}) — segera order!`, 'info');
+            }
+          }
+        });
+      });
+      setBahanBaku(newBahanBaku);
+
+      // Sync produk ke Firestore dengan data stok terbaru
+      if (calculatedProducts.length > 0) {
+        const updatedCalc = calculateAllProducts(newBahanBaku, productHpp, detailResep);
+        setTimeout(() => {
+          syncProductsToFirestore(updatedCalc, productHpp, detailResep, newBahanBaku).catch(console.warn);
+        }, 1000);
+      }
+    }, (err) => console.warn('Order listener error:', err));
+
+    // Listen for ERP notifications
+    const unsubNotif = listenNotifications((notif) => {
+      showToast(`📢 ${notif.title}: ${notif.body}`, 'info');
+    }, (err) => console.warn('Notification listener error:', err));
+
+    return () => {
+      unsubOrders();
+      unsubNotif();
+    };
+  }, [bahanBaku, productHpp, detailResep, calculatedProducts]);
+
   // Show welcome notifications on first login
   useEffect(() => {
     if (isOwnerAuthenticated) {
@@ -1330,6 +1385,10 @@ export default function App() {
             {activeTab === 'erp_webstore' && (
               <WebStoreManagerTab
                 productHpp={productHpp}
+                calculatedProducts={calculatedProducts}
+                bahanBaku={bahanBaku}
+                detailResep={detailResep}
+                cabangList={cabangList}
               />
             )}
             {activeTab === 'erp_pembukuan' && (

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { WebStoreConfig, WebStoreProduct, WebStorePromo, ProductHpp, createDefaultWebStoreConfig } from '../types';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { WebStoreConfig, WebStoreProduct, WebStorePromo, PaymentMethod, ProductHpp, Cabang, createDefaultWebStoreConfig, createDefaultPaymentMethods } from '../types';
 import {
   Globe,
   Save,
@@ -20,12 +20,30 @@ import {
   AlertTriangle,
   Eye,
   Smartphone,
+  CreditCard,
+  Banknote,
+  Wallet,
+  Building2,
+  Copy,
+  Cpu,
 } from 'lucide-react';
+import {
+  saveWebStoreConfig,
+  getWebStoreConfig,
+  getAllWebStoreConfigs,
+  syncProductsToFirestore,
+  registerSubdomain,
+  getAllSubdomains,
+} from '../lib/firestore-bridge';
 
 const STORAGE_KEY = 'storenear_web_config';
 
 interface Props {
   productHpp: ProductHpp[];
+  calculatedProducts?: any[];
+  bahanBaku?: any[];
+  detailResep?: any[];
+  cabangList?: Cabang[];
 }
 
 // Helper: load image as base64
@@ -38,11 +56,10 @@ const loadImageAsBase64 = (file: File): Promise<string> => {
   });
 };
 
-// Helper: format currency
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
-export default function WebStoreManagerTab({ productHpp }: Props) {
+export default function WebStoreManagerTab({ productHpp, calculatedProducts, bahanBaku, detailResep, cabangList }: Props) {
   const [config, setConfig] = useState<WebStoreConfig>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
@@ -56,12 +73,41 @@ export default function WebStoreManagerTab({ productHpp }: Props) {
   const [activeSection, setActiveSection] = useState<string>('identity');
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [editingPromo, setEditingPromo] = useState<WebStorePromo | null>(null);
+  const [editingPayment, setEditingPayment] = useState<PaymentMethod | null>(null);
   const [showPromoModal, setShowPromoModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSavingToFirestore, setIsSavingToFirestore] = useState(false);
+  const [lastSynced, setLastSynced] = useState<string | null>(null);
+  const [isFirestoreConnected, setIsFirestoreConnected] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const heroInputRef = useRef<HTMLInputElement>(null);
   const promoInputRef = useRef<HTMLInputElement>(null);
+  const paymentLogoInputRef = useRef<HTMLInputElement>(null);
+
+  // Load config dari Firestore on mount
+  useEffect(() => {
+    const loadFromFirestore = async () => {
+      try {
+        const cabangId = config.cabangId || 'pusat';
+        const remoteConfig = await getWebStoreConfig(cabangId);
+        if (remoteConfig) {
+          setConfig(remoteConfig);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(remoteConfig));
+          setIsFirestoreConnected(true);
+          showToast('✅ Config Firestore berhasil dimuat!', 'success');
+        } else {
+          setIsFirestoreConnected(true);
+        }
+      } catch (err) {
+        console.warn('Firestore load failed, using local:', err);
+        setIsFirestoreConnected(false);
+      }
+    };
+    loadFromFirestore();
+  }, []);
 
   // Auto-save to localStorage
   useEffect(() => {
@@ -103,134 +149,166 @@ export default function WebStoreManagerTab({ productHpp }: Props) {
     });
   };
 
+  // ─── SAVE TO FIRESTORE ───
+  const handleSaveToFirestore = async () => {
+    setIsSavingToFirestore(true);
+    try {
+      const cabangId = config.cabangId || 'pusat';
+      await saveWebStoreConfig(cabangId, config);
+      setIsFirestoreConnected(true);
+      showToast('✅ Konfigurasi tersimpan ke Firestore! Web Store akan update otomatis.', 'success');
+    } catch (err: any) {
+      console.error('Firestore save error:', err);
+      showToast('❌ Gagal simpan ke Firestore: ' + (err.message || 'Unknown'), 'error');
+    } finally {
+      setIsSavingToFirestore(false);
+    }
+  };
+
+  // ─── SYNC PRODUCTS TO FIRESTORE ───
+  const handleSyncProducts = async () => {
+    if (!calculatedProducts || !productHpp || !detailResep || !bahanBaku) {
+      showToast('Data kalkulasi belum tersedia. Buka tab Formulasi Resep dulu.', 'info');
+      return;
+    }
+    setIsSyncing(true);
+    try {
+      const count = await syncProductsToFirestore(calculatedProducts, productHpp, detailResep, bahanBaku);
+      setLastSynced(new Date().toLocaleTimeString('id-ID'));
+      showToast(`✅ ${count} produk berhasil disinkronisasi ke Firestore! Web Store akan update.`, 'success');
+    } catch (err: any) {
+      console.error('Product sync error:', err);
+      showToast('❌ Gagal sync produk: ' + (err.message || 'Unknown'), 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // ─── SUBDOMAIN REGISTRATION ───
+  const handleRegisterSubdomain = async () => {
+    const cabangId = config.cabangId || 'pusat';
+    const subdomain = config.branchSubdomain || 'pusat';
+    const storeName = config.storeName || 'Near Bakery';
+    try {
+      await registerSubdomain(subdomain, cabangId, storeName);
+      showToast(`✅ Subdomain "${subdomain}" berhasil didaftarkan!`, 'success');
+    } catch (err: any) {
+      showToast('❌ Gagal daftar subdomain: ' + (err.message || 'Unknown'), 'error');
+    }
+  };
+
   // Image upload handlers
   const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const b64 = await loadImageAsBase64(file);
-      updateConfig({ logo: b64 });
-      showToast('Logo berhasil diupload!', 'success');
-    }
+    if (file) { const b64 = await loadImageAsBase64(file); updateConfig({ logo: b64 }); showToast('Logo berhasil diupload!', 'success'); }
   };
-
   const handleUploadHero = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const b64 = await loadImageAsBase64(file);
-      updateConfig({ heroImage: b64 });
-      showToast('Hero image berhasil diupload!', 'success');
-    }
+    if (file) { const b64 = await loadImageAsBase64(file); updateConfig({ heroImage: b64 }); showToast('Hero image berhasil diupload!', 'success'); }
   };
-
   const handleUploadProductImage = async (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const b64 = await loadImageAsBase64(file);
-      updateProduct(idx, { displayImage: b64 });
-      showToast('Gambar produk berhasil diupload!', 'success');
-    }
+    if (file) { const b64 = await loadImageAsBase64(file); updateProduct(idx, { displayImage: b64 }); showToast('Gambar produk berhasil diupload!', 'success'); }
   };
-
   const handleUploadPromoImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && editingPromo) {
-      const b64 = await loadImageAsBase64(file);
-      setEditingPromo({ ...editingPromo, image: b64 });
-    }
+    if (file && editingPromo) { const b64 = await loadImageAsBase64(file); setEditingPromo({ ...editingPromo, image: b64 }); }
   };
 
-  // Promo CRUD
+  // ─── PROMO CRUD ───
   const handleAddPromo = () => {
-    setEditingPromo({
-      id: `promo-${Date.now()}`,
-      title: '',
-      description: '',
-      image: '',
-      active: true,
-    });
+    setEditingPromo({ id: `promo-${Date.now()}`, title: '', description: '', image: '', active: true });
     setShowPromoModal(true);
   };
-
   const handleEditPromo = (promo: WebStorePromo) => {
     setEditingPromo({ ...promo });
     setShowPromoModal(true);
   };
-
   const handleSavePromo = () => {
-    if (!editingPromo) return;
-    if (!editingPromo.title.trim()) {
-      showToast('Judul promo harus diisi!', 'error');
-      return;
-    }
+    if (!editingPromo || !editingPromo.title.trim()) { showToast('Judul promo harus diisi!', 'error'); return; }
     setConfig(prev => {
       const existing = prev.promos.findIndex(p => p.id === editingPromo.id);
       if (existing >= 0) {
-        const promos = [...prev.promos];
-        promos[existing] = editingPromo;
+        const promos = [...prev.promos]; promos[existing] = editingPromo;
         return { ...prev, promos };
       }
       return { ...prev, promos: [...prev.promos, editingPromo] };
     });
-    setShowPromoModal(false);
-    setEditingPromo(null);
+    setShowPromoModal(false); setEditingPromo(null);
     showToast('Promo berhasil disimpan!', 'success');
   };
-
   const handleDeletePromo = (id: string) => {
-    setConfig(prev => ({
-      ...prev,
-      promos: prev.promos.filter(p => p.id !== id),
-    }));
+    setConfig(prev => ({ ...prev, promos: prev.promos.filter(p => p.id !== id) }));
     showToast('Promo dihapus.', 'info');
   };
 
-  // Export / Import
+  // ─── PAYMENT METHODS CRUD ───
+  const handleAddPayment = () => {
+    setEditingPayment({
+      id: `pm-${Date.now()}`,
+      type: 'transfer_bank',
+      name: '',
+      label: '',
+      active: true,
+      bankName: '',
+      accountNumber: '',
+      accountName: '',
+      order: (config.paymentMethods?.length || 0) + 1,
+    });
+    setShowPaymentModal(true);
+  };
+  const handleEditPayment = (pm: PaymentMethod) => {
+    setEditingPayment({ ...pm });
+    setShowPaymentModal(true);
+  };
+  const handleSavePayment = () => {
+    if (!editingPayment || !editingPayment.name.trim()) { showToast('Nama metode pembayaran harus diisi!', 'error'); return; }
+    setConfig(prev => {
+      const existing = prev.paymentMethods.findIndex(p => p.id === editingPayment.id);
+      if (existing >= 0) {
+        const pms = [...prev.paymentMethods]; pms[existing] = editingPayment;
+        return { ...prev, paymentMethods: pms };
+      }
+      return { ...prev, paymentMethods: [...(prev.paymentMethods || []), editingPayment] };
+    });
+    setShowPaymentModal(false); setEditingPayment(null);
+    showToast('Metode pembayaran berhasil disimpan!', 'success');
+  };
+  const handleDeletePayment = (id: string) => {
+    setConfig(prev => ({ ...prev, paymentMethods: (prev.paymentMethods || []).filter(p => p.id !== id) }));
+    showToast('Metode pembayaran dihapus.', 'info');
+  };
+
+  // ─── EXPORT / IMPORT ───
   const handleExport = () => {
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `storenear-config-${new Date().toISOString().substring(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const a = document.createElement('a'); a.href = url; a.download = `storenear-config-${new Date().toISOString().substring(0, 10)}.json`;
+    a.click(); URL.revokeObjectURL(url);
     showToast('Konfigurasi berhasil diexport!', 'success');
   };
-
   const handleImport = () => {
     const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
+    input.type = 'file'; input.accept = '.json';
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       try {
-        const text = await file.text();
-        const parsed = JSON.parse(text);
-        if (!parsed.storeName || !parsed.products) {
-          showToast('Format JSON tidak valid!', 'error');
-          return;
-        }
-        setConfig(parsed);
-        showToast('Konfigurasi berhasil diimport!', 'success');
-      } catch {
-        showToast('Gagal membaca file JSON!', 'error');
-      }
+        const text = await file.text(); const parsed = JSON.parse(text);
+        if (!parsed.storeName || !parsed.products) { showToast('Format JSON tidak valid!', 'error'); return; }
+        setConfig(parsed); showToast('Konfigurasi berhasil diimport!', 'success');
+      } catch { showToast('Gagal membaca file JSON!', 'error'); }
     };
     input.click();
   };
 
-  // Section renderer
+  // ─── UI HELPERS ───
   const sectionBtn = (key: string, icon: React.ReactNode, label: string) => (
-    <button
-      onClick={() => setActiveSection(key)}
+    <button onClick={() => setActiveSection(key)}
       className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-        activeSection === key
-          ? 'bg-emerald-600 text-white shadow-md'
-          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-      }`}
-    >
-      {icon}
-      {label}
+        activeSection === key ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+      }`}>
+      {icon}{label}
     </button>
   );
 
@@ -238,41 +316,67 @@ export default function WebStoreManagerTab({ productHpp }: Props) {
   const labelClass = "text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 block";
   const cardClass = "bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4";
 
-  // ─── RENDER ───
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6 pb-24">
       {/* HEADER */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-black text-gray-900 flex items-center gap-2">
             <Globe className="w-6 h-6 text-emerald-600" />
             Web Store Manager
           </h2>
           <p className="text-xs text-gray-500 mt-1">
-            Atur semua konten web store dari sini — gambar, teks, produk, promo, dan tema
+            Atur web store per cabang — semua konten, produk, promo, tema, & pembayaran
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button onClick={handleExport} className="px-3 py-2 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer flex items-center gap-1.5">
-            <Download className="w-3.5 h-3.5" /> Export JSON
+            <Download className="w-3.5 h-3.5" /> Export
           </button>
           <button onClick={handleImport} className="px-3 py-2 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer flex items-center gap-1.5">
-            <Upload className="w-3.5 h-3.5" /> Import JSON
+            <Upload className="w-3.5 h-3.5" /> Import
           </button>
-          <button onClick={() => setShowPreview(true)} className="px-3 py-2 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm">
+          <button onClick={handleSaveToFirestore} disabled={isSavingToFirestore}
+            className="px-3 py-2 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm">
+            <Save className="w-3.5 h-3.5" />
+            {isSavingToFirestore ? 'Menyimpan...' : '💾 Simpan ke Cloud'}
+          </button>
+          {calculatedProducts && (
+            <button onClick={handleSyncProducts} disabled={isSyncing}
+              className="px-3 py-2 text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm">
+              <Cpu className="w-3.5 h-3.5" />
+              {isSyncing ? 'Sync...' : '🔄 Sync Produk'}
+            </button>
+          )}
+          <button onClick={() => setShowPreview(true)}
+            className="px-3 py-2 text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm">
             <Eye className="w-3.5 h-3.5" /> Preview
           </button>
         </div>
       </div>
 
+      {/* Status bar */}
+      <div className="flex items-center gap-4 text-[10px] text-gray-500">
+        <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${isFirestoreConnected ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${isFirestoreConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+          {isFirestoreConnected ? 'Firestore Connected' : 'Local Only'}
+        </span>
+        {lastSynced && <span>Sync terakhir: {lastSynced}</span>}
+        <span className="text-gray-300">|</span>
+        <span>Cabang: <strong>{config.cabangId || 'pusat'}</strong></span>
+        <span className="text-gray-300">|</span>
+        <span>Subdomain: <strong>{config.branchSubdomain || 'pusat'}</strong></span>
+      </div>
+
       {/* NAVIGATION SECTIONS */}
       <div className="flex flex-wrap gap-2">
         {sectionBtn('identity', <ShoppingBag className="w-4 h-4" />, '🏪 Identitas')}
-        {sectionBtn('hero', <Image className="w-4 h-4" />, '🖼️ Hero Banner')}
+        {sectionBtn('hero', <Image className="w-4 h-4" />, '🖼️ Hero')}
         {sectionBtn('products', <ShoppingBag className="w-4 h-4" />, '📦 Produk')}
         {sectionBtn('theme', <Palette className="w-4 h-4" />, '🎨 Tema')}
         {sectionBtn('promos', <Megaphone className="w-4 h-4" />, '📢 Promo')}
-        {sectionBtn('preview', <Smartphone className="w-4 h-4" />, '👁️ Preview')}
+        {sectionBtn('payment', <CreditCard className="w-4 h-4" />, '💳 Pembayaran')}
+        {sectionBtn('branch', <Building2 className="w-4 h-4" />, '🏛️ Cabang')}
       </div>
 
       {/* ─── SECTION: IDENTITY ─── */}
@@ -361,7 +465,6 @@ export default function WebStoreManagerTab({ productHpp }: Props) {
             <button onClick={() => heroInputRef.current?.click()} className="mt-2 px-3 py-2 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer">Upload Hero Image</button>
             <input ref={heroInputRef} type="file" accept="image/*" className="hidden" onChange={handleUploadHero} />
           </div>
-          {/* Preview */}
           <div className="mt-4 p-4 bg-gradient-to-br from-emerald-900 to-slate-900 rounded-2xl text-white relative overflow-hidden">
             <div className="relative z-10">
               <h4 className="text-2xl font-black">{config.heroTitle || 'Fresh from the Oven'}</h4>
@@ -370,9 +473,7 @@ export default function WebStoreManagerTab({ productHpp }: Props) {
                 {config.heroBtnText || 'Pesan Sekarang'}
               </button>
             </div>
-            {config.heroImage && (
-              <img src={config.heroImage} className="absolute inset-0 w-full h-full object-cover opacity-30" alt="" />
-            )}
+            {config.heroImage && <img src={config.heroImage} className="absolute inset-0 w-full h-full object-cover opacity-30" alt="" />}
           </div>
         </div>
       )}
@@ -380,16 +481,20 @@ export default function WebStoreManagerTab({ productHpp }: Props) {
       {/* ─── SECTION: PRODUCTS ─── */}
       {activeSection === 'products' && (
         <div className={cardClass}>
-          <h3 className="text-sm font-black text-gray-800 flex items-center justify-between">
-            <span>📦 Produk Tampilan Web Store</span>
-            <span className="text-[10px] font-normal text-gray-500">
-              {config.products.filter(p => p.active).length} dari {config.products.length} produk aktif
-            </span>
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black text-gray-800">📦 Produk Tampilan Web Store</h3>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-normal text-gray-500">{config.products.filter(p => p.active).length} dari {config.products.length} aktif</span>
+              <button onClick={handleSyncProducts} disabled={isSyncing}
+                className="px-3 py-1.5 text-[10px] font-bold bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-all cursor-pointer flex items-center gap-1">
+                <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'Sync...' : 'Sync ke Firestore'}
+              </button>
+            </div>
+          </div>
           <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
             {config.products.map((p, idx) => (
               <div key={p.productName} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                {/* Thumbnail */}
                 <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-white border border-gray-200 shrink-0">
                   {p.displayImage ? (
                     <img src={p.displayImage} alt={p.productName} className="w-full h-full object-cover" />
@@ -397,7 +502,6 @@ export default function WebStoreManagerTab({ productHpp }: Props) {
                     <div className="w-full h-full flex items-center justify-center text-gray-300"><Image className="w-5 h-5" /></div>
                   )}
                 </div>
-                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <input type="checkbox" checked={p.active} onChange={e => updateProduct(idx, { active: e.target.checked })} className="w-3.5 h-3.5 rounded accent-emerald-600" />
@@ -405,7 +509,7 @@ export default function WebStoreManagerTab({ productHpp }: Props) {
                     <span className="text-[9px] text-gray-400 font-mono bg-slate-200 px-1.5 py-0.5 rounded">{p.kategori}</span>
                   </div>
                   <div className="flex gap-2 mt-1.5">
-                    <input className="flex-1 px-2.5 py-1.5 text-[10px] border border-gray-200 rounded-lg outline-none focus:border-emerald-400" 
+                    <input className="flex-1 px-2.5 py-1.5 text-[10px] border border-gray-200 rounded-lg outline-none focus:border-emerald-400"
                       value={p.description} onChange={e => updateProduct(idx, { description: e.target.value })} placeholder="Deskripsi produk..." />
                     <label className="px-2.5 py-1.5 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer shrink-0">
                       <Image className="w-3 h-3 inline mr-1" />Gambar
@@ -442,7 +546,6 @@ export default function WebStoreManagerTab({ productHpp }: Props) {
               </div>
             </div>
           </div>
-          {/* Preview tema */}
           <div className="mt-4 p-4 rounded-2xl text-white" style={{ background: config.primaryColor }}>
             <p className="text-xs font-bold opacity-80">Warna Utama</p>
             <p className="text-lg font-black">{config.primaryColor}</p>
@@ -494,9 +597,8 @@ export default function WebStoreManagerTab({ productHpp }: Props) {
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 mt-2 justify-end">
-                    <button onClick={() => {
-                      setConfig(prev => ({ ...prev, promos: prev.promos.map(p => p.id === promo.id ? { ...p, active: !p.active } : p) }));
-                    }} className={`px-2 py-1 text-[9px] font-bold rounded-lg cursor-pointer ${promo.active ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-200 text-slate-500'}`}>
+                    <button onClick={() => setConfig(prev => ({ ...prev, promos: prev.promos.map(p => p.id === promo.id ? { ...p, active: !p.active } : p) }))}
+                      className={`px-2 py-1 text-[9px] font-bold rounded-lg cursor-pointer ${promo.active ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-200 text-slate-500'}`}>
                       {promo.active ? 'Aktif' : 'Nonaktif'}
                     </button>
                     <button onClick={() => handleEditPromo(promo)} className="p-1.5 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 cursor-pointer"><Edit3 className="w-3 h-3" /></button>
@@ -509,12 +611,139 @@ export default function WebStoreManagerTab({ productHpp }: Props) {
         </div>
       )}
 
+      {/* ─── SECTION: PAYMENT METHODS ─── */}
+      {activeSection === 'payment' && (
+        <div className={cardClass}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black text-gray-800">💳 Metode Pembayaran</h3>
+            <button onClick={handleAddPayment} className="px-3 py-2 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer flex items-center gap-1">
+              <Plus className="w-3.5 h-3.5" /> Tambah Metode
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-500">
+            Metode pembayaran ini akan tampil di halaman checkout web store. Kelola semuanya dari sini.
+          </p>
+          {(!config.paymentMethods || config.paymentMethods.length === 0) ? (
+            <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-xl">
+              <CreditCard className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-xs text-gray-400">Belum ada metode pembayaran. Klik "Tambah Metode" atau reset ke default.</p>
+              <button onClick={() => updateConfig({ paymentMethods: createDefaultPaymentMethods() })}
+                className="mt-3 px-4 py-2 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer">
+                Reset ke Default
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {config.paymentMethods.sort((a, b) => a.order - b.order).map(pm => (
+                <div key={pm.id} className={`p-4 rounded-xl border ${pm.active ? 'border-emerald-200 bg-emerald-50' : 'border-gray-200 bg-gray-50'} flex items-start gap-3`}>
+                  <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0">
+                    {pm.type === 'transfer_bank' ? <Banknote className="w-5 h-5 text-blue-600" /> :
+                     pm.type === 'ewallet' ? <Wallet className="w-5 h-5 text-green-600" /> :
+                     <ShoppingBag className="w-5 h-5 text-amber-600" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-bold ${pm.active ? 'text-gray-800' : 'text-gray-400'}`}>{pm.name}</span>
+                      <span className="text-[9px] text-gray-400 font-mono uppercase">{pm.type.replace('_', ' ')}</span>
+                    </div>
+                    {pm.type === 'transfer_bank' && pm.bankName && (
+                      <p className="text-[10px] text-gray-600 mt-0.5">
+                        {pm.bankName} — {pm.accountNumber} a.n. {pm.accountName}
+                      </p>
+                    )}
+                    {pm.type === 'ewallet' && pm.phoneNumber && (
+                      <p className="text-[10px] text-gray-600 mt-0.5">No. HP: {pm.phoneNumber}</p>
+                    )}
+                    <p className="text-[9px] text-gray-400 mt-0.5">{pm.label}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => setConfig(prev => ({
+                      ...prev,
+                      paymentMethods: (prev.paymentMethods || []).map(p => p.id === pm.id ? { ...p, active: !p.active } : p)
+                    }))}
+                      className={`px-2 py-1 text-[9px] font-bold rounded-lg cursor-pointer ${pm.active ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-200 text-slate-500'}`}>
+                      {pm.active ? 'Aktif' : 'Nonaktif'}
+                    </button>
+                    <button onClick={() => handleEditPayment(pm)} className="p-1.5 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 cursor-pointer"><Edit3 className="w-3 h-3" /></button>
+                    <button onClick={() => handleDeletePayment(pm.id)} className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 cursor-pointer"><Trash2 className="w-3 h-3" /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── SECTION: BRANCH ─── */}
+      {activeSection === 'branch' && (
+        <div className={cardClass}>
+          <h3 className="text-sm font-black text-gray-800">🏛️ Konfigurasi Cabang & Subdomain</h3>
+          <p className="text-[10px] text-gray-500">
+            Setiap cabang bisa memiliki web store sendiri dengan subdomain berbeda. Atur di sini.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>ID Cabang</label>
+              <select className={inputClass} value={config.cabangId || 'pusat'} onChange={e => updateConfig({ cabangId: e.target.value })}>
+                <option value="pusat">Pusat</option>
+                {(cabangList || []).map(c => (
+                  <option key={c.id} value={c.id}>{c.nama} ({c.id})</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Subdomain</label>
+              <div className="flex items-center gap-2">
+                <input className={inputClass} value={config.branchSubdomain} onChange={e => updateConfig({ branchSubdomain: e.target.value })} placeholder="cabang-a" />
+                <span className="text-[9px] text-gray-400">.nearbakery.com</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleRegisterSubdomain} className="px-4 py-2 text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all cursor-pointer">
+              Daftarkan Subdomain
+            </button>
+            <button onClick={async () => {
+              const subs = await getAllSubdomains();
+              if (subs.length === 0) {
+                showToast('Belum ada subdomain terdaftar.', 'info');
+              } else {
+                showToast(`Subdomain: ${subs.map(s => `${s.subdomain} → ${s.cabangNama}`).join(', ')}`, 'info');
+              }
+            }} className="px-4 py-2 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer">
+              Lihat Semua Subdomain
+            </button>
+          </div>
+          {cabangList && cabangList.length > 0 && (
+            <div className="mt-4">
+              <h4 className="text-[10px] font-bold text-gray-600 mb-2">Daftar Cabang Tersedia:</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {cabangList.filter(c => c.isActive).map(c => (
+                  <div key={c.id} className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <p className="text-[11px] font-bold text-gray-700">{c.nama}</p>
+                      <p className="text-[9px] text-gray-400">{c.alamat}</p>
+                    </div>
+                    <button onClick={() => {
+                      updateConfig({ cabangId: c.id, branchSubdomain: c.id.toLowerCase().replace(/[^a-z0-9]/g, '-'), storeName: `Near Bakery - ${c.nama}` });
+                      showToast(`Beralih ke cabang: ${c.nama}`, 'success');
+                    }} className="ml-auto px-2 py-1 text-[9px] font-bold bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 cursor-pointer">
+                      Pilih
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ─── SECTION: PREVIEW ─── */}
       {activeSection === 'preview' && (
         <div className={cardClass}>
           <h3 className="text-sm font-black text-gray-800">👁️ Preview Web Store</h3>
           <div className="border border-gray-200 rounded-2xl overflow-hidden shadow-lg">
-            {/* Mobile frame */}
             <div className="max-w-sm mx-auto bg-white min-h-[600px]">
               {/* Header */}
               <div className="p-4 flex items-center gap-3 border-b border-gray-100" style={{ background: config.primaryColor }}>
@@ -546,19 +775,24 @@ export default function WebStoreManagerTab({ productHpp }: Props) {
                   {config.products.filter(p => p.active).slice(0, 4).map(p => (
                     <div key={p.productName} className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
                       <div className="w-full h-20 rounded-lg bg-white border border-slate-100 flex items-center justify-center overflow-hidden">
-                        {p.displayImage ? (
-                          <img src={p.displayImage} alt={p.productName} className="w-full h-full object-cover" />
-                        ) : (
-                          <ShoppingBag className="w-6 h-6 text-slate-300" />
-                        )}
+                        {p.displayImage ? <img src={p.displayImage} alt={p.productName} className="w-full h-full object-cover" /> : <ShoppingBag className="w-6 h-6 text-slate-300" />}
                       </div>
                       <p className="text-[10px] font-bold text-gray-800 mt-1.5 truncate">{p.productName}</p>
                     </div>
                   ))}
                 </div>
-                {config.products.filter(p => p.active).length === 0 && (
-                  <p className="text-[10px] text-gray-400 text-center py-4">Belum ada produk aktif</p>
-                )}
+              </div>
+              {/* Payment methods preview */}
+              <div className="px-4 pb-4">
+                <h3 className="text-[10px] font-bold text-gray-600 mb-2">💳 Metode Pembayaran</h3>
+                <div className="space-y-1.5">
+                  {(config.paymentMethods || []).filter(p => p.active).slice(0, 3).map(pm => (
+                    <div key={pm.id} className="flex items-center gap-2 text-[10px] text-gray-600 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                      {pm.type === 'transfer_bank' ? '🏦' : pm.type === 'ewallet' ? '📱' : '💰'}
+                      <span>{pm.name}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
               {/* Footer */}
               <div className="p-4 text-center text-[9px] text-gray-400 border-t border-gray-100" style={{ background: config.primaryColor + '08' }}>
@@ -577,9 +811,7 @@ export default function WebStoreManagerTab({ productHpp }: Props) {
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-gray-100 space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="text-sm font-black text-gray-800">{editingPromo.id.startsWith('promo-') ? 'Tambah Promo' : 'Edit Promo'}</h3>
-              <button onClick={() => { setShowPromoModal(false); setEditingPromo(null); }} className="p-1 hover:bg-gray-100 rounded-lg cursor-pointer">
-                <X className="w-4 h-4" />
-              </button>
+              <button onClick={() => { setShowPromoModal(false); setEditingPromo(null); }} className="p-1 hover:bg-gray-100 rounded-lg cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
             <div>
               <label className={labelClass}>Judul Promo</label>
@@ -592,11 +824,7 @@ export default function WebStoreManagerTab({ productHpp }: Props) {
             <div>
               <label className={labelClass}>Gambar Promo</label>
               <div className="flex items-center gap-3">
-                {editingPromo.image ? (
-                  <img src={editingPromo.image} alt="" className="w-16 h-16 object-cover rounded-lg border" />
-                ) : (
-                  <div className="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center text-gray-400"><Image className="w-5 h-5" /></div>
-                )}
+                {editingPromo.image ? <img src={editingPromo.image} alt="" className="w-16 h-16 object-cover rounded-lg border" /> : <div className="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center text-gray-400"><Image className="w-5 h-5" /></div>}
                 <button onClick={() => promoInputRef.current?.click()} className="px-3 py-2 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer">Upload</button>
                 <input ref={promoInputRef} type="file" accept="image/*" className="hidden" onChange={handleUploadPromoImage} />
               </div>
@@ -605,21 +833,79 @@ export default function WebStoreManagerTab({ productHpp }: Props) {
               <input type="checkbox" checked={editingPromo.active} onChange={e => setEditingPromo({ ...editingPromo, active: e.target.checked })} className="w-3.5 h-3.5 rounded accent-emerald-600" />
               <span className="text-xs text-gray-600">Aktif</span>
             </div>
-            <button onClick={handleSavePromo} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer">
-              Simpan Promo
-            </button>
+            <button onClick={handleSavePromo} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer">Simpan Promo</button>
           </div>
         </div>
       )}
 
-      {/* ─── SAVE STATUS BAR ─── */}
-      <div className="fixed bottom-6 right-6 z-40">
-        <button onClick={() => {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...config, lastUpdated: new Date().toISOString() }));
-          showToast('✅ Konfigurasi web store tersimpan!', 'success');
-        }} className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-2xl shadow-lg transition-all cursor-pointer flex items-center gap-2 hover:scale-105">
+      {/* ─── PAYMENT MODAL ─── */}
+      {showPaymentModal && editingPayment && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-gray-100 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-sm font-black text-gray-800">{editingPayment.id.startsWith('pm-') ? 'Tambah Metode Pembayaran' : 'Edit Metode Pembayaran'}</h3>
+              <button onClick={() => { setShowPaymentModal(false); setEditingPayment(null); }} className="p-1 hover:bg-gray-100 rounded-lg cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            <div>
+              <label className={labelClass}>Jenis Pembayaran</label>
+              <select className={inputClass} value={editingPayment.type} onChange={e => setEditingPayment({ ...editingPayment, type: e.target.value as any })}>
+                <option value="transfer_bank">Transfer Bank</option>
+                <option value="ewallet">E-Wallet</option>
+                <option value="cod">COD (Cash On Delivery)</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Nama Metode</label>
+              <input className={inputClass} value={editingPayment.name} onChange={e => setEditingPayment({ ...editingPayment, name: e.target.value })} placeholder="Transfer Bank (BCA)" />
+            </div>
+            <div>
+              <label className={labelClass}>Label / Deskripsi</label>
+              <input className={inputClass} value={editingPayment.label} onChange={e => setEditingPayment({ ...editingPayment, label: e.target.value })} placeholder="Transfer Bank BCA (Verifikasi Otomatis)" />
+            </div>
+
+            {editingPayment.type === 'transfer_bank' && (
+              <>
+                <div>
+                  <label className={labelClass}>Nama Bank</label>
+                  <input className={inputClass} value={editingPayment.bankName || ''} onChange={e => setEditingPayment({ ...editingPayment, bankName: e.target.value })} placeholder="Bank BCA" />
+                </div>
+                <div>
+                  <label className={labelClass}>Nomor Rekening</label>
+                  <input className={inputClass} value={editingPayment.accountNumber || ''} onChange={e => setEditingPayment({ ...editingPayment, accountNumber: e.target.value })} placeholder="77359182301" />
+                </div>
+                <div>
+                  <label className={labelClass}>Nama Pemilik Rekening</label>
+                  <input className={inputClass} value={editingPayment.accountName || ''} onChange={e => setEditingPayment({ ...editingPayment, accountName: e.target.value })} placeholder="Near Bakery & Co. PT" />
+                </div>
+              </>
+            )}
+
+            {editingPayment.type === 'ewallet' && (
+              <div>
+                <label className={labelClass}>Nomor HP E-Wallet</label>
+                <input className={inputClass} value={editingPayment.phoneNumber || ''} onChange={e => setEditingPayment({ ...editingPayment, phoneNumber: e.target.value })} placeholder="6281234567890" />
+              </div>
+            )}
+
+            <div>
+              <label className={labelClass}>Urutan Tampil</label>
+              <input type="number" className={inputClass} value={editingPayment.order} onChange={e => setEditingPayment({ ...editingPayment, order: parseInt(e.target.value) || 1 })} />
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="checkbox" checked={editingPayment.active} onChange={e => setEditingPayment({ ...editingPayment, active: e.target.checked })} className="w-3.5 h-3.5 rounded accent-emerald-600" />
+              <span className="text-xs text-gray-600">Aktif</span>
+            </div>
+            <button onClick={handleSavePayment} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer">Simpan Metode Pembayaran</button>
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING SAVE BUTTON */}
+      <div className="fixed bottom-6 right-6 z-40 flex gap-2">
+        <button onClick={handleSaveToFirestore} disabled={isSavingToFirestore}
+          className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-2xl shadow-lg transition-all cursor-pointer flex items-center gap-2 hover:scale-105">
           <Save className="w-4 h-4" />
-          Simpan Konfigurasi
+          {isSavingToFirestore ? 'Menyimpan...' : 'Simpan ke Cloud'}
         </button>
       </div>
 
