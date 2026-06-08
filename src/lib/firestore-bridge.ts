@@ -24,6 +24,7 @@ import {
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { WebStoreConfig, PaymentMethod, BahanBaku, ProductHpp, DetailResep, CalculationResult, Cabang } from '../types';
+import { getSavedRecipeImage } from './image-generator';
 
 // Inisialisasi Firebase untuk Firestore (sama dengan web store)
 const app = initializeApp(firebaseConfig, 'erp-bridge');
@@ -117,7 +118,7 @@ export async function syncProductsToFirestore(
       (p) => p.namaProduk.toLowerCase().trim() === calc.namaProduk.toLowerCase().trim()
     );
 
-    // Cari deskripsi & gambar dari webstore_config jika sudah ada
+    // Cari deskripsi & gambar dari berbagai sumber
     let displayImage = '';
     let description = calc.namaProduk;
     let kategori = productInfo?.kategori || 'Lainnya';
@@ -129,6 +130,25 @@ export async function syncProductsToFirestore(
       displayImage = existing.imageUrl || '';
       description = existing.description || calc.namaProduk;
       kategori = existing.category || kategori;
+    }
+
+    // Ambil gambar dari ERP image storage (RecipesTab) jika belum ada di Firestore
+    if (!displayImage) {
+      const savedImage = getSavedRecipeImage(calc.namaProduk);
+      if (savedImage && !savedImage.includes('unsplash.com/photo-1546069901')) {
+        // Only use if it's a custom saved image, not the generic fallback
+        displayImage = savedImage;
+      }
+    }
+
+    // Dapatkan deskripsi dari productInfo / existing data
+    const hppProductInfo = productHpp.find(
+      (p) => p.namaProduk.toLowerCase().trim() === calc.namaProduk.toLowerCase().trim()
+    );
+    if (!description || description === calc.namaProduk) {
+      description = hppProductInfo?.kategori 
+        ? `${calc.namaProduk} — ${hppProductInfo.kategori} lezat dari Near Bakery & Co. Dibuat dengan bahan-bahan pilihan berkualitas terbaik.`
+        : `${calc.namaProduk} — Lezat dari Near Bakery & Co. Dibuat dengan bahan-bahan pilihan berkualitas terbaik.`;
     }
 
     // Hitung stok dari bahan baku paling kritis
