@@ -45,6 +45,7 @@ import BepTab from './components/BepTab';
 import DoughTemperatureTab from './components/DoughTemperatureTab';
 import BackupSystemTab from './components/BackupSystemTab';
 import PembukuanTab from './components/PembukuanTab';
+import WebStoreManagerTab from './components/WebStoreManagerTab';
 
 // Production Center
 import ProductionCenterTab from './components/ProductionCenterTab';
@@ -59,6 +60,7 @@ import {
   CheckCircle2,
   X,
   FileSpreadsheet,
+  Globe,
   Layers,
   Sparkles,
   RefreshCw,
@@ -240,6 +242,7 @@ export default function App() {
     | 'erp_production_center'
     | 'erp_rekap_bahan'
     | 'erp_pembukuan'
+    | 'erp_webstore'
   >('dashboard');
 
   // --- Lifted States with persistent syncing back to localStorage ---
@@ -1324,6 +1327,11 @@ export default function App() {
                 calculatedProducts={calculatedProducts}
               />
             )}
+            {activeTab === 'erp_webstore' && (
+              <WebStoreManagerTab
+                productHpp={productHpp}
+              />
+            )}
             {activeTab === 'erp_pembukuan' && (
               <PembukuanTab
                 calculatedProducts={calculatedProducts}
@@ -1524,6 +1532,7 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
         </div>
         <div className="space-y-1">
           <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑦ Backup</span>
+          {sidebarBtn('erp_webstore', <Globe className="w-4 h-4" />, '🌐 Web Store')}
           {sidebarBtn('erp_backup', <Cloud className="w-4 h-4" />, '💾 Backup & Restore')}
         </div>
       </nav>

@@ -185,3 +185,88 @@ export interface PurchaseOrder {
   status: 'Draft' | 'Disetujui' | 'Dikirim ke Supplier' | 'Diterima';
 }
 
+// === WEB STORE CONFIG ===
+export interface WebStoreProduct {
+  productName: string;
+  active: boolean;
+  displayImage: string; // base64 or URL
+  description: string;
+  kategori: string;
+}
+
+export interface WebStorePromo {
+  id: string;
+  title: string;
+  description: string;
+  image: string;
+  active: boolean;
+}
+
+export interface WebStoreConfig {
+  // Store Identity
+  storeName: string;
+  slogan: string;
+  logo: string; // base64
+  aboutText: string;
+  contactWhatsApp: string;
+  contactEmail: string;
+  contactInstagram: string;
+  alamat: string;
+  
+  // Hero Banner
+  heroTitle: string;
+  heroSubtitle: string;
+  heroImage: string; // base64
+  heroBtnText: string;
+  heroBtnLink: string;
+  
+  // Products
+  products: WebStoreProduct[];
+  
+  // Theme
+  primaryColor: string;
+  secondaryColor: string;
+  
+  // Promotions
+  promos: WebStorePromo[];
+  
+  // Footer
+  footerText: string;
+  facebookUrl: string;
+  twitterUrl: string;
+  
+  // Timestamp
+  lastUpdated: string;
+}
+
+// Default config factory
+export const createDefaultWebStoreConfig = (products: { namaProduk: string; kategori?: string }[]): WebStoreConfig => ({
+  storeName: 'Near Bakery & Co.',
+  slogan: 'Fresh Baked Daily with Love',
+  logo: '',
+  aboutText: 'Toko roti artisan yang menyajikan roti segar setiap hari. Dibuat dengan bahan-bahan berkualitas terbaik dan resep turun-temurun.',
+  contactWhatsApp: '6281234567890',
+  contactEmail: 'hello@nearbakery.com',
+  contactInstagram: '@nearbakery',
+  alamat: 'Jl. Contoh No. 123, Kota',
+  heroTitle: 'Fresh from the Oven',
+  heroSubtitle: 'Artisan breads & pastries made daily with premium ingredients',
+  heroImage: '',
+  heroBtnText: 'Pesan Sekarang',
+  heroBtnLink: '#products',
+  products: products.map(p => ({
+    productName: p.namaProduk,
+    active: true,
+    displayImage: '',
+    description: '',
+    kategori: p.kategori || 'Lainnya',
+  })),
+  primaryColor: '#059669',
+  secondaryColor: '#f59e0b',
+  promos: [],
+  footerText: '© 2026 Near Bakery & Co. All rights reserved.',
+  facebookUrl: '',
+  twitterUrl: '',
+  lastUpdated: new Date().toISOString(),
+});
+
