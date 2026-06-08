@@ -142,12 +142,9 @@ export async function syncProductsToFirestore(
     }
 
     // Dapatkan deskripsi dari productInfo / existing data
-    const hppProductInfo = productHpp.find(
-      (p) => p.namaProduk.toLowerCase().trim() === calc.namaProduk.toLowerCase().trim()
-    );
     if (!description || description === calc.namaProduk) {
-      description = hppProductInfo?.kategori 
-        ? `${calc.namaProduk} — ${hppProductInfo.kategori} lezat dari Near Bakery & Co. Dibuat dengan bahan-bahan pilihan berkualitas terbaik.`
+      description = productInfo?.kategori 
+        ? `${calc.namaProduk} — ${productInfo.kategori} lezat dari Near Bakery & Co. Dibuat dengan bahan-bahan pilihan berkualitas terbaik.`
         : `${calc.namaProduk} — Lezat dari Near Bakery & Co. Dibuat dengan bahan-bahan pilihan berkualitas terbaik.`;
     }
 
