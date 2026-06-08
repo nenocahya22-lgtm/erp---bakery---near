@@ -1,5 +1,60 @@
 import { BahanBaku, ProductHpp, DetailResep, CalculationResult } from '../types';
 
+// ─── AUTO KONVERSI SATUAN ───
+// Tabel konversi ke satuan dasar (gram)
+const SATUAN_CONVERSIONS: Record<string, { toBase: (v: number) => number; fromBase: (v: number) => number; group: 'mass' | 'volume' | 'count' | 'other' }> = {
+  'gr':    { toBase: v => v,                    fromBase: v => v,                    group: 'mass' },
+  'kg':    { toBase: v => v * 1000,             fromBase: v => v / 1000,             group: 'mass' },
+  'ons':   { toBase: v => v * 100,              fromBase: v => v / 100,              group: 'mass' },
+  'ml':    { toBase: v => v,                    fromBase: v => v,                    group: 'volume' },
+  'liter': { toBase: v => v * 1000,             fromBase: v => v / 1000,             group: 'volume' },
+  'pcs':   { toBase: v => v,                    fromBase: v => v,                    group: 'count' },
+  'sdm':   { toBase: v => v * 15,               fromBase: v => v / 15,               group: 'volume' }, // 1 sdm ≈ 15 ml
+  'sdt':   { toBase: v => v * 5,                fromBase: v => v / 5,                group: 'volume' }, // 1 sdt ≈ 5 ml
+  'cup':   { toBase: v => v * 240,              fromBase: v => v / 240,              group: 'volume' }, // 1 cup ≈ 240 ml
+  'bungkus': { toBase: v => v,                  fromBase: v => v,                    group: 'count' },
+  'pack':  { toBase: v => v,                    fromBase: v => v,                    group: 'count' },
+  'box':   { toBase: v => v,                    fromBase: v => v,                    group: 'count' },
+  'krat':  { toBase: v => v,                    fromBase: v => v,                    group: 'count' },
+  'ikat':  { toBase: v => v,                    fromBase: v => v,                    group: 'count' },
+  'ekor':  { toBase: v => v,                    fromBase: v => v,                    group: 'count' },
+};
+
+/**
+ * Konversi nilai antar satuan yang kompatibel (mass→mass, volume→volume, count→count).
+ * Contoh: convertSatuan(2000, 'gr', 'kg') → 2
+ */
+export function convertSatuan(value: number, fromSatuan: string, toSatuan: string): number {
+  const from = SATUAN_CONVERSIONS[fromSatuan];
+  const to = SATUAN_CONVERSIONS[toSatuan];
+  if (!from || !to) return value; // unknown unit, return as-is
+  if (from.group !== to.group) return value; // incompatible groups
+  const baseValue = from.toBase(value);
+  return to.fromBase(baseValue);
+}
+
+/**
+ * Dapatkan satuan terbaik untuk display (otomatis: gram→kg jika >=1000, ml→liter jika >=1000)
+ */
+export function getBestSatuan(satuan: string, value: number): { satuan: string; displayValue: number } {
+  if ((satuan === 'gr' || satuan === 'grams') && value >= 1000) {
+    return { satuan: 'kg', displayValue: value / 1000 };
+  }
+  if ((satuan === 'ml') && value >= 1000) {
+    return { satuan: 'liter', displayValue: value / 1000 };
+  }
+  return { satuan, displayValue: value };
+}
+
+/**
+ * Format nilai dengan satuan yang optimal (contoh: 1500 gr → "1.5 kg")
+ */
+export function formatWithSatuan(value: number, satuan: string): string {
+  const { satuan: bestSat, displayValue } = getBestSatuan(satuan, value);
+  const formatted = displayValue % 1 === 0 ? displayValue.toFixed(0) : displayValue.toFixed(1);
+  return `${formatted} ${bestSat}`;
+}
+
 export function calculateAllProducts(
   bahanBaku: BahanBaku[],
   productHpp: ProductHpp[],

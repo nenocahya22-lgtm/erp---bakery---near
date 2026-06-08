@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Truck, QrCode, Move, ShoppingCart, CheckCircle, RefreshCw, FolderSearch, FileText, Printer, Plus, X, Trash2 } from 'lucide-react';
+import { SATUAN_OPTIONS } from '../types';
 
 interface RequisitionItem {
   reqNo: string;
@@ -514,14 +515,15 @@ export default function LogisticsTab() {
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Jenis Satuan</label>
-                  <input
-                    type="text"
+                  <select
                     required
                     value={poUnit}
                     onChange={(e) => setPoUnit(e.target.value)}
-                    placeholder="Misal: Sack / Karton"
                     className="w-full border border-gray-200 rounded-lg p-2 bg-white text-xs"
-                  />
+                  >
+                    <option value="">-- Pilih Satuan --</option>
+                    {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
                 </div>
               </div>
 
