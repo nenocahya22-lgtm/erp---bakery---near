@@ -459,10 +459,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
                 })}
               </div>
               {calculatedProducts.length === 0 && (
-                <p className="text-[10px] text-amber-600 font-medium mt-1">Belum ada produk aktif.</p>
-              )}
-              {calculatedProducts.length === 0 && (
-                <p className="text-[10px] text-amber-600 font-medium mt-1">Belum ada produk aktif.</p>
+                <p className="text-[10px] text-amber-600 font-medium mt-1">Belum ada produk aktif. Tambah produk di tab Formulasi Resep.</p>
               )}
             </div>
 
