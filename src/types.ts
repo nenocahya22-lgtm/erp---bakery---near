@@ -15,7 +15,6 @@ export interface ProductHpp {
   kode?: string; // Auto-generated kode like PRD-001
   namaProduk: string;
   porsiJual: number; // Berapa porsi yang dihasilkan dalam satu resep
-  overhead: number; // Biaya operasional tambahan per resep
   hargaJual: number; // Harga jual total resep atau per porsi
   kategori?: string; // e.g. 'Roti', 'Cake', 'Cookies', 'Coffee', 'Lainnya'
 }
@@ -42,7 +41,6 @@ export interface DetailResep {
 export interface CalculationResult {
   namaProduk: string;
   porsiJual: number;
-  overhead: number;
   hargaJual: number;
   biayaBahanTotal: number;
   hppTotalResep: number;

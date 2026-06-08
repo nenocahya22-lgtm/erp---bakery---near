@@ -358,7 +358,7 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, onWipeAllD
   calculatedProducts.forEach((p) => {
     if (p.bahanList.length === 0) {
       warnings.push({
-        message: `Produk "${p.namaProduk}" belum dikonfigurasi resep bahannya. HPP saat ini hanya menghitung overhead.`,
+        message: `Produk "${p.namaProduk}" belum dikonfigurasi resep bahannya. HPP belum bisa dihitung secara akurat.`,
         type: 'warning',
       });
     }

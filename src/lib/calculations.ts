@@ -34,7 +34,7 @@ export function calculateAllProducts(
       };
     });
 
-    const hppTotalResep = biayaBahanTotal + product.overhead;
+    const hppTotalResep = biayaBahanTotal; // HPP = biaya bahan saja (tanpa overhead)
     const hppPerPorsi = hppTotalResep / (product.porsiJual || 1);
     const hargaJualPerPorsi = product.hargaJual / (product.porsiJual || 1);
     const profitPerPorsi = hargaJualPerPorsi - hppPerPorsi;
@@ -43,7 +43,6 @@ export function calculateAllProducts(
     return {
       namaProduk: product.namaProduk,
       porsiJual: product.porsiJual,
-      overhead: product.overhead,
       hargaJual: product.hargaJual,
       biayaBahanTotal,
       hppTotalResep,

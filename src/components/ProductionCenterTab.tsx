@@ -193,8 +193,7 @@ export default function ProductionCenterTab({
     const bahan = bahanBaku.find(b => b.nama.toLowerCase().trim() === r.namaBahan.toLowerCase().trim());
     return sum + (r.scaleTakaran * (bahan?.hargaSatuan || 0));
   }, 0);
-  const woTotalOverhead = (woProductInfo?.overhead || 0) * woBatch;
-  const woTotalHpp = woTotalCost + woTotalOverhead;
+  const woTotalHpp = woTotalCost;
   const woTotalOutput = (woProductInfo?.porsiJual || 1) * woBatch;
 
   const handlePrintWO = () => {
@@ -205,7 +204,7 @@ export default function ProductionCenterTab({
       const dalamKg = r.scaleTakaran >= 1000;
       return `<tr><td style="padding:8px;border-bottom:1px solid #eee;">${r.namaBahan}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;">${dalamKg ? (r.scaleTakaran/1000).toFixed(2) : r.scaleTakaran.toFixed(0)}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">${dalamKg ? 'kg' : (bahan?.satuan||'gr')}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;">${formatCurrency(r.scaleTakaran * (bahan?.hargaSatuan||0))}</td></tr>`;
     }).join('');
-    pw.document.write(`<html><head><title>WO - ${woProduct}</title><style>body{font-family:'Segoe UI',Arial,sans-serif;max-width:700px;margin:0 auto;padding:40px;color:#1f2937;}h1{font-size:22px;}table{width:100%;border-collapse:collapse;}th{background:#f3f4f6;padding:10px;text-align:left;font-size:11px;text-transform:uppercase;}@media print{body{padding:20px;}}</style></head><body><h1>🧾 Kitchen Work Order</h1><p style="color:#6b7280;font-size:12px;"><strong>Produk:</strong> ${woProduct} &nbsp;|&nbsp; <strong>Batch:</strong> ${woBatch}x &nbsp;|&nbsp; <strong>Output:</strong> ${woTotalOutput} porsi &nbsp;|&nbsp; <strong>Tanggal:</strong> ${new Date().toLocaleDateString('id-ID')}</p><table><thead><tr><th>Bahan</th><th style="text-align:right;">Jumlah</th><th style="text-align:center;">Satuan</th><th style="text-align:right;">Biaya</th></tr></thead><tbody>${rows}<tr><td style="padding:8px;border-bottom:1px solid #eee;color:#6b7280;">Overhead</td><td></td><td style="text-align:center;">-</td><td style="text-align:right;font-family:monospace;">${formatCurrency(woTotalOverhead)}</td></tr></tbody></table><div style="margin-top:16px;padding:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;"><strong>Total Batch: ${formatCurrency(woTotalHpp)}</strong> &nbsp;|&nbsp; Cost/porsi: ${formatCurrency(woTotalHpp/woTotalOutput)}</div>${woNotes ? `<div style="margin-top:12px;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;"><strong>Catatan:</strong> ${woNotes}</div>` : ''}<p style="margin-top:40px;text-align:center;color:#9ca3af;font-size:11px;">Near Bakery & Co. ERP — Work Order</p><script>window.print();<\/script></body></html>`);
+    pw.document.write(`<html><head><title>WO - ${woProduct}</title><style>body{font-family:'Segoe UI',Arial,sans-serif;max-width:700px;margin:0 auto;padding:40px;color:#1f2937;}h1{font-size:22px;}table{width:100%;border-collapse:collapse;}th{background:#f3f4f6;padding:10px;text-align:left;font-size:11px;text-transform:uppercase;}@media print{body{padding:20px;}}</style></head><body><h1>🧾 Kitchen Work Order</h1><p style="color:#6b7280;font-size:12px;"><strong>Produk:</strong> ${woProduct} &nbsp;|&nbsp; <strong>Batch:</strong> ${woBatch}x &nbsp;|&nbsp; <strong>Output:</strong> ${woTotalOutput} porsi &nbsp;|&nbsp; <strong>Tanggal:</strong> ${new Date().toLocaleDateString('id-ID')}</p><table><thead><tr><th>Bahan</th><th style="text-align:right;">Jumlah</th><th style="text-align:center;">Satuan</th><th style="text-align:right;">Biaya</th></tr></thead><tbody>${rows}</tbody></table><div style="margin-top:16px;padding:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;"><strong>Total Batch: ${formatCurrency(woTotalHpp)}</strong> &nbsp;|&nbsp; Cost/porsi: ${formatCurrency(woTotalHpp/woTotalOutput)}</div>${woNotes ? `<div style="margin-top:12px;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;"><strong>Catatan:</strong> ${woNotes}</div>` : ''}<p style="margin-top:40px;text-align:center;color:#9ca3af;font-size:11px;">Near Bakery & Co. ERP — Work Order</p><script>window.print();<\/script></body></html>`);
     pw.document.close();
   };
 
@@ -672,18 +671,13 @@ export default function ProductionCenterTab({
                             </tr>
                           );
                         })}
-                        <tr className="border-t-2 border-gray-200 bg-gray-50/30">
-                          <td className="px-4 py-3 font-bold text-gray-500">Overhead Batch</td><td></td><td></td>
-                          <td className="text-center text-gray-400">-</td>
-                          <td className="px-4 py-3 text-right font-mono font-bold text-gray-700">{formatCurrency(woTotalOverhead)}</td>
-                        </tr>
+
                       </tbody>
                     </table>
                   </div>
                   <div className="mt-4 bg-emerald-50 p-4 rounded-xl border border-emerald-100">
                     <div className="grid grid-cols-3 gap-4 text-xs">
                       <div><span className="text-[10px] uppercase font-bold text-gray-500 block">Bahan</span><span className="font-mono font-black text-gray-900">{formatCurrency(woTotalCost)}</span></div>
-                      <div><span className="text-[10px] uppercase font-bold text-gray-500 block">Overhead</span><span className="font-mono font-black text-gray-900">{formatCurrency(woTotalOverhead)}</span></div>
                       <div><span className="text-[10px] uppercase font-bold text-gray-500 block">HPP / Porsi</span><span className="font-mono font-black text-emerald-800">{formatCurrency(woTotalHpp/woTotalOutput)}</span></div>
                     </div>
                   </div>
@@ -730,10 +724,6 @@ export default function ProductionCenterTab({
                           })}
                         </div>
                         <div className="border-t border-gray-100 pt-2 space-y-1">
-                          <div className="flex justify-between text-gray-500">
-                            <span>Overhead</span>
-                            <span className="font-mono">{formatCurrency(p.overhead)}</span>
-                          </div>
                           <div className="flex justify-between text-gray-500">
                             <span>HPP per Porsi</span>
                             <span className="font-mono font-bold text-emerald-700">{calc ? formatCurrency(calc.hppPerPorsi) : '—'}</span>

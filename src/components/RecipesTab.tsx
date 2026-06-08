@@ -121,14 +121,12 @@ export default function RecipesTab({
   const [showAddForm, setShowAddForm] = useState(false);
   const [newProductName, setNewProductName] = useState('');
   const [newProductPorsi, setNewProductPorsi] = useState('10');
-  const [newProductOverhead, setNewProductOverhead] = useState('5000');
   const [newProductHargaJual, setNewProductHargaJual] = useState('45000');
   const [newProductKategori, setNewProductKategori] = useState('Roti');
 
   // Edit existing product formula state
   const [isEditingProductDetails, setIsEditingProductDetails] = useState(false);
   const [editPorsiJual, setEditPorsiJual] = useState('');
-  const [editOverhead, setEditOverhead] = useState('');
   const [editHargaJual, setEditHargaJual] = useState('');
   const [editKategori, setEditKategori] = useState('Roti');
 
@@ -157,7 +155,6 @@ export default function RecipesTab({
     if (activeProduct) {
       setActiveRecipePorsi(activeProduct.porsiJual);
       setEditPorsiJual(activeProduct.porsiJual.toString());
-      setEditOverhead(activeProduct.overhead.toString());
       setEditHargaJual(activeProduct.hargaJual.toString());
       setEditKategori(activeProduct.kategori || 'Roti');
     }
@@ -303,18 +300,16 @@ export default function RecipesTab({
     setEditingBahanName(null);
   };
 
-  // Save product details edit (overhead, margin, category)
+  // Save product details edit (margin, category)
   const handleSaveProductDetailsEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeProduct) return;
 
     const finalPorsi = parseFloat(editPorsiJual) || 1;
-    const finalOverhead = parseFloat(editOverhead) || 0;
     const finalHargaJual = parseFloat(editHargaJual) || 0;
 
     // Update locally or via prop cascade
     activeProduct.porsiJual = finalPorsi;
-    activeProduct.overhead = finalOverhead;
     activeProduct.hargaJual = finalHargaJual;
     activeProduct.kategori = editKategori;
 
@@ -349,7 +344,6 @@ export default function RecipesTab({
       kode: nextKode,
       namaProduk: newProductName.trim(),
       porsiJual: parseFloat(newProductPorsi) || 1,
-      overhead: parseFloat(newProductOverhead) || 0,
       hargaJual: parseFloat(newProductHargaJual) || 0,
       kategori: newProductKategori,
     };
@@ -361,7 +355,6 @@ export default function RecipesTab({
     // Reset formulation fields
     setNewProductName('');
     setNewProductPorsi('10');
-    setNewProductOverhead('5000');
     setNewProductHargaJual('0');
     setNewProductKategori('Roti');
   };
@@ -428,7 +421,7 @@ export default function RecipesTab({
     onDeleteTopping(id);
   };
 
-  // Hitung Total HPP = sum of semua ingredients * qty + overhead
+  // Hitung Total HPP = sum of semua ingredients
   const getTotalHPP = (productName: string) => {
     const product = productHpp.find(p => p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim());
     if (!product) return 0;
@@ -437,7 +430,7 @@ export default function RecipesTab({
       const bahan = bahanBaku.find(b => b.nama.toLowerCase().trim() === d.namaBahan.toLowerCase().trim());
       return sum + (d.takaran * (bahan?.hargaSatuan || 0));
     }, 0);
-    return bahanCost + product.overhead;
+    return bahanCost;
   };
 
   const formatCurrency = (val: number) => {
@@ -583,9 +576,7 @@ export default function RecipesTab({
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
+              </div>                <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Portion Yield</label>
                   <input
@@ -597,22 +588,16 @@ export default function RecipesTab({
                     className="w-full text-xs border border-gray-200 bg-white rounded-lg p-2 font-mono font-bold text-center"
                   />
                 </div>
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Overhead (Rp)</label>
+                <div className="col-span-2">
+                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Harga Jual (Rp)</label>
                   <input
                     type="number"
                     min="0"
-                    placeholder="5000"
-                    value={newProductOverhead}
-                    onChange={(e) => setNewProductOverhead(e.target.value)}
+                    placeholder="45000"
+                    value={newProductHargaJual}
+                    onChange={(e) => setNewProductHargaJual(e.target.value)}
                     className="w-full text-xs border border-gray-200 bg-white rounded-lg p-2 font-mono text-center"
                   />
-                </div>
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Estimasi HPP (Rp) <span className="text-blue-500">*auto dari bahan</span></label>
-                  <div className="w-full text-xs border border-gray-200 bg-gray-100 rounded-lg p-2 font-mono text-center text-gray-400 font-bold">
-                    (Akan terhitung otomatis setelah tambah bahan)
-                  </div>
                 </div>
               </div>
 
@@ -733,7 +718,7 @@ export default function RecipesTab({
                 <h4 className="text-xs font-black text-slate-900 uppercase flex items-center gap-1.5">
                   <Edit2 className="w-4 h-4 text-emerald-600" /> Edit Detail Formula HPP & Kategori Menu
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs">
                   <div>
                     <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Porsi Yield</label>
                     <input
@@ -743,17 +728,6 @@ export default function RecipesTab({
                       value={editPorsiJual}
                       onChange={(e) => setEditPorsiJual(e.target.value)}
                       className="w-full border border-gray-200 bg-white rounded-lg p-2.5 font-mono font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Overhead Batch (Rp)</label>
-                    <input
-                      type="number"
-                      required
-                      min="0"
-                      value={editOverhead}
-                      onChange={(e) => setEditOverhead(e.target.value)}
-                      className="w-full border border-gray-200 bg-white rounded-lg p-2.5 font-mono"
                     />
                   </div>
                   <div>
@@ -1207,18 +1181,18 @@ export default function RecipesTab({
                 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-bold divide-y sm:divide-y-0 sm:divide-x divide-slate-800 text-center">
                   <div className="space-y-1 py-2 sm:py-0">
-                    <span className="text-[10px] uppercase text-slate-400 block font-normal">HPP Resep Adonan</span>
+                    <span className="text-[10px] uppercase text-slate-400 block font-normal">HPP Resep (Bahan Saja)</span>
                     <span className="text-sm font-mono text-slate-200">{formatCurrency(totalIngredientsCost / activeRecipePorsi)} / porsi</span>
                   </div>
                   
                   <div className="space-y-1 py-2 sm:py-0 sm:pl-4">
-                    <span className="text-[10px] uppercase text-slate-400 block font-normal">Biaya Overhead Unit</span>
-                    <span className="text-sm font-mono text-slate-200">{formatCurrency(activeProduct.overhead / activeRecipePorsi)} / porsi</span>
+                    <span className="text-[10px] uppercase text-slate-400 block font-normal">Biaya Operasional</span>
+                    <span className="text-sm font-mono text-slate-200">Via OPEX (Arus Kas)</span>
                   </div>
 
                   <div className="space-y-1 py-2 sm:py-0 sm:pl-4">
-                    <span className="text-[10px] uppercase text-slate-400 block font-normal">Total HPP + Overhead</span>
-                    <span className="text-base font-mono text-emerald-400">{formatCurrency((totalIngredientsCost + activeProduct.overhead) / activeRecipePorsi)} / porsi</span>
+                    <span className="text-[10px] uppercase text-slate-400 block font-normal">Total HPP (Bahan Saja)</span>
+                    <span className="text-base font-mono text-emerald-400">{formatCurrency(totalIngredientsCost / activeRecipePorsi)} / porsi</span>
                   </div>
                 </div>
 
@@ -1236,7 +1210,7 @@ export default function RecipesTab({
                       <span className="text-slate-400">Margin Aktual</span>
                       <span className={`font-mono font-bold ${activeProduct.hargaJual > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
                         {activeProduct.hargaJual > 0
-                          ? `${(((activeProduct.hargaJual - ((totalIngredientsCost + activeProduct.overhead) / activeRecipePorsi)) / activeProduct.hargaJual) * 100).toFixed(1)}%`
+                          ? `${(((activeProduct.hargaJual - (totalIngredientsCost / activeRecipePorsi)) / activeProduct.hargaJual) * 100).toFixed(1)}%`
                           : '—'}
                       </span>
                     </div>
@@ -1257,7 +1231,7 @@ export default function RecipesTab({
                     <span className="text-[10px] block text-slate-500 mb-1 font-semibold uppercase">Margin Bersih</span>
                     <span className="text-base font-black font-mono text-emerald-400">
                       {activeProduct.hargaJual > 0
-                        ? `${(((activeProduct.hargaJual - ((totalIngredientsCost + activeProduct.overhead) / activeRecipePorsi)) / activeProduct.hargaJual) * 100).toFixed(1)}%`
+                        ? `${(((activeProduct.hargaJual - (totalIngredientsCost / activeRecipePorsi)) / activeProduct.hargaJual) * 100).toFixed(1)}%`
                         : '—'}
                     </span>
                   </div>

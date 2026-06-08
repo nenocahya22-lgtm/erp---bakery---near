@@ -10,7 +10,7 @@ interface HargaHppTabProps {
   bahanBaku: BahanBaku[];
   calculatedProducts: CalculationResult[];
   detailResep: DetailResep[];
-  onUpdateProductPricing: (productName: string, overhead: number, hargaJual: number) => void;
+  onUpdateProductPricing: (productName: string, hargaJual: number) => void;
   onDeleteProduct: (productName: string) => void;
   onEditMaterial?: (oldName: string, updated: BahanBaku) => void;
 }
@@ -30,7 +30,7 @@ export default function HargaHppTab({ bahanBaku, calculatedProducts, detailResep
               <TrendingUp className="w-6 h-6 text-emerald-600" /> Harga & HPP
             </h2>
             <p className="text-xs text-gray-500 mt-1">
-              Analisis harga bahan, HPP produk, dynamic pricing, dan simulasi substitusi — dalam satu tab.
+              Analisis harga bahan, HPP produk, dan penetapan harga jual — dalam satu tab.
             </p>
           </div>
         </div>
@@ -130,10 +130,9 @@ function HargaPrediksiSection({ bahanBaku, calculatedProducts, formatCurrency }:
   const maxPrice = Math.max(...allPrices, 1);
   const minPrice = Math.min(...allPrices, 0);
 
-  const rawPortfolioSum = calculatedProducts.reduce((acc, curr) => acc + (curr.hppTotalResep - curr.overhead), 0);
+  const rawPortfolioSum = calculatedProducts.reduce((acc, curr) => acc + curr.hppTotalResep, 0);
   const inflatedSum = rawPortfolioSum * (1 + commodityInflation / 100);
-  const overheadSum = calculatedProducts.reduce((acc, curr) => acc + curr.overhead, 0);
-  const inflatedPortfolio = inflatedSum + overheadSum;
+  const inflatedPortfolio = inflatedSum;
   const avgMargin = calculatedProducts.length > 0
     ? calculatedProducts.reduce((acc, curr) => acc + curr.marginPersen, 0) / calculatedProducts.length : 0;
   const inflatedMargin = Math.max(-100, avgMargin - (commodityInflation * 0.4));
@@ -275,7 +274,7 @@ function HargaPrediksiSection({ bahanBaku, calculatedProducts, formatCurrency }:
             </div>
           </div>
           <div className="bg-slate-50 p-4 rounded-xl space-y-2 text-xs">
-            <div className="flex justify-between"><span>HPP Portofolio Awal:</span><span className="font-bold font-mono">{formatCurrency(rawPortfolioSum + overheadSum)}</span></div>
+            <div className="flex justify-between"><span>HPP Portofolio Awal:</span><span className="font-bold font-mono">{formatCurrency(rawPortfolioSum)}</span></div>
             <div className="flex justify-between text-red-700 font-bold border-t border-dashed pt-2"><span>HPP Setelah Inflasi (+{commodityInflation}%):</span><span className="font-mono">{formatCurrency(inflatedPortfolio)}</span></div>
             <div className="flex justify-between"><span>Margin Rata-rata:</span><span className={`font-mono font-bold ${inflatedMargin < 20 ? 'text-red-600' : 'text-emerald-700'}`}>{inflatedMargin.toFixed(1)}%</span></div>
           </div>
@@ -312,7 +311,7 @@ function HargaPrediksiSection({ bahanBaku, calculatedProducts, formatCurrency }:
 // ===== SUB-TAB: HPP & MARGIN =====
 function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDeleteProduct, bahanBaku, formatCurrency }: {
   calculatedProducts: CalculationResult[];
-  onUpdateProductPricing: (productName: string, overhead: number, hargaJual: number) => void;
+  onUpdateProductPricing: (productName: string, hargaJual: number) => void;
   onDeleteProduct: (productName: string) => void;
   bahanBaku: BahanBaku[];
   formatCurrency: (v: number) => string;
@@ -329,7 +328,7 @@ function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDelete
   const handleApplySuggestedPrice = () => {
     if (!activeResult) return;
     if (window.confirm(`Terapkan harga jual ${formatCurrency(suggestedPriceTotal)} untuk "${activeResult.namaProduk}"?`)) {
-      onUpdateProductPricing(activeResult.namaProduk, activeResult.overhead, suggestedPriceTotal);
+      onUpdateProductPricing(activeResult.namaProduk, suggestedPriceTotal);
     }
   };
 
@@ -382,7 +381,7 @@ function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDelete
                     if (window.confirm(`Terapkan margin ${globalTargetMargin}% ke SEMUA produk (${calculatedProducts.length} produk)?`)) {
                       calculatedProducts.forEach(p => {
                         const recommended = p.hppPerPorsi / (1 - globalTargetMargin / 100);
-                        onUpdateProductPricing(p.namaProduk, p.overhead, Math.round(recommended * p.porsiJual));
+                        onUpdateProductPricing(p.namaProduk, Math.round(recommended * p.porsiJual));
                       });
                     }
                   }}
@@ -441,7 +440,7 @@ function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDelete
         <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-start">
           <div>
             <h3 className="text-base font-semibold text-gray-900">Harga Pokok Penjualan (HPP) & Margin</h3>
-            <p className="text-xs text-gray-500 mt-1">Simulasi biaya overhead, harga jual, dan margin keuntungan langsung.</p>
+            <p className="text-xs text-gray-500 mt-1">Atur harga jual produk, lihat margin keuntungan langsung.</p>
           </div>
           <button onClick={() => {
             const printWin = window.open('', '_blank');
@@ -473,9 +472,7 @@ function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDelete
                 <tr className="border-b border-gray-100 bg-gray-50/30 text-[11px] font-bold text-gray-500 uppercase">
                   <th className="px-5 py-3">Nama Produk</th>
                   <th className="px-4 py-3 text-right">Yield</th>
-                  <th className="px-4 py-3 text-right">HPP/Porsi</th>
-                  <th className="px-4 py-3 text-right">Overhead</th>
-                  <th className="px-4 py-3 text-right">Harga Jual</th>
+                  <th className="px-4 py-3 text-right">HPP/Porsi</th>                      <th className="px-4 py-3 text-right">Harga Jual</th>
                   <th className="px-4 py-3 text-right">Laba/Porsi</th>
                   <th className="px-4 py-3 text-center">Margin</th>
                   <th className="px-4 py-3 text-center">Aksi</th>
@@ -493,16 +490,8 @@ function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDelete
                       <td className="px-4 py-4 text-right">
                         <div className="inline-flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-md">
                           <Edit3 className="w-3 h-3 text-gray-400" />
-                          <input type="number" value={p.overhead} onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => onUpdateProductPricing(p.namaProduk, parseFloat(e.target.value) || 0, p.hargaJual)}
-                            className="w-16 bg-transparent text-right font-bold text-gray-700 font-mono" />
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-right">
-                        <div className="inline-flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-md">
-                          <Edit3 className="w-3 h-3 text-gray-400" />
                           <input type="number" value={p.hargaJual} onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => onUpdateProductPricing(p.namaProduk, p.overhead, parseFloat(e.target.value) || 0)}
+                            onChange={(e) => onUpdateProductPricing(p.namaProduk, parseFloat(e.target.value) || 0)}
                             className="w-20 bg-transparent text-right font-bold text-emerald-800 font-mono" />
                         </div>
                       </td>
@@ -557,18 +546,15 @@ function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDelete
               <div className="space-y-3 pt-2">
                 <h4 className="text-xs font-bold text-gray-700 uppercase">Struktur Komponen (per Porsi)</h4>
                 <div className="h-6 w-full rounded-lg overflow-hidden flex text-[10px] text-white font-bold font-mono">
-                  <div style={{ width: `${Math.max(1, Math.min(100, ((activeResult.hppPerPorsi - activeResult.overhead/activeResult.porsiJual) / activeResult.hargaJualPerPorsi) * 100))}%` }}
-                    className="bg-emerald-600 h-full flex items-center justify-center truncate px-1">Bahan</div>
-                  <div style={{ width: `${Math.max(1, Math.min(100, ((activeResult.overhead/activeResult.porsiJual) / activeResult.hargaJualPerPorsi) * 100))}%` }}
-                    className="bg-amber-500 h-full flex items-center justify-center truncate px-1">Ops</div>
+                  <div style={{ width: `${Math.max(1, Math.min(100, (activeResult.hppPerPorsi / activeResult.hargaJualPerPorsi) * 100))}%` }}
+                    className="bg-emerald-600 h-full flex items-center justify-center truncate px-1">HPP Bahan</div>
                   {activeResult.profitPerPorsi > 0 && (
                     <div style={{ width: `${Math.max(1, Math.min(100, activeResult.marginPersen))}%` }}
                       className="bg-blue-600 h-full flex items-center justify-center truncate px-1">Laba</div>
                   )}
                 </div>
-                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-50 text-[10px]">
-                  <div><span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-600 mr-1"></span>Bahan: <span className="block font-bold font-mono">{formatCurrency(activeResult.hppPerPorsi - activeResult.overhead/activeResult.porsiJual)}</span></div>
-                  <div><span className="inline-block w-2.5 h-2.5 rounded-sm bg-amber-500 mr-1"></span>Overhead: <span className="block font-bold font-mono">{formatCurrency(activeResult.overhead / activeResult.porsiJual)}</span></div>
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-50 text-[10px]">
+                  <div><span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-600 mr-1"></span>HPP Bahan: <span className="block font-bold font-mono">{formatCurrency(activeResult.hppPerPorsi)}</span></div>
                   <div><span className="inline-block w-2.5 h-2.5 rounded-sm bg-blue-600 mr-1"></span>Laba: <span className="block font-bold font-mono">{formatCurrency(activeResult.profitPerPorsi)}</span></div>
                 </div>
               </div>

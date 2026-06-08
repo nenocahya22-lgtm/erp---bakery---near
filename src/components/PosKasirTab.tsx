@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, ChefHat, Printer, X, Coins, RefreshCw, Calendar, Clock, TrendingUp, BarChart3 } from 'lucide-react';
+import { ShoppingCart, ChefHat, Printer, X, Coins, RefreshCw, Calendar, Clock, TrendingUp, BarChart3, Image } from 'lucide-react';
 import { CalculationResult } from '../types';
+import { getSavedRecipeImage } from '../lib/image-generator';
 
 interface RetailOrder {
   ordId: string;
@@ -431,15 +432,35 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
 
             <div>
               <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Pilih Produk</label>
-              <select required value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl p-2.5 bg-white font-bold">
-                <option value="">-- Pilih Produk --</option>
-                {calculatedProducts.map(p => (
-                  <option key={p.namaProduk} value={p.namaProduk}>
-                    {p.namaProduk} - {formatCurrency(p.hargaJualPerPorsi)}
-                  </option>
-                ))}
-              </select>
+              <div className="grid grid-cols-2 gap-2 mb-3 max-h-[300px] overflow-y-auto">
+                {calculatedProducts.map(p => {
+                  const img = getSavedRecipeImage(p.namaProduk);
+                  const isSelected = selectedProduct === p.namaProduk;
+                  return (
+                    <button key={p.namaProduk} type="button"
+                      onClick={() => { setSelectedProduct(p.namaProduk); }}
+                      className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex gap-2 items-center ${
+                        isSelected
+                          ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20'
+                          : 'bg-white border-gray-200 hover:border-emerald-300 hover:shadow-sm'
+                      }`}>
+                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 shrink-0 border border-gray-200">
+                        <img src={img} alt={p.namaProduk}
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="block text-[11px] font-bold text-gray-900 truncate">{p.namaProduk}</span>
+                        <span className="block text-[10px] font-mono font-bold text-emerald-700">{formatCurrency(p.hargaJualPerPorsi)}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              {calculatedProducts.length === 0 && (
+                <p className="text-[10px] text-amber-600 font-medium mt-1">Belum ada produk aktif.</p>
+              )}
               {calculatedProducts.length === 0 && (
                 <p className="text-[10px] text-amber-600 font-medium mt-1">Belum ada produk aktif.</p>
               )}

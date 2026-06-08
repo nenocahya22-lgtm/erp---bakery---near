@@ -37,13 +37,12 @@ import CrmMarketingTab from './components/CrmMarketingTab';
 import BomTab from './components/BomTab';
 import FefoExpiryTab from './components/FefoExpiryTab';
 
-import BudgetTab from './components/BudgetTab';
+import AnggaranAlokasiTab from './components/AnggaranAlokasiTab';
 import ProductionPlannerTab from './components/ProductionPlannerTab';
 import KitchenWorkOrderTab from './components/KitchenWorkOrderTab';
 import BakerPercentageTab from './components/BakerPercentageTab';
 import BepTab from './components/BepTab';
 import DoughTemperatureTab from './components/DoughTemperatureTab';
-import ProfitDistribusiTab from './components/ProfitDistribusiTab';
 import BackupSystemTab from './components/BackupSystemTab';
 import PembukuanTab from './components/PembukuanTab';
 
@@ -229,7 +228,7 @@ export default function App() {
     | 'erp_pos'
     | 'erp_online'
     | 'erp_crm'
-    | 'erp_budget'
+    | 'erp_anggaran_alokasi'
     | 'erp_iot'
     | 'erp_compliance'
     | 'erp_production_planner'
@@ -237,7 +236,6 @@ export default function App() {
     | 'erp_baker_pct'
     | 'erp_bep'
     | 'erp_dough_temp'
-    | 'erp_profit_distribusi'
     | 'erp_backup'
     | 'erp_production_center'
     | 'erp_rekap_bahan'
@@ -657,11 +655,11 @@ export default function App() {
     showToast(`Produk "${productName}" dihapus!`, 'info');
   };
 
-  const handleUpdateProductPricing = (productName: string, overhead: number, hargaJual: number) => {
+  const handleUpdateProductPricing = (productName: string, hargaJual: number) => {
     setProductHpp((prev) =>
       prev.map((p) =>
         p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
-          ? { ...p, overhead, hargaJual }
+          ? { ...p, hargaJual }
           : p
       )
     );
@@ -1275,9 +1273,10 @@ export default function App() {
                 suratOrders={suratOrders}
               />
             )}
-            {activeTab === 'erp_budget' && (
-              <BudgetTab
+            {activeTab === 'erp_anggaran_alokasi' && (
+              <AnggaranAlokasiTab
                 calculatedProducts={calculatedProducts}
+                bahanBaku={bahanBaku}
                 wasteTotalLoss={wasteTotalLoss}
                 rdTotalCost={rdTotalCost}
               />
@@ -1316,9 +1315,7 @@ export default function App() {
             {activeTab === 'erp_dough_temp' && (
               <DoughTemperatureTab />
             )}
-            {activeTab === 'erp_profit_distribusi' && (
-              <ProfitDistribusiTab />
-            )}
+
             {activeTab === 'erp_backup' && (
               <BackupSystemTab
                 bahanBaku={bahanBaku}
@@ -1514,9 +1511,8 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
         <div className="space-y-1">
           <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑤ Keuangan</span>
           {sidebarBtn('erp_cash_flow', <Coins className="w-4 h-4" />, '💵 Arus Kas')}
-          {sidebarBtn('erp_profit_distribusi', <PieChart className="w-4 h-4" />, '🎯 Alokasi Laba')}
+          {sidebarBtn('erp_anggaran_alokasi', <PieChart className="w-4 h-4" />, '💰 Anggaran & Alokasi')}
           {sidebarBtn('erp_bep', <BarChart3 className="w-4 h-4" />, '🧮 BEP & Balance')}
-          {sidebarBtn('erp_budget', <CheckCircle2 className="w-4 h-4" />, '💰 Anggaran Budget')}
           {sidebarBtn('hpp', <TrendingUp className="w-4 h-4" />, '📈 Harga & HPP')}
         </div>
         <div className="space-y-1">

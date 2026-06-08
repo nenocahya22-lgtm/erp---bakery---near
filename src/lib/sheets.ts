@@ -141,8 +141,7 @@ export async function loadProjectDataFromSheets(accessToken: string, spreadsheet
           data.productHpp.push({
             namaProduk: String(row[0]).trim(),
             porsiJual: parseFloat(row[1]) || 1,
-            overhead: parseFloat(row[2]) || 0,
-            hargaJual: parseFloat(row[3]) || 0,
+            hargaJual: parseFloat(row[2]) || 0,
           });
         }
       }
@@ -205,7 +204,7 @@ export async function createAndInitializeTemplates(
 
   // Hanya buat header kolom — tanpa data sampel
   const headerBahan = [['Nama Bahan', 'Satuan', 'Harga Beli', 'Isi Kemasan', 'Harga Satuan']];
-  const headerHpp = [['Nama Produk', 'Porsi Jual', 'Overhead', 'Harga Jual']];
+  const headerHpp = [['Nama Produk', 'Porsi Jual', 'Harga Jual']];
   const headerResep = [['Nama Produk', 'Nama Bahan', 'Banyaknya / Takaran']];
 
   await updateSheetValues(accessToken, spreadsheetId, 'Bahan Baku!A1', headerBahan);
@@ -240,9 +239,9 @@ export async function saveProjectDataToSheets(
     ]);
   });
 
-  const hppRows: any[][] = [['Nama Produk', 'Porsi Jual', 'Overhead', 'Harga Jual']];
+  const hppRows: any[][] = [['Nama Produk', 'Porsi Jual', 'Harga Jual']];
   data.productHpp.forEach((p) => {
-    hppRows.push([p.namaProduk, p.porsiJual, p.overhead, p.hargaJual]);
+    hppRows.push([p.namaProduk, p.porsiJual, p.hargaJual]);
   });
 
   const resepRows: any[][] = [['Nama Produk', 'Nama Bahan', 'Banyaknya / Takaran']];

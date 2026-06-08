@@ -33,8 +33,7 @@ export default function KitchenWorkOrderTab({
     return sum + (r.scaleTakaran * hargaSatuan);
   }, 0);
 
-  const totalOverhead = (product?.overhead || 0) * batchMultiplier;
-  const totalBatchHpp = totalBatchCost + totalOverhead;
+  const totalBatchHpp = totalBatchCost;
   const totalOutput = (product?.porsiJual || 1) * batchMultiplier;
   const costPerUnit = totalOutput > 0 ? totalBatchHpp / totalOutput : 0;
 
@@ -91,14 +90,7 @@ export default function KitchenWorkOrderTab({
             <tr><th>Bahan</th><th style="text-align:right;">Jumlah</th><th style="text-align:center;">Satuan</th><th style="text-align:right;">Biaya</th></tr>
           </thead>
           <tbody>
-            ${ingredientRows}
-            <tr>
-              <td style="padding:8px 12px;border-bottom:1px solid #eee;font-weight:500;color:#6b7280;">Overhead</td>
-              <td style="padding:8px 12px;border-bottom:1px solid #eee;"></td>
-              <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:center;">-</td>
-              <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;">${formatCurrency(totalOverhead)}</td>
-            </tr>
-            <tr class="total-row">
+            ${ingredientRows}                      <tr class="total-row">
               <td style="padding:10px 12px;font-weight:bold;">TOTAL BATCH</td>
               <td style="padding:10px 12px;text-align:right;"></td>
               <td style="padding:10px 12px;text-align:center;">${totalOutput} porsi</td>
@@ -280,27 +272,17 @@ export default function KitchenWorkOrderTab({
                           </tr>
                         );
                       })}
-                      <tr className="border-t-2 border-gray-200 bg-gray-50/30">
-                        <td className="px-4 py-3 font-bold text-gray-500">Overhead Batch</td>
-                        <td></td>
-                        <td></td>
-                        <td className="text-center text-gray-400">-</td>
-                        <td className="px-4 py-3 text-right font-mono font-bold text-gray-700">{formatCurrency(totalOverhead)}</td>
-                      </tr>
+
                     </tbody>
                   </table>
                 </div>
 
                 {/* Footer Summary */}
                 <div className="mt-4 bg-emerald-50 p-4 rounded-xl border border-emerald-100">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                  <div className="grid grid-cols-3 gap-4 text-xs">
                     <div>
                       <span className="text-[10px] uppercase font-bold text-gray-500 block">Total Bahan</span>
                       <span className="font-mono font-black text-gray-900 text-sm">{formatCurrency(totalBatchCost)}</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-gray-500 block">Overhead</span>
-                      <span className="font-mono font-black text-gray-900 text-sm">{formatCurrency(totalOverhead)}</span>
                     </div>
                     <div>
                       <span className="text-[10px] uppercase font-bold text-gray-500 block">HPP Batch</span>
