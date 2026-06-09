@@ -1237,6 +1237,8 @@ export default function App() {
               <DashboardTab
                 calculatedProducts={calculatedProducts}
                 bahanBaku={bahanBaku}
+                cabangList={cabangList}
+                branchTransactions={branchTransactions}
                 onWipeAllData={handleWipeAllData}
               />
             )}

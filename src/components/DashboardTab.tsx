@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { CalculationResult, BahanBaku } from '../types';
-import { TrendingUp, FolderTree, Package, DollarSign, AlertCircle, Sparkles, AlertTriangle, Lightbulb, RefreshCw, Copy, Check, FileDown, Rocket, ArrowRight, Bell, X, Trash2, MessageSquare, Send, Settings, CheckCircle2 } from 'lucide-react';
+import { CalculationResult, BahanBaku, Cabang, BranchTransaction } from '../types';
+import { TrendingUp, FolderTree, Package, DollarSign, AlertCircle, Sparkles, AlertTriangle, Lightbulb, RefreshCw, Copy, Check, FileDown, Rocket, ArrowRight, Bell, X, Trash2, MessageSquare, Send, Settings, CheckCircle2, Building2, ShoppingCart } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 
 interface AlertItem {
@@ -20,13 +20,28 @@ interface WaNotification {
   sent: boolean;
 }
 
+interface RetailOrder {
+  ordId: string;
+  source: string;
+  customerName: string;
+  items: string;
+  totalSum: number;
+  status: string;
+  timeAgo: string;
+  date: string;
+  catatan: string;
+  addOns?: { nama: string; harga: number }[];
+}
+
 interface DashboardTabProps {
   calculatedProducts: CalculationResult[];
   bahanBaku: BahanBaku[];
+  cabangList?: Cabang[];
+  branchTransactions?: BranchTransaction[];
   onWipeAllData?: () => void;
 }
 
-export default function DashboardTab({ calculatedProducts, bahanBaku, onWipeAllData }: DashboardTabProps) {
+export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList = [], branchTransactions = [], onWipeAllData }: DashboardTabProps) {
   // AI Marketing Assistant states
   const [analysisResult, setAnalysisResult] = React.useState<string>('');
   const [loading, setLoading] = React.useState<boolean>(false);
@@ -76,6 +91,63 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, onWipeAllD
     const interval = setInterval(checkAlerts, 30000);
     return () => clearInterval(interval);
   }, [calculatedProducts, bahanBaku]);
+
+  // ─── BRANCH SALES DATA ───
+  const [posOrders, setPosOrders] = useState<RetailOrder[]>(() => {
+    const saved = localStorage.getItem('pos_orders_data');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [revenueTracker, setRevenueTracker] = useState<{ transactions: any[]; dailyTotals: Record<string, { total: number; sources: Record<string, number> }> }>(() => {
+    const saved = localStorage.getItem('revenue_tracker_data');
+    return saved ? JSON.parse(saved) : { transactions: [], dailyTotals: {} };
+  });
+
+  useEffect(() => {
+    const saved = localStorage.getItem('pos_orders_data');
+    if (saved) setPosOrders(JSON.parse(saved));
+  }, []);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('revenue_tracker_data');
+    if (saved) setRevenueTracker(JSON.parse(saved));
+  }, []);
+
+  // Compute per-cabang sales metrics
+  const today = new Date().toISOString().substring(0, 10);
+  const todayRevenueTracker = revenueTracker.dailyTotals[today];
+  
+  const branchSalesData = cabangList.map(cabang => {
+    // POS orders that came from this branch
+    const branchSource = `POS Cabang ${cabang.nama}`;
+    const branchPosOrders = posOrders.filter(o => o.source === branchSource && o.date === today);
+    const totalRevenueFromPos = branchPosOrders.reduce((s, o) => s + o.totalSum, 0);
+    
+    // Revenue from tracker sources
+    const revenueFromTracker = todayRevenueTracker?.sources?.[branchSource] || 0;
+    const totalRevenue = Math.max(totalRevenueFromPos, revenueFromTracker);
+    
+    // Branch transactions (stock movements)
+    const branchTx = branchTransactions.filter(t => t.cabangId === cabang.id);
+    const posTransactions = branchTx.filter(t => t.tipe === 'pos_jual');
+    const totalDeducted = posTransactions.reduce((s, t) => s + t.qty, 0);
+
+    // Recent orders (most recent first)
+    const recentOrders = [...posOrders]
+      .filter(o => o.source === branchSource)
+      .sort((a, b) => b.date.localeCompare(a.date) || b.timeAgo.localeCompare(a.timeAgo))
+      .slice(0, 5);
+
+    return {
+      cabang,
+      totalRevenue,
+      totalOrders: branchPosOrders.length,
+      totalDeducted,
+      recentOrders,
+    };
+  });
+
+  const totalBranchRevenue = branchSalesData.reduce((s, b) => s + b.totalRevenue, 0);
+  const totalBranchOrders = branchSalesData.reduce((s, b) => s + b.totalOrders, 0);
 
   const dismissAlert = (id: string) => setAlerts(prev => prev.map(a => a.id === id ? { ...a, dismissed: true } : a));
   const activeAlerts = alerts.filter(a => !a.dismissed);
@@ -514,6 +586,114 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, onWipeAllD
           </div>
         </div>
       </div>
+
+      {/* ==================== PENJUALAN PER CABANG ==================== */}
+      {cabangList.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+          <div className="p-5 border-b border-gray-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
+                  <Building2 className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                    🏪 Ringkasan Penjualan per Cabang
+                    {totalBranchRevenue > 0 && (
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-bold rounded-full font-mono">
+                        {formatCurrency(totalBranchRevenue)} hari ini
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Data POS dari {cabangList.length} cabang aktif — {totalBranchOrders} transaksi hari ini
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="divide-y divide-gray-100">
+            {branchSalesData.map(b => (
+              <div key={b.cabang.id} className="p-5 hover:bg-gray-50/50 transition">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
+                      <Building2 className="w-4 h-4 text-emerald-600" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-bold text-gray-900">{b.cabang.nama}</span>
+                      <span className="text-[10px] text-gray-400 block">{b.cabang.alamat || '-'}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-6 flex-wrap">
+                    <div className="text-right">
+                      <span className="text-[10px] uppercase font-bold text-gray-400 block">Revenue Hari Ini</span>
+                      <span className="text-base font-black font-mono text-emerald-700">
+                        {b.totalRevenue > 0 ? formatCurrency(b.totalRevenue) : <span className="text-gray-300">Rp 0</span>}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] uppercase font-bold text-gray-400 block">Transaksi</span>
+                      <span className="text-base font-black font-mono text-blue-700">{b.totalOrders}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] uppercase font-bold text-gray-400 block">Pemakaian Bahan</span>
+                      <span className="text-base font-black font-mono text-amber-700">
+                        {b.totalOrders > 0 ? `${b.totalDeducted.toFixed(0)} unit` : <span className="text-gray-300">-</span>}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] uppercase font-bold text-gray-400 block">AOV</span>
+                      <span className="text-base font-black font-mono text-purple-700">
+                        {b.totalOrders > 0 ? formatCurrency(Math.round(b.totalRevenue / b.totalOrders)) : <span className="text-gray-300">-</span>}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recent orders from this branch */}
+                {b.recentOrders.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-50">
+                    <span className="text-[9px] uppercase font-bold text-gray-400 tracking-wider block mb-2">Transaksi Terakhir</span>
+                    <div className="flex flex-wrap gap-2">
+                      {b.recentOrders.slice(0, 3).map((o, i) => (
+                        <div key={o.ordId || i} className="bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1.5 text-[10px]">
+                          <span className="font-semibold text-gray-700">{o.items}</span>
+                          <span className="text-gray-400 mx-1">—</span>
+                          <span className="font-mono font-bold text-emerald-700">{formatCurrency(o.totalSum)}</span>
+                          <span className="text-gray-400 ml-1">{o.timeAgo}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {branchSalesData.length === 0 && (
+              <div className="p-8 text-center text-xs text-gray-400">
+                Belum ada cabang terdaftar. Tambah cabang di Data Pusat.
+              </div>
+            )}
+          </div>
+
+          {/* TOTAL BARIS */}
+          {branchSalesData.filter(b => b.totalRevenue > 0).length > 0 && (
+            <div className="p-4 bg-emerald-50 border-t border-emerald-100 flex items-center justify-between text-xs font-bold">
+              <div className="flex items-center gap-2 text-emerald-800">
+                <ShoppingCart className="w-4 h-4" />
+                <span>Total Penjualan Semua Cabang</span>
+              </div>
+              <div className="flex items-center gap-6">
+                <span>{totalBranchOrders} transaksi</span>
+                <span className="text-base font-black font-mono">{formatCurrency(totalBranchRevenue)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ==================== AUTOMATED AI MARKETING ASSISTANT MODULE ==================== */}
       <div 
