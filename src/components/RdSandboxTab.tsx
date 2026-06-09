@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { BahanBaku } from '../types';
+import React, { useState, useEffect } from 'react';
+import { BahanBaku, SATUAN_OPTIONS } from '../types';
 import { FlaskConical, Plus, Trash2, Sparkles, Sliders, ArrowUpRight, Scale, FolderOpen, Tag, ChevronRight, Edit2, X, Check, AlertTriangle } from 'lucide-react';
 
 export interface RDExperiment {
@@ -33,9 +33,10 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
   const [newRDPortion, setNewRDPortion] = useState('10');
   const [newRDOverhead, setNewRDOverhead] = useState('10000');
   const [newRDPrice, setNewRDPrice] = useState('0');
-  const [rdIngredients, setRdIngredients] = useState<{ bahanName: string; takaran: number }[]>([]);
+  const [rdIngredients, setRdIngredients] = useState<{ bahanName: string; takaran: number; satuan: string }[]>([]);
   const [selectedBahanIdx, setSelectedBahanIdx] = useState('0');
   const [addonTakaran, setAddonTakaran] = useState('100');
+  const [rdSatuan, setRdSatuan] = useState('gr');
   const [selectedExp, setSelectedExp] = useState<string>('');
 
   const getIngredientCost = (bahanName: string, takaran: number) => {
@@ -47,6 +48,12 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
     const found = bahanBaku.find(b => b.nama.toLowerCase().trim() === bahanName.toLowerCase().trim());
     return found ? found.satuan : 'gr';
   };
+
+  // Sync satuan when selected bahan changes
+  useEffect(() => {
+    const bahan = bahanBaku[parseInt(selectedBahanIdx)];
+    if (bahan) setRdSatuan(bahan.satuan);
+  }, [selectedBahanIdx, bahanBaku]);
 
   const handleAddIngredientDraft = () => {
     if (bahanBaku.length === 0) return;
@@ -63,7 +70,7 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
           : item
       ));
     } else {
-      setRdIngredients(prev => [...prev, { bahanName: material.nama, takaran: qty }]);
+      setRdIngredients(prev => [...prev, { bahanName: material.nama, takaran: qty, satuan: rdSatuan }]);
     }
     setAddonTakaran('100');
   };
@@ -86,7 +93,7 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
         bahanName: ing.bahanName,
         takaran: ing.takaran,
         unitPrice: bDetail ? bDetail.hargaSatuan : 12,
-        satuan: bDetail ? bDetail.satuan : 'gr'
+        satuan: ing.satuan || (bDetail ? bDetail.satuan : 'gr')
       };
     });
 
@@ -169,8 +176,14 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
                     <option key={b.nama} value={idx}>{b.nama} ({b.satuan})</option>
                   ))}
                 </select>
-                <input type="number" value={addonTakaran} onChange={(e) => setAddonTakaran(e.target.value)}
-                  className="w-20 border border-gray-200 rounded-lg p-2 text-xs font-mono text-center" placeholder="Takaran" />
+                <div className="flex gap-1">
+                  <input type="number" value={addonTakaran} onChange={(e) => setAddonTakaran(e.target.value)}
+                    className="w-20 border border-gray-200 rounded-lg p-2 text-xs font-mono text-center" placeholder="Takaran" />
+                  <select value={rdSatuan} onChange={(e) => setRdSatuan(e.target.value)}
+                    className="w-16 border border-gray-200 rounded-lg p-2 text-xs font-bold bg-white text-center">
+                    {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
                 <button type="button" onClick={handleAddIngredientDraft}
                   className="px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer">
                   <Plus className="w-4 h-4" />
@@ -194,7 +207,7 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
                     <tbody className="divide-y divide-gray-100">
                       {rdIngredients.map((ing, idx) => {
                         const cost = getIngredientCost(ing.bahanName, ing.takaran);
-                        const satuan = getBahanSatuan(ing.bahanName);
+                        const satuan = ing.satuan || getBahanSatuan(ing.bahanName);
                         const hargaSatuan = bahanBaku.find(b => b.nama === ing.bahanName)?.hargaSatuan || 0;
                         return (
                           <tr key={idx} className="hover:bg-gray-50">
