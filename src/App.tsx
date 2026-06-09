@@ -933,6 +933,47 @@ export default function App() {
       const totalStr = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(order.totalAmount);
       showToast(`🛒 Pesanan Baru dari Web Store! ${order.userName} — ${totalStr}`, 'success');
 
+      // 🔥 Catat order ke pos_orders_data (biar muncul di Ringkasan Dashboard)
+      try {
+        const savedOrders = localStorage.getItem('pos_orders_data');
+        const posOrders = savedOrders ? JSON.parse(savedOrders) : [];
+        posOrders.push({
+          ordId: `ws-${order.id}`,
+          source: 'Web Store',
+          customerName: order.userName,
+          items: order.items.map((i: any) => i.name).join(', '),
+          totalSum: order.totalAmount,
+          status: order.status || 'Menunggu Pembayaran',
+          timeAgo: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+          date: new Date().toISOString().substring(0, 10),
+          catatan: '',
+        });
+        localStorage.setItem('pos_orders_data', JSON.stringify(posOrders));
+      } catch (e) { console.warn('Failed to save pos_orders_data:', e); }
+
+      // 🔥 Catat revenue ke revenue_tracker_data (biar muncul di Ringkasan Dashboard)
+      try {
+        const saved = localStorage.getItem('revenue_tracker_data');
+        const tracker = saved ? JSON.parse(saved) : { transactions: [], dailyTotals: {} };
+        const today = new Date().toISOString().substring(0, 10);
+        const txEntry = {
+          id: `ws-rev-${Date.now()}`,
+          time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+          product: order.items.map((i: any) => i.name).join(', '),
+          qty: order.items.reduce((s: number, i: any) => s + i.quantity, 0),
+          amount: order.totalAmount,
+          source: 'Web Store',
+          date: today,
+        };
+        tracker.transactions.push(txEntry);
+        if (tracker.transactions.length > 500) tracker.transactions = tracker.transactions.slice(-500);
+        if (!tracker.dailyTotals[today]) tracker.dailyTotals[today] = { total: 0, sources: {} };
+        tracker.dailyTotals[today].total += order.totalAmount;
+        if (!tracker.dailyTotals[today].sources['Web Store']) tracker.dailyTotals[today].sources['Web Store'] = 0;
+        tracker.dailyTotals[today].sources['Web Store'] += order.totalAmount;
+        localStorage.setItem('revenue_tracker_data', JSON.stringify(tracker));
+      } catch (e) { console.warn('Failed to save revenue_tracker_data:', e); }
+
       // Auto-deduct bahan baku stok berdasarkan resep — single pass untuk hindari overlap
       const newBahanBaku = JSON.parse(JSON.stringify(bahanBaku)) as typeof bahanBaku;
       order.items.forEach((item) => {
