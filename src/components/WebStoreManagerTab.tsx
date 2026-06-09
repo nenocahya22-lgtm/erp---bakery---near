@@ -83,9 +83,7 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
   const [isFirestoreConnected, setIsFirestoreConnected] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
-  const heroInputRef = useRef<HTMLInputElement>(null);
   const promoInputRef = useRef<HTMLInputElement>(null);
-  const paymentLogoInputRef = useRef<HTMLInputElement>(null);
 
   // Load config dari Firestore on mount
   useEffect(() => {
@@ -202,10 +200,7 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
     const file = e.target.files?.[0];
     if (file) { const b64 = await loadImageAsBase64(file); updateConfig({ logo: b64 }); showToast('Logo berhasil diupload!', 'success'); }
   };
-  const handleUploadHero = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) { const b64 = await loadImageAsBase64(file); updateConfig({ heroImage: b64 }); showToast('Hero image berhasil diupload!', 'success'); }
-  };
+
   const handleUploadProductImage = async (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) { const b64 = await loadImageAsBase64(file); updateProduct(idx, { displayImage: b64 }); showToast('Gambar produk berhasil diupload!', 'success'); }
@@ -374,23 +369,30 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
         {sectionBtn('hero', <Image className="w-4 h-4" />, '🖼️ Hero')}
         {sectionBtn('products', <ShoppingBag className="w-4 h-4" />, '📦 Produk')}
         {sectionBtn('theme', <Palette className="w-4 h-4" />, '🎨 Tema')}
+        {sectionBtn('texts', <FileJson className="w-4 h-4" />, '📝 Teks')}
         {sectionBtn('promos', <Megaphone className="w-4 h-4" />, '📢 Promo')}
         {sectionBtn('payment', <CreditCard className="w-4 h-4" />, '💳 Pembayaran')}
         {sectionBtn('branch', <Building2 className="w-4 h-4" />, '🏛️ Cabang')}
+        {sectionBtn('footer', <Globe className="w-4 h-4" />, '📋 Footer')}
       </div>
 
-      {/* ─── SECTION: IDENTITY ─── */}
+      {/* ─── SECTION: IDENTITY & NAVBAR ─── */}
       {activeSection === 'identity' && (
         <div className={cardClass}>
-          <h3 className="text-sm font-black text-gray-800">🏪 Identitas Toko</h3>
+          <h3 className="text-sm font-black text-gray-800">🏪 Identitas Toko & Navbar</h3>
+          <p className="text-[10px] text-gray-500">Semua field ini mengatur teks yang muncul di Navbar Web Store.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Nama Brand (Navbar)</label>
+              <input className={inputClass} value={config.navbarBrandText} onChange={e => updateConfig({ navbarBrandText: e.target.value })} placeholder="NEAR BAKERY & CO." />
+            </div>
             <div>
               <label className={labelClass}>Nama Toko</label>
               <input className={inputClass} value={config.storeName} onChange={e => updateConfig({ storeName: e.target.value })} placeholder="Near Bakery & Co." />
             </div>
             <div>
-              <label className={labelClass}>Slogan</label>
-              <input className={inputClass} value={config.slogan} onChange={e => updateConfig({ slogan: e.target.value })} placeholder="Fresh Baked Daily" />
+              <label className={labelClass}>Slogan (Hero Gold Text)</label>
+              <input className={inputClass} value={config.slogan} onChange={e => updateConfig({ slogan: e.target.value })} placeholder="Artisan Bakery Premium" />
             </div>
             <div>
               <label className={labelClass}>Logo</label>
@@ -405,75 +407,98 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
               </div>
             </div>
             <div>
-              <label className={labelClass}>WhatsApp (no. HP)</label>
-              <input className={inputClass} value={config.contactWhatsApp} onChange={e => updateConfig({ contactWhatsApp: e.target.value })} placeholder="6281234567890" />
+              <label className={labelClass}>Search Placeholder</label>
+              <input className={inputClass} value={config.searchPlaceholder} onChange={e => updateConfig({ searchPlaceholder: e.target.value })} placeholder="Cari menu artisan..." />
             </div>
             <div>
-              <label className={labelClass}>Email</label>
-              <input className={inputClass} value={config.contactEmail} onChange={e => updateConfig({ contactEmail: e.target.value })} placeholder="hello@nearbakery.com" />
-            </div>
-            <div>
-              <label className={labelClass}>Instagram</label>
-              <input className={inputClass} value={config.contactInstagram} onChange={e => updateConfig({ contactInstagram: e.target.value })} placeholder="@nearbakery" />
+              <label className={labelClass}>Teks "Temukan Toko"</label>
+              <input className={inputClass} value={config.storeLocatorText} onChange={e => updateConfig({ storeLocatorText: e.target.value })} placeholder="Temukan Toko" />
             </div>
           </div>
-          <div>
-            <label className={labelClass}>Alamat</label>
-            <input className={inputClass} value={config.alamat} onChange={e => updateConfig({ alamat: e.target.value })} placeholder="Jl. Contoh No. 123, Kota" />
-          </div>
-          <div>
-            <label className={labelClass}>Tentang Toko</label>
-            <textarea className={`${inputClass} h-24 resize-none`} value={config.aboutText} onChange={e => updateConfig({ aboutText: e.target.value })} placeholder="Tulis deskripsi tentang toko..." />
+          <div className="border-t border-gray-100 pt-4 mt-4">
+            <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-3">Kontak (tampil di Footer)</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>WhatsApp</label>
+                <input className={inputClass} value={config.contactWhatsApp} onChange={e => updateConfig({ contactWhatsApp: e.target.value })} placeholder="6281234567890" />
+              </div>
+              <div>
+                <label className={labelClass}>Email</label>
+                <input className={inputClass} value={config.contactEmail} onChange={e => updateConfig({ contactEmail: e.target.value })} placeholder="hello@nearbakery.com" />
+              </div>
+              <div>
+                <label className={labelClass}>Instagram</label>
+                <input className={inputClass} value={config.contactInstagram} onChange={e => updateConfig({ contactInstagram: e.target.value })} placeholder="@nearbakery" />
+              </div>
+              <div>
+                <label className={labelClass}>Alamat</label>
+                <input className={inputClass} value={config.alamat} onChange={e => updateConfig({ alamat: e.target.value })} placeholder="Jl. Contoh No. 123, Kota" />
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ─── SECTION: HERO ─── */}
+      {/* ─── SECTION: HERO BANNER ─── */}
       {activeSection === 'hero' && (
         <div className={cardClass}>
           <h3 className="text-sm font-black text-gray-800">🖼️ Hero Banner</h3>
+          <p className="text-[10px] text-gray-500">Sesuaikan banner utama Web Store — teks gold, judul, deskripsi, badge, dan tombol.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
+              <label className={labelClass}>Teks Gold (Tagline)</label>
+              <input className={inputClass} value={config.heroTagline} onChange={e => updateConfig({ heroTagline: e.target.value })} placeholder="Artisan Bakery Premium" />
+            </div>
+            <div>
               <label className={labelClass}>Judul Utama</label>
-              <input className={inputClass} value={config.heroTitle} onChange={e => updateConfig({ heroTitle: e.target.value })} placeholder="Fresh from the Oven" />
+              <input className={inputClass} value={config.heroTitle} onChange={e => updateConfig({ heroTitle: e.target.value })} placeholder="Roti & Pastry Hangat..." />
+            </div>
+            <div className="md:col-span-2">
+              <label className={labelClass}>Deskripsi</label>
+              <textarea className={`${inputClass} h-16 resize-none`} value={config.heroDescription} onChange={e => updateConfig({ heroDescription: e.target.value })} placeholder="Nikmati keaslian cita rasa Sourdough alami..." />
             </div>
             <div>
-              <label className={labelClass}>Subjudul</label>
-              <input className={inputClass} value={config.heroSubtitle} onChange={e => updateConfig({ heroSubtitle: e.target.value })} placeholder="Artisan breads & pastries" />
+              <label className={labelClass}>Teks Tombol CTA</label>
+              <input className={inputClass} value={config.heroBtnText} onChange={e => updateConfig({ heroBtnText: e.target.value })} placeholder="Daftar & Pesan Sekarang" />
             </div>
             <div>
-              <label className={labelClass}>Teks Tombol</label>
-              <input className={inputClass} value={config.heroBtnText} onChange={e => updateConfig({ heroBtnText: e.target.value })} placeholder="Pesan Sekarang" />
-            </div>
-            <div>
-              <label className={labelClass}>Link Tombol</label>
-              <input className={inputClass} value={config.heroBtnLink} onChange={e => updateConfig({ heroBtnLink: e.target.value })} placeholder="#products" />
+              <label className={labelClass}>Background Color</label>
+              <div className="flex items-center gap-3">
+                <input type="color" value={config.heroBgColor} onChange={e => updateConfig({ heroBgColor: e.target.value })} className="w-12 h-12 rounded-xl border border-gray-200 cursor-pointer" />
+                <input className={inputClass} value={config.heroBgColor} onChange={e => updateConfig({ heroBgColor: e.target.value })} placeholder="#1E3932" />
+              </div>
             </div>
           </div>
-          <div>
-            <label className={labelClass}>Gambar Hero</label>
-            <div className="flex items-center gap-3">
-              {config.heroImage ? (
-                <div className="relative">
-                  <img src={config.heroImage} alt="Hero" className="w-full max-h-48 object-cover rounded-xl border border-gray-200" />
-                  <button onClick={() => updateConfig({ heroImage: '' })} className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-lg cursor-pointer"><X className="w-3.5 h-3.5" /></button>
-                </div>
-              ) : (
-                <div className="w-full h-32 bg-slate-100 rounded-xl flex items-center justify-center text-gray-400 border-2 border-dashed border-gray-200"><Image className="w-8 h-8" /></div>
-              )}
+          
+          {/* Badge Premium */}
+          <div className="border-t border-gray-100 pt-4 mt-4">
+            <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-3">Badge Premium (lingkaran di hero)</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className={labelClass}>Baris 1</label>
+                <input className={inputClass} value={config.heroBadgeText1} onChange={e => updateConfig({ heroBadgeText1: e.target.value })} placeholder="100% ALAMI" />
+              </div>
+              <div>
+                <label className={labelClass}>Baris 2</label>
+                <input className={inputClass} value={config.heroBadgeText2} onChange={e => updateConfig({ heroBadgeText2: e.target.value })} placeholder="Ragi Alami" />
+              </div>
+              <div>
+                <label className={labelClass}>Baris 3</label>
+                <input className={inputClass} value={config.heroBadgeText3} onChange={e => updateConfig({ heroBadgeText3: e.target.value })} placeholder="TANPA PENGAWET" />
+              </div>
             </div>
-            <button onClick={() => heroInputRef.current?.click()} className="mt-2 px-3 py-2 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer">Upload Hero Image</button>
-            <input ref={heroInputRef} type="file" accept="image/*" className="hidden" onChange={handleUploadHero} />
           </div>
-          <div className="mt-4 p-4 bg-gradient-to-br from-emerald-900 to-slate-900 rounded-2xl text-white relative overflow-hidden">
-            <div className="relative z-10">
-              <h4 className="text-2xl font-black">{config.heroTitle || 'Fresh from the Oven'}</h4>
-              <p className="text-sm text-emerald-200 mt-1">{config.heroSubtitle || 'Artisan breads & pastries'}</p>
-              <button className="mt-3 px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-all">
-                {config.heroBtnText || 'Pesan Sekarang'}
+
+          {/* Mini Preview */}
+          <div className="mt-4 p-6 rounded-2xl text-white relative overflow-hidden" style={{background: config.heroBgColor || '#1E3932'}}>
+            <div className="relative z-10 space-y-2">
+              <span className="text-[#cba258] font-semibold text-xs tracking-widest uppercase">{config.heroTagline || 'Artisan Bakery Premium'}</span>
+              <h4 className="text-2xl font-black">{config.heroTitle || 'Roti & Pastry Hangat'}</h4>
+              <p className="text-sm text-white/70 max-w-md">{config.heroDescription || 'Nikmati keaslian cita rasa...'}</p>
+              <button className="mt-1 px-5 py-2 bg-white hover:bg-gray-100 text-emerald-800 text-xs font-bold rounded-full transition-all">
+                {config.heroBtnText || 'Daftar & Pesan Sekarang'}
               </button>
             </div>
-            {config.heroImage && <img src={config.heroImage} className="absolute inset-0 w-full h-full object-cover opacity-30" alt="" />}
           </div>
         </div>
       )}
@@ -482,7 +507,7 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
       {activeSection === 'products' && (
         <div className={cardClass}>
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-black text-gray-800">📦 Produk Tampilan Web Store</h3>
+            <h3 className="text-sm font-black text-gray-800">📦 Produk & Teks Grid</h3>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-normal text-gray-500">{config.products.filter(p => p.active).length} dari {config.products.length} aktif</span>
               <button onClick={handleSyncProducts} disabled={isSyncing}
@@ -492,6 +517,23 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
               </button>
             </div>
           </div>
+          
+          {/* Product Grid Text Settings */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 mb-4">
+            <div>
+              <label className={labelClass}>Judul Grid Produk</label>
+              <input className={inputClass} value={config.productGridTitle} onChange={e => updateConfig({ productGridTitle: e.target.value })} placeholder="Pilihan Hari Ini" />
+            </div>
+            <div>
+              <label className={labelClass}>Empty State Title (Admin)</label>
+              <input className={inputClass} value={config.emptyStateTitle} onChange={e => updateConfig({ emptyStateTitle: e.target.value })} placeholder="Belum Ada Menu Tersedia" />
+            </div>
+            <div className="md:col-span-2">
+              <label className={labelClass}>Empty State Description</label>
+              <textarea className={`${inputClass} h-16 resize-none`} value={config.emptyStateDescription} onChange={e => updateConfig({ emptyStateDescription: e.target.value })} placeholder="Database Anda saat ini kosong..." />
+            </div>
+          </div>
+
           <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
             {config.products.map((p, idx) => (
               <div key={p.productName} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
@@ -537,42 +579,52 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
       {activeSection === 'theme' && (
         <div className={cardClass}>
           <h3 className="text-sm font-black text-gray-800">🎨 Tema & Warna</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <p className="text-[10px] text-gray-500">Sesuaikan warna Web Store — cocokkan dengan warna brand Near Bakery & Co.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div>
-              <label className={labelClass}>Warna Utama (Primary)</label>
+              <label className={labelClass}>Brand Green (Nav, Tombol)</label>
               <div className="flex items-center gap-3">
-                <input type="color" value={config.primaryColor} onChange={e => updateConfig({ primaryColor: e.target.value })} className="w-12 h-12 rounded-xl border border-gray-200 cursor-pointer" />
-                <input className={inputClass} value={config.primaryColor} onChange={e => updateConfig({ primaryColor: e.target.value })} placeholder="#059669" />
+                <input type="color" value={config.colorBrandGreen} onChange={e => updateConfig({ colorBrandGreen: e.target.value })} className="w-12 h-12 rounded-xl border border-gray-200 cursor-pointer" />
+                <input className={inputClass} value={config.colorBrandGreen} onChange={e => updateConfig({ colorBrandGreen: e.target.value })} placeholder="#006241" />
               </div>
             </div>
             <div>
-              <label className={labelClass}>Warna Aksen (Secondary)</label>
+              <label className={labelClass}>Green Accent (Tombol)</label>
               <div className="flex items-center gap-3">
-                <input type="color" value={config.secondaryColor} onChange={e => updateConfig({ secondaryColor: e.target.value })} className="w-12 h-12 rounded-xl border border-gray-200 cursor-pointer" />
-                <input className={inputClass} value={config.secondaryColor} onChange={e => updateConfig({ secondaryColor: e.target.value })} placeholder="#f59e0b" />
+                <input type="color" value={config.colorGreenAccent} onChange={e => updateConfig({ colorGreenAccent: e.target.value })} className="w-12 h-12 rounded-xl border border-gray-200 cursor-pointer" />
+                <input className={inputClass} value={config.colorGreenAccent} onChange={e => updateConfig({ colorGreenAccent: e.target.value })} placeholder="#00754A" />
+              </div>
+            </div>
+            <div>
+              <label className={labelClass}>House Green (Hero BG)</label>
+              <div className="flex items-center gap-3">
+                <input type="color" value={config.colorHouseGreen} onChange={e => updateConfig({ colorHouseGreen: e.target.value })} className="w-12 h-12 rounded-xl border border-gray-200 cursor-pointer" />
+                <input className={inputClass} value={config.colorHouseGreen} onChange={e => updateConfig({ colorHouseGreen: e.target.value })} placeholder="#1E3932" />
+              </div>
+            </div>
+            <div>
+              <label className={labelClass}>Gold (Aksen Emas)</label>
+              <div className="flex items-center gap-3">
+                <input type="color" value={config.colorGold} onChange={e => updateConfig({ colorGold: e.target.value })} className="w-12 h-12 rounded-xl border border-gray-200 cursor-pointer" />
+                <input className={inputClass} value={config.colorGold} onChange={e => updateConfig({ colorGold: e.target.value })} placeholder="#cba258" />
+              </div>
+            </div>
+            <div>
+              <label className={labelClass}>Canvas Warm (BG Halaman)</label>
+              <div className="flex items-center gap-3">
+                <input type="color" value={config.colorCanvasWarm} onChange={e => updateConfig({ colorCanvasWarm: e.target.value })} className="w-12 h-12 rounded-xl border border-gray-200 cursor-pointer" />
+                <input className={inputClass} value={config.colorCanvasWarm} onChange={e => updateConfig({ colorCanvasWarm: e.target.value })} placeholder="#f2f0eb" />
               </div>
             </div>
           </div>
-          <div className="mt-4 p-4 rounded-2xl text-white" style={{ background: config.primaryColor }}>
-            <p className="text-xs font-bold opacity-80">Warna Utama</p>
-            <p className="text-lg font-black">{config.primaryColor}</p>
-            <div className="mt-2 inline-block px-4 py-1.5 rounded-lg text-xs font-bold" style={{ background: config.secondaryColor }}>
-              Tombol Aksen: {config.secondaryColor}
-            </div>
-          </div>
-          <div>
-            <label className={labelClass}>Footer Text</label>
-            <input className={inputClass} value={config.footerText} onChange={e => updateConfig({ footerText: e.target.value })} placeholder="© 2026 Near Bakery & Co." />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>Facebook URL</label>
-              <input className={inputClass} value={config.facebookUrl} onChange={e => updateConfig({ facebookUrl: e.target.value })} placeholder="https://facebook.com/nearbakery" />
-            </div>
-            <div>
-              <label className={labelClass}>Twitter URL</label>
-              <input className={inputClass} value={config.twitterUrl} onChange={e => updateConfig({ twitterUrl: e.target.value })} placeholder="https://twitter.com/nearbakery" />
-            </div>
+          {/* Swatch Preview */}
+          <div className="mt-4 p-4 rounded-2xl flex items-center gap-4" style={{background: config.colorCanvasWarm || '#f2f0eb'}}>
+            <div className="w-12 h-12 rounded-xl" style={{background: config.colorBrandGreen || '#006241'}} />
+            <div className="w-12 h-12 rounded-xl" style={{background: config.colorGreenAccent || '#00754A'}} />
+            <div className="w-12 h-12 rounded-xl" style={{background: config.colorHouseGreen || '#1E3932'}} />
+            <div className="w-12 h-12 rounded-xl" style={{background: config.colorGold || '#cba258'}} />
+            <div className="w-12 h-12 rounded-xl border border-gray-200" style={{background: config.colorCanvasWarm || '#f2f0eb'}} />
+            <span className="text-xs text-gray-500 ml-2">Brand Green · Green Accent · House Green · Gold · Canvas Warm</span>
           </div>
         </div>
       )}
@@ -681,6 +733,56 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
         </div>
       )}
 
+      {/* ─── SECTION: TEXTS ─── */}
+      {activeSection === 'texts' && (
+        <div className={cardClass}>
+          <h3 className="text-sm font-black text-gray-800">📝 Teks & Label Web Store</h3>
+          <p className="text-[10px] text-gray-500">Sesuaikan semua teks yang muncul di halaman Web Store.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Judul Grid Produk</label>
+              <input className={inputClass} value={config.productGridTitle} onChange={e => updateConfig({ productGridTitle: e.target.value })} placeholder="Pilihan Hari Ini" />
+            </div>
+            <div>
+              <label className={labelClass}>Banyak Produk Label</label>
+              <div className="px-3 py-2 text-xs text-gray-500 bg-slate-50 rounded-xl border border-gray-200">
+                <strong>{config.products.filter(p => p.active).length}</strong> Sajian <span className="text-[9px] text-gray-400">(otomatis)</span>
+              </div>
+            </div>
+            <div>
+              <label className={labelClass}>Empty State Title</label>
+              <input className={inputClass} value={config.emptyStateTitle} onChange={e => updateConfig({ emptyStateTitle: e.target.value })} placeholder="Belum Ada Menu Tersedia" />
+            </div>
+            <div className="md:col-span-2">
+              <label className={labelClass}>Empty State Description</label>
+              <textarea className={`${inputClass} h-16 resize-none`} value={config.emptyStateDescription} onChange={e => updateConfig({ emptyStateDescription: e.target.value })} placeholder="Database Anda saat ini kosong..." />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── SECTION: FOOTER ─── */}
+      {activeSection === 'footer' && (
+        <div className={cardClass}>
+          <h3 className="text-sm font-black text-gray-800">📋 Footer Web Store</h3>
+          <p className="text-[10px] text-gray-500">Atur teks footer, copyright, dan tautan.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Copyright Text</label>
+              <input className={inputClass} value={config.footerCopyright} onChange={e => updateConfig({ footerCopyright: e.target.value })} placeholder="© 2026 Near Bakery & Co." />
+            </div>
+            <div>
+              <label className={labelClass}>Footer Links (dipisah koma)</label>
+              <input className={inputClass} value={Array.isArray(config.footerLinks) ? config.footerLinks.join(', ') : ''} onChange={e => updateConfig({ footerLinks: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} placeholder="Menu, Rewards, Gift Cards" />
+            </div>
+            <div className="md:col-span-2">
+              <label className={labelClass}>Checkout Footer Text</label>
+              <input className={inputClass} value={config.checkoutFooterText} onChange={e => updateConfig({ checkoutFooterText: e.target.value })} placeholder="Near Bakery & Co. — Kualitas Terjamin" />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── SECTION: BRANCH ─── */}
       {activeSection === 'branch' && (
         <div className={cardClass}>
@@ -753,31 +855,31 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
           <div className="border border-gray-200 rounded-2xl overflow-hidden shadow-lg">
             <div className="max-w-sm mx-auto bg-white min-h-[600px]">
               {/* Header */}
-              <div className="p-4 flex items-center gap-3 border-b border-gray-100" style={{ background: config.primaryColor }}>
+              <div className="p-4 flex items-center gap-3 border-b border-gray-100" style={{ background: config.colorBrandGreen || '#006241' }}>
                 {config.logo ? (
                   <img src={config.logo} alt="" className="w-10 h-10 object-contain rounded-lg bg-white p-1" />
                 ) : (
-                  <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center text-white font-bold">{config.storeName.charAt(0)}</div>
+                  <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center text-white font-bold">{(config.navbarBrandText || 'N').charAt(0)}</div>
                 )}
                 <div className="text-white">
-                  <h3 className="text-sm font-bold">{config.storeName}</h3>
-                  <p className="text-[9px] opacity-80">{config.slogan}</p>
+                  <h3 className="text-sm font-bold">{config.navbarBrandText || 'NEAR BAKERY & CO.'}</h3>
+                  <p className="text-[9px] opacity-80">{config.slogan || 'Artisan Bakery Premium'}</p>
                 </div>
               </div>
               {/* Hero */}
-              <div className="relative h-44 flex items-center justify-center text-center" style={{ background: `linear-gradient(135deg, ${config.primaryColor}dd, ${config.primaryColor}88)` }}>
-                {config.heroImage && <img src={config.heroImage} className="absolute inset-0 w-full h-full object-cover opacity-40" alt="" />}
-                <div className="relative z-10 p-4">
-                  <h2 className="text-xl font-black text-white">{config.heroTitle}</h2>
-                  <p className="text-xs text-white/80 mt-1">{config.heroSubtitle}</p>
-                  <button className="mt-3 px-5 py-2 text-xs font-bold rounded-xl text-white shadow-lg" style={{ background: config.secondaryColor }}>
-                    {config.heroBtnText}
+              <div className="relative h-44 flex items-center justify-center text-center" style={{ background: config.heroBgColor || '#1E3932' }}>
+                <div className="relative z-10 p-4 space-y-1">
+                  <span className="text-[#cba258] text-[9px] tracking-widest uppercase font-semibold">{config.heroTagline || 'Artisan Bakery Premium'}</span>
+                  <h2 className="text-lg font-black text-white">{config.heroTitle || 'Roti & Pastry Hangat'}</h2>
+                  <p className="text-[10px] text-white/70 max-w-xs mx-auto">{config.heroDescription || 'Nikmati keaslian cita rasa...'}</p>
+                  <button className="mt-2 px-5 py-1.5 text-[10px] font-bold rounded-full text-white shadow-sm" style={{ background: config.colorGold || '#cba258' }}>
+                    {config.heroBtnText || 'Daftar & Pesan Sekarang'}
                   </button>
                 </div>
               </div>
               {/* Products */}
               <div className="p-4">
-                <h3 className="text-xs font-bold text-gray-800 mb-3">Menu Kami</h3>
+                <h3 className="text-xs font-bold text-gray-800 mb-3">{config.productGridTitle || 'Pilihan Hari Ini'}</h3>
                 <div className="grid grid-cols-2 gap-3">
                   {config.products.filter(p => p.active).slice(0, 4).map(p => (
                     <div key={p.productName} className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
@@ -806,10 +908,10 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
                 </div>
               </div>
               {/* Footer */}
-              <div className="p-4 text-center text-[9px] text-gray-400 border-t border-gray-100" style={{ background: config.primaryColor + '08' }}>
+              <div className="p-4 text-center text-[9px] text-gray-400 border-t border-gray-100" style={{ background: (config.colorBrandGreen || '#006241') + '08' }}>
                 <a href={`https://wa.me/${config.contactWhatsApp}`} className="text-emerald-600 font-bold block mb-1">WhatsApp: {config.contactWhatsApp}</a>
                 <p>{config.contactEmail} | {config.contactInstagram}</p>
-                <p className="mt-2">{config.footerText}</p>
+                <p className="mt-2">{config.footerCopyright || '© 2026 Near Bakery & Co. — Artisan Bakery Premium'}</p>
               </div>
             </div>
           </div>

@@ -224,29 +224,40 @@ export interface WebStorePromo {
 }
 
 export interface WebStoreConfig {
-  // Store Identity
+  // Store Identity — Navbar
   storeName: string;
+  navbarBrandText: string;
   slogan: string;
   logo: string; // base64
-  aboutText: string;
   contactWhatsApp: string;
   contactEmail: string;
   contactInstagram: string;
   alamat: string;
+  searchPlaceholder: string;
+  storeLocatorText: string;
   
   // Hero Banner
+  heroTagline: string;
   heroTitle: string;
-  heroSubtitle: string;
-  heroImage: string; // base64
+  heroDescription: string;
   heroBtnText: string;
-  heroBtnLink: string;
+  heroBadgeText1: string;
+  heroBadgeText2: string;
+  heroBadgeText3: string;
+  heroBgColor: string;
   
   // Products
   products: WebStoreProduct[];
+  productGridTitle: string;
+  emptyStateTitle: string;
+  emptyStateDescription: string;
   
-  // Theme
-  primaryColor: string;
-  secondaryColor: string;
+  // Theme Colors — matching Web Store design system
+  colorBrandGreen: string;
+  colorGreenAccent: string;
+  colorHouseGreen: string;
+  colorGold: string;
+  colorCanvasWarm: string;
   
   // Promotions
   promos: WebStorePromo[];
@@ -259,9 +270,9 @@ export interface WebStoreConfig {
   branchSubdomain: string;
 
   // Footer
-  footerText: string;
-  facebookUrl: string;
-  twitterUrl: string;
+  footerCopyright: string;
+  footerLinks: string[];
+  checkoutFooterText: string;
   
   // Timestamp
   lastUpdated: string;
@@ -300,19 +311,24 @@ export const createDefaultPaymentMethods = (): PaymentMethod[] => [
 ];
 
 export const createDefaultWebStoreConfig = (products: { namaProduk: string; kategori?: string }[], cabangId?: string): WebStoreConfig => ({
-  storeName: 'Near Bakery & Co.',
-  slogan: 'Fresh Baked Daily with Love',
+  storeName: 'NEAR BAKERY & CO.',
+  navbarBrandText: 'NEAR BAKERY & CO.',
+  slogan: 'Artisan Bakery Premium',
   logo: '',
-  aboutText: 'Toko roti artisan yang menyajikan roti segar setiap hari. Dibuat dengan bahan-bahan berkualitas terbaik dan resep turun-temurun.',
   contactWhatsApp: '6281234567890',
   contactEmail: 'hello@nearbakery.com',
   contactInstagram: '@nearbakery',
   alamat: 'Jl. Contoh No. 123, Kota',
-  heroTitle: 'Fresh from the Oven',
-  heroSubtitle: 'Artisan breads & pastries made daily with premium ingredients',
-  heroImage: '',
-  heroBtnText: 'Pesan Sekarang',
-  heroBtnLink: '#products',
+  searchPlaceholder: 'Cari menu artisan...',
+  storeLocatorText: 'Temukan Toko',
+  heroTagline: 'Artisan Bakery Premium',
+  heroTitle: 'Roti & Pastry Hangat, Dipanggang Segar Setiap Hari',
+  heroDescription: 'Nikmati keaslian cita rasa Sourdough alami, croissant mentega renyah, dan aneka kue premium yang dibuat dengan sepenuh hati oleh baker berpengalaman.',
+  heroBtnText: 'Daftar & Pesan Sekarang',
+  heroBadgeText1: '100% ALAMI',
+  heroBadgeText2: 'Ragi Alami',
+  heroBadgeText3: 'TANPA PENGAWET',
+  heroBgColor: '#1E3932',
   products: products.map(p => ({
     productName: p.namaProduk,
     active: true,
@@ -320,15 +336,21 @@ export const createDefaultWebStoreConfig = (products: { namaProduk: string; kate
     description: '',
     kategori: p.kategori || 'Lainnya',
   })),
-  primaryColor: '#059669',
-  secondaryColor: '#f59e0b',
+  productGridTitle: 'Pilihan Hari Ini',
+  emptyStateTitle: 'Belum Ada Menu Tersedia',
+  emptyStateDescription: 'Database Anda saat ini kosong. Masuk ke panel penjual untuk menambahkan produk.',
+  colorBrandGreen: '#006241',
+  colorGreenAccent: '#00754A',
+  colorHouseGreen: '#1E3932',
+  colorGold: '#cba258',
+  colorCanvasWarm: '#f2f0eb',
   promos: [],
   paymentMethods: createDefaultPaymentMethods(),
   cabangId: cabangId || 'pusat',
   branchSubdomain: 'pusat',
-  footerText: '© 2026 Near Bakery & Co. All rights reserved.',
-  facebookUrl: '',
-  twitterUrl: '',
+  footerCopyright: '© 2026 Near Bakery & Co. — Artisan Bakery Premium',
+  footerLinks: ['Menu', 'Rewards', 'Gift Cards'],
+  checkoutFooterText: 'Near Bakery & Co. — Kualitas Terjamin',
   lastUpdated: new Date().toISOString(),
 });
 
