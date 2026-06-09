@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BahanBaku, DetailResep, CalculationResult, PriceRecord } from '../types';
 import {
   TrendingUp, TrendingDown, BarChart3, DollarSign, Info, Sparkles, Printer, Plus, Trash2,
-  Sliders, Calendar, Sun, CloudRain, Shuffle, Calculator, Edit3, AlertTriangle, CheckCircle2,
+  Sliders, Calendar, Sun, CloudRain, Shuffle, Calculator, AlertTriangle, CheckCircle2,
   Percent, HelpCircle, AlertOctagon, ChevronRight, Package
 } from 'lucide-react';
 
@@ -488,12 +488,7 @@ function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDelete
                       <td className="px-4 py-4 text-right font-mono text-gray-500">{p.porsiJual} porsi</td>
                       <td className="px-4 py-4 text-right font-mono text-gray-900 font-semibold">{formatCurrency(p.hppPerPorsi)}</td>
                       <td className="px-4 py-4 text-right">
-                        <div className="inline-flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-md">
-                          <Edit3 className="w-3 h-3 text-gray-400" />
-                          <input type="number" value={p.hargaJual} onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => onUpdateProductPricing(p.namaProduk, parseFloat(e.target.value) || 0)}
-                            className="w-20 bg-transparent text-right font-bold text-emerald-800 font-mono" />
-                        </div>
+                        <span className="font-bold text-emerald-800 font-mono">{formatCurrency(p.hargaJual)}</span>
                       </td>
                       <td className={`px-4 py-4 text-right font-mono font-semibold ${p.profitPerPorsi >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
                         {formatCurrency(p.profitPerPorsi)}
