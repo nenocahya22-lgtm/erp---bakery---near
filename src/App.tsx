@@ -47,6 +47,7 @@ import DoughTemperatureTab from './components/DoughTemperatureTab';
 import BackupSystemTab from './components/BackupSystemTab';
 import PembukuanTab from './components/PembukuanTab';
 import WebStoreManagerTab from './components/WebStoreManagerTab';
+import ToppingsTab from './components/ToppingsTab';
 
 // Production Center
 import ProductionCenterTab from './components/ProductionCenterTab';
@@ -243,6 +244,7 @@ export default function App() {
     | 'erp_production_center'
     | 'erp_rekap_bahan'
     | 'erp_pembukuan'
+    | 'erp_toppings'
     | 'erp_webstore'
   >('dashboard');
 
@@ -1247,12 +1249,9 @@ export default function App() {
                 bahanBaku={bahanBaku}
                 productHpp={productHpp}
                 detailResep={detailResep}
-                toppings={toppings}
                 onAddProduct={handleAddProduct}
                 onUpdateProductIngredients={handleUpdateProductIngredients}
                 onDeleteProduct={handleDeleteProduct}
-                onAddTopping={handleAddTopping}
-                onDeleteTopping={handleDeleteTopping}
               />
             )}
             {activeTab === 'hpp' && (
@@ -1382,6 +1381,15 @@ export default function App() {
                 productHpp={productHpp}
                 detailResep={detailResep}
                 calculatedProducts={calculatedProducts}
+              />
+            )}
+            {activeTab === 'erp_toppings' && (
+              <ToppingsTab
+                toppings={toppings}
+                productHpp={productHpp}
+                bahanBaku={bahanBaku}
+                onAddTopping={handleAddTopping}
+                onDeleteTopping={handleDeleteTopping}
               />
             )}
             {activeTab === 'erp_webstore' && (
@@ -1563,6 +1571,7 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
           {sidebarBtn('data_pusat', <Building2 className="w-4 h-4" />, '🏛️ Data Pusat')}
           {sidebarBtn('materials', <Package className="w-4 h-4" />, '📦 Monitor Stok')}
           {sidebarBtn('recipes', <FolderTree className="w-4 h-4" />, '📝 Formulasi Resep')}
+          {sidebarBtn('erp_toppings', <Coins className="w-4 h-4" />, '🧩 Add-on & Topping')}
         </div>
         <div className="space-y-1">
           <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">③ Inventory & Produksi</span>

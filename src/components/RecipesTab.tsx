@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BahanBaku, ProductHpp, DetailResep, ProductTopping, SATUAN_OPTIONS } from '../types';
+import { BahanBaku, ProductHpp, DetailResep, SATUAN_OPTIONS } from '../types';
 import {
   Plus,
   Trash2,
@@ -21,12 +21,9 @@ interface RecipesTabProps {
   bahanBaku: BahanBaku[];
   productHpp: ProductHpp[];
   detailResep: DetailResep[];
-  toppings: ProductTopping[];
   onAddProduct: (p: ProductHpp, ingredients: DetailResep[]) => void;
   onUpdateProductIngredients: (productName: string, updatedDetails: DetailResep[], porsiJual: number) => void;
   onDeleteProduct: (productName: string) => void;
-  onAddTopping: (t: ProductTopping) => void;
-  onDeleteTopping: (id: string) => void;
   onUpdateProductDetails?: (oldName: string, updated: ProductHpp) => void;
 }
 
@@ -34,12 +31,9 @@ export default function RecipesTab({
   bahanBaku,
   productHpp,
   detailResep,
-  toppings,
   onAddProduct,
   onUpdateProductIngredients,
   onDeleteProduct,
-  onAddTopping,
-  onDeleteTopping,
   onUpdateProductDetails,
 }: RecipesTabProps) {
   const [selectedProductName, setSelectedProductName] = useState<string>(
@@ -121,7 +115,6 @@ export default function RecipesTab({
   const [showAddForm, setShowAddForm] = useState(false);
   const [newProductName, setNewProductName] = useState('');
   const [newProductPorsi, setNewProductPorsi] = useState('10');
-  const [newProductHargaJual, setNewProductHargaJual] = useState('45000');
   const [newProductKategori, setNewProductKategori] = useState('Roti');
 
   // Edit existing product formula state
@@ -139,12 +132,6 @@ export default function RecipesTab({
   // Inline ingredient quantity editing state
   const [editingBahanName, setEditingBahanName] = useState<string | null>(null);
   const [editingBahanQty, setEditingBahanQty] = useState<string>('');
-
-  // New topping form state
-  const [selectedToppingsBahan, setSelectedToppingsBahan] = useState('');
-  const [newToppingName, setNewToppingName] = useState('');
-  const [newToppingTakaran, setNewToppingTakaran] = useState('');
-  const [toppingSatuan, setToppingSatuan] = useState('gr');
 
   // Find active product
   const activeProduct = productHpp.find(
@@ -233,19 +220,6 @@ export default function RecipesTab({
   });
 
   const totalIngredientsCost = calculatedIngredients.reduce((acc, curr) => acc + curr.itemCost, 0);
-
-  // Topping details of the active product
-  const activeToppings = (toppings || []).filter(
-    (t) => t.namaProduk.toLowerCase().trim() === selectedProductName.toLowerCase().trim()
-  );
-
-  const totalToppingsHpp = activeToppings.reduce((acc, curr) => {
-    const raw = bahanMap.get(curr.namaBahan.toLowerCase().trim());
-    const cost = raw ? curr.takaran * raw.hargaSatuan : 0;
-    return acc + cost;
-  }, 0);
-
-  const totalToppingsRevenue = activeToppings.reduce((acc, curr) => acc + curr.hargaJualTopping, 0);
 
   // Add ingredient to active recipe
   const handleAddIngredientToActive = (e: React.FormEvent) => {
@@ -352,7 +326,7 @@ export default function RecipesTab({
       kode: nextKode,
       namaProduk: newProductName.trim(),
       porsiJual: parseFloat(newProductPorsi) || 1,
-      hargaJual: parseFloat(newProductHargaJual) || 0,
+      hargaJual: 0,
       kategori: newProductKategori,
     };
 
@@ -363,7 +337,6 @@ export default function RecipesTab({
     // Reset formulation fields
     setNewProductName('');
     setNewProductPorsi('10');
-    setNewProductHargaJual('0');
     setNewProductKategori('Roti');
   };
 
@@ -391,42 +364,6 @@ export default function RecipesTab({
   const showToastLocal = (message: string, type: 'success' | 'info' = 'info') => {
     setLocalToast({ message, type });
     setTimeout(() => setLocalToast(null), 3000);
-  };
-
-  // Topping Add-On Actions
-  const handleAddTopping = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedProductName || !selectedToppingsBahan) return;
-
-    const raw = bahanMap.get(selectedToppingsBahan.toLowerCase().trim());
-    if (!raw) return;
-
-    const tName = newToppingName.trim() || `Topping ${selectedToppingsBahan}`;
-    const tTakaran = parseFloat(newToppingTakaran) || 0;
-    if (tTakaran <= 0) return;
-
-    const newTp: ProductTopping = {
-      id: Math.random().toString(36).substring(2, 9),
-      namaProduk: selectedProductName,
-      namaTopping: tName,
-      namaBahan: selectedToppingsBahan,
-      takaran: tTakaran,
-      hargaBeli: raw.hargaBeli,
-      isiKemasan: raw.isiKemasan,
-      satuan: toppingSatuan,
-      hargaSatuan: raw.hargaSatuan,
-      hargaJualTopping: Math.round(tTakaran * raw.hargaSatuan),
-    };
-
-    onAddTopping(newTp);
-    setSelectedToppingsBahan('');
-    setNewToppingName('');
-    setNewToppingTakaran('');
-    setToppingSatuan('gr');
-  };
-
-  const handleDeleteTopping = (id: string) => {
-    onDeleteTopping(id);
   };
 
   // Hitung Total HPP = sum of semua ingredients
@@ -597,15 +534,10 @@ export default function RecipesTab({
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Total HPP (Rp) <span className="text-blue-500 font-normal normal-case">acuan margin</span></label>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="45000"
-                    value={newProductHargaJual}
-                    onChange={(e) => setNewProductHargaJual(e.target.value)}
-                    className="w-full text-xs border border-gray-200 bg-white rounded-lg p-2 font-mono text-center"
-                  />
+                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Total HPP (Rp) <span className="text-blue-500 font-normal normal-case">auto dari bahan</span></label>
+                  <div className="w-full border border-gray-200 bg-gray-100 rounded-lg p-2 font-mono text-emerald-800 font-bold text-center text-xs">
+                    Rp 0 (hitung otomatis setelah tambah bahan)
+                  </div>
                 </div>
               </div>
 
@@ -1035,138 +967,15 @@ export default function RecipesTab({
                 )}
               </div>
 
-              {/* TOPPING ADDON MODULE - COMPLETE, EXPANDABLE & CLEAR PERSISTENT MATHS */}
-              <div className="bg-slate-50 p-5 rounded-2xl border border-dashed border-indigo-200 space-y-4">
-                <div className="flex items-center justify-between border-b border-gray-200 pb-2.5">
-                  <div className="space-y-0.5">
-                    <h4 className="text-xs font-bold uppercase text-slate-900 tracking-wider flex items-center gap-1.5">
-                      <Coins className="w-4 h-4 text-indigo-600" />
-                      Add-on / Toppings Pendukung Menu (Eceran)
-                    </h4>
-                    <p className="text-[10px] text-gray-500">
-                      Tambahkan opsi topping berbayar untuk kustomisasi roti (misal: ekstra keju, coklat choco-chip).
-                    </p>
-                  </div>
-                  <span className="text-[9px] font-mono font-bold uppercase tracking-wider bg-indigo-100 text-indigo-800 border border-indigo-150 px-2 py-0.5 rounded">
-                    {activeToppings.length} topping terhubung
-                  </span>
+              {/* Informasi: Add-on/Topping dipindah ke tab khusus */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-dashed border-indigo-200">
+                <div className="flex items-center gap-3 text-xs">
+                  <Coins className="w-5 h-5 text-indigo-600 shrink-0" />
+                  <p className="text-gray-600">
+                    <strong>Add-on / Topping</strong> sekarang dikelola di tab terpisah untuk menghindari <strong>double counting</strong> di POS. 
+                    Buka <strong>🧩 Add-on & Topping</strong> di sidebar untuk mengelola topping secara terpusat.
+                  </p>
                 </div>
-
-                {activeToppings.length === 0 ? (
-                  <div className="text-center p-6 bg-white border border-gray-150 rounded-xl">
-                    <p className="text-xs text-gray-400 font-semibold uppercase">Belum Ada Topping Khusus</p>
-                    <p className="text-[10px] text-gray-400 mt-1">Anda bisa menambahkan topping opsional yang bisa dipilih konsumen kasir.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
-                    {activeToppings.map((t) => {
-                      return (
-                        <div key={t.id} className="bg-white border border-gray-150 p-3 rounded-xl flex items-center justify-between text-xs font-semibold text-gray-700">
-                          <div>
-                            <span className="font-bold text-gray-900 block">{t.namaTopping}</span>
-                            <span className="text-[10px] text-gray-500 font-mono">
-                              Bahan: {t.namaBahan} ({t.takaran} {t.satuan})
-                            </span>
-                          </div>
-                          
-                          <div className="text-right flex items-center gap-4">
-                            <div>
-                              <span className="text-[10px] text-gray-400 block font-normal uppercase">Total HPP</span>
-                              <span className="font-bold text-indigo-700 font-mono">{formatCurrency(t.hargaJualTopping)}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-gray-400 block font-normal uppercase">Takaran</span>
-                              <span className="font-bold text-gray-700 font-mono">{t.takaran} {t.satuan}</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteTopping(t.id)}
-                              className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Adding New Topping Form */}
-                            <form onSubmit={handleAddTopping} className="p-4 bg-white rounded-xl border border-indigo-150/60 grid grid-cols-1 md:grid-cols-12 gap-3 items-end text-xs">
-                  <div className="md:col-span-3">
-                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Pilih Bahan Mentah</label>
-                    <select
-                      required
-                      value={selectedToppingsBahan}
-                      onChange={(e) => {
-                        setSelectedToppingsBahan(e.target.value);
-                        setNewToppingName(`Topping ${e.target.value}`);
-                        const raw = bahanMap.get(e.target.value.toLowerCase().trim());
-                        if (raw) {
-                          setNewToppingTakaran('15');
-                          setToppingSatuan(raw.satuan);
-                        }
-                      }}
-                      className="w-full border border-gray-205 rounded-xl p-2.5 bg-white font-medium"
-                    >
-                      <option value="">-- Pilih Bahan --</option>
-                      {bahanBaku.map((b) => (
-                        <option key={b.nama} value={b.nama}>
-                          {b.nama} ({b.satuan})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Nama Topping</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Keju Parut Tebal"
-                      value={newToppingName}
-                      onChange={(e) => setNewToppingName(e.target.value)}
-                      className="w-full border border-gray-205 rounded-xl p-2.5 bg-white font-medium"
-                    />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Takaran</label>
-                    <div className="flex gap-1">
-                      <input
-                        type="number"
-                        required
-                        min="0.1"
-                        step="any"
-                        placeholder="15"
-                        value={newToppingTakaran}
-                        onChange={(e) => setNewToppingTakaran(e.target.value)}
-                        className="flex-1 border border-gray-205 rounded-xl p-2.5 bg-white font-mono font-bold"
-                      />
-                      <select value={toppingSatuan} onChange={e => setToppingSatuan(e.target.value)}
-                        className="w-16 text-[10px] border border-gray-200 rounded-xl p-2 font-bold bg-white text-center">
-                        {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="md:col-span-3">
-                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Total HPP <span className="text-blue-500 font-normal normal-case">auto</span></label>
-                    <div className="w-full border border-gray-200 bg-gray-100 rounded-xl p-2.5 font-mono font-bold text-indigo-700 text-center">
-                      {formatCurrency((parseFloat(newToppingTakaran) || 0) * (selectedToppingsBahan ? (bahanMap.get(selectedToppingsBahan.toLowerCase().trim())?.hargaSatuan || 0) : 0))}
-                    </div>
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <button
-                      type="submit"
-                      className="w-full py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-xs cursor-pointer flex justify-center items-center gap-1 uppercase"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Topping
-                    </button>
-                  </div>
-                </form>
               </div>
 
               {/* INTEGRATED REVENUE BREAKDOWN & HPPS SUMMARY CARD */}
