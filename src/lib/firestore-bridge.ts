@@ -1,7 +1,6 @@
 /**
  * Firestore Bridge — menghubungkan ERP dengan database Firestore yang sama dengan Web Store
- * Kedua aplikasi menggunakan Firebase project yang sama: quick-codex-1cf5x
- * Web Store menggunakan database ID: ai-studio-9e420702-3e63-4587-a7e9-2f225c2ac0c6
+ * Kedua aplikasi menggunakan Firebase project yang sama: near-bakery-store
  */
 
 import { initializeApp } from 'firebase/app';
@@ -28,8 +27,7 @@ import { getSavedRecipeImage } from './image-generator';
 
 // Inisialisasi Firebase untuk Firestore (sama dengan web store)
 const app = initializeApp(firebaseConfig, 'erp-bridge');
-const FIRESTORE_DB_ID = 'ai-studio-9e420702-3e63-4587-a7e9-2f225c2ac0c6';
-export const db = getFirestore(app, FIRESTORE_DB_ID);
+export const db = getFirestore(app);
 
 // ============================================================================
 // WEB STORE CONFIG — simpan & baca konfigurasi web store dari Firestore
