@@ -171,11 +171,24 @@ export async function syncProductsToFirestore(
       })
     );
 
+    // Cek diskon dari WebStoreConfig
+    let discountPercent = 0;
+    if (wsConfig?.products) {
+      const wsProduct = wsConfig.products.find(
+        (p: any) => p.productName.toLowerCase().trim() === calc.namaProduk.toLowerCase().trim()
+      );
+      if (wsProduct && wsProduct.discountPercent) {
+        discountPercent = Math.min(100, Math.max(0, Number(wsProduct.discountPercent)));
+      }
+    }
+
     batch.set(docRef, {
       id: productId,
       name: calc.namaProduk,
       description,
       price: Math.round(calc.hargaJualPerPorsi),
+      discountPercent: discountPercent > 0 ? discountPercent : undefined,
+      originalPrice: discountPercent > 0 ? Math.round(calc.hargaJualPerPorsi) : undefined,
       stock: Math.max(0, minStock),
       imageUrl: displayImage,
       category: kategori,

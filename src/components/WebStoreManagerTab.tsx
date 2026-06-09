@@ -367,6 +367,7 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
       <div className="flex flex-wrap gap-2">
         {sectionBtn('identity', <ShoppingBag className="w-4 h-4" />, '🏪 Identitas')}
         {sectionBtn('hero', <Image className="w-4 h-4" />, '🖼️ Hero')}
+        {sectionBtn('categories', <FileJson className="w-4 h-4" />, '📂 Kategori')}
         {sectionBtn('products', <ShoppingBag className="w-4 h-4" />, '📦 Produk')}
         {sectionBtn('theme', <Palette className="w-4 h-4" />, '🎨 Tema')}
         {sectionBtn('texts', <FileJson className="w-4 h-4" />, '📝 Teks')}
@@ -503,6 +504,125 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
         </div>
       )}
 
+      {/* ─── SECTION: CATEGORIES ─── */}
+      {activeSection === 'categories' && (
+        <div className={cardClass}>
+          <h3 className="text-sm font-black text-gray-800">📂 Kelola Kategori</h3>
+          <p className="text-[10px] text-gray-500">
+            Tambah, edit, dan hapus kategori produk Web Store. Kategori ini akan muncul di slider Web Store.
+            Setiap kategori bisa diberi icon (wheat, croissant, cake, cookie, coffee, atau lainnya).
+          </p>
+          
+          {/* Daftar kategori existing */}
+          <div className="space-y-2">
+            {(config.categories || []).map((cat, idx) => (
+              <div key={idx} className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                  <span className="text-lg">
+                    {(config.categoryIcons || {})[cat] === 'wheat' ? '🌾' :
+                     (config.categoryIcons || {})[cat] === 'croissant' ? '🥐' :
+                     (config.categoryIcons || {})[cat] === 'cake' ? '🎂' :
+                     (config.categoryIcons || {})[cat] === 'cookie' ? '🍪' :
+                     (config.categoryIcons || {})[cat] === 'coffee' ? '☕' : '📦'}
+                  </span>
+                </div>
+                <span className="text-xs font-bold text-gray-800 flex-1">{cat}</span>
+                <button
+                  onClick={() => {
+                    const newCats = (config.categories || []).filter((_, i) => i !== idx);
+                    const newIcons = { ...(config.categoryIcons || {}) };
+                    delete newIcons[cat];
+                    updateConfig({ categories: newCats, categoryIcons: newIcons });
+                  }}
+                  className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 cursor-pointer"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+          {(!config.categories || config.categories.length === 0) && (
+            <p className="text-xs text-gray-400 text-center py-4">Belum ada kategori. Tambah kategori di bawah.</p>
+          )}
+
+          {/* Form tambah kategori */}
+          <div className="border-t border-gray-100 pt-4 mt-4">
+            <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-3">Tambah Kategori Baru</h4>
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <label className={labelClass}>Nama Kategori</label>
+                <input
+                  id="new-category-name"
+                  className={inputClass}
+                  placeholder="Roti & Sourdough"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const input = document.getElementById('new-category-name') as HTMLInputElement;
+                      const name = input.value.trim();
+                      if (name && !(config.categories || []).includes(name)) {
+                        updateConfig({ 
+                          categories: [...(config.categories || []), name],
+                          categoryIcons: { ...(config.categoryIcons || {}), [name]: 'wheat' }
+                        });
+                        input.value = '';
+                      }
+                    }
+                  }}
+                />
+              </div>
+              <select
+                id="new-category-icon"
+                className={`${inputClass} w-32`}
+                defaultValue="wheat"
+              >
+                <option value="wheat">🌾 Roti</option>
+                <option value="croissant">🥐 Croissant</option>
+                <option value="cake">🎂 Kue</option>
+                <option value="cookie">🍪 Cookies</option>
+                <option value="coffee">☕ Kopi</option>
+                <option value="package">📦 Lainnya</option>
+              </select>
+              <button
+                onClick={() => {
+                  const input = document.getElementById('new-category-name') as HTMLInputElement;
+                  const iconSelect = document.getElementById('new-category-icon') as HTMLSelectElement;
+                  const name = input.value.trim();
+                  if (name && !(config.categories || []).includes(name)) {
+                    updateConfig({ 
+                      categories: [...(config.categories || []), name],
+                      categoryIcons: { ...(config.categoryIcons || {}), [name]: iconSelect.value }
+                    });
+                    input.value = '';
+                  }
+                }}
+                className="px-3 py-2 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer"
+              >
+                <Plus className="w-3 h-3" /> Tambah
+              </button>
+            </div>
+          </div>
+
+          {/* Reset ke default */}
+          <div className="border-t border-gray-100 pt-3 mt-3">
+            <button
+              onClick={() => updateConfig({ 
+                categories: ['Roti & Sourdough', 'Viennoiserie & Croissant', 'Kue & Tart', 'Kue Kering & Cookies', 'Minuman Kopi & Teh'],
+                categoryIcons: {
+                  'Roti & Sourdough': 'wheat',
+                  'Viennoiserie & Croissant': 'croissant',
+                  'Kue & Tart': 'cake',
+                  'Kue Kering & Cookies': 'cookie',
+                  'Minuman Kopi & Teh': 'coffee'
+                }
+              })}
+              className="px-3 py-1.5 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-lg transition-all cursor-pointer"
+            >
+              Reset ke Default
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ─── SECTION: PRODUCTS ─── */}
       {activeSection === 'products' && (
         <div className={cardClass}>
@@ -560,6 +680,11 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
                   <div className="flex gap-2 mt-1.5">
                     <input className="flex-1 px-2.5 py-1.5 text-[10px] border border-gray-200 rounded-lg outline-none focus:border-emerald-400"
                       value={p.description} onChange={e => updateProduct(idx, { description: e.target.value })} placeholder="Deskripsi produk..." />
+                    <input type="number" min="0" max="100"
+                      className="w-16 px-2 py-1.5 text-[10px] font-bold border border-amber-200 rounded-lg outline-none focus:border-amber-400 bg-amber-50 text-amber-800"
+                      value={p.discountPercent || 0}
+                      onChange={e => updateProduct(idx, { discountPercent: Math.min(100, Math.max(0, Number(e.target.value))) })}
+                      placeholder="0%" title="Diskon %" />
                     <label className="px-2.5 py-1.5 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer shrink-0">
                       <Image className="w-3 h-3 inline mr-1" />Gambar
                       <input type="file" accept="image/*" className="hidden" onChange={e => handleUploadProductImage(idx, e)} />

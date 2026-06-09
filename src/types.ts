@@ -213,6 +213,7 @@ export interface WebStoreProduct {
   displayImage: string; // base64 or URL
   description: string;
   kategori: string;
+  discountPercent?: number; // 0-100, 0 = no discount
 }
 
 export interface WebStorePromo {
@@ -258,6 +259,10 @@ export interface WebStoreConfig {
   colorHouseGreen: string;
   colorGold: string;
   colorCanvasWarm: string;
+  
+  // Categories (managed from ERP, synced to Web Store)
+  categories: string[];
+  categoryIcons: Record<string, string>; // category name → icon name
   
   // Promotions
   promos: WebStorePromo[];
@@ -339,6 +344,14 @@ export const createDefaultWebStoreConfig = (products: { namaProduk: string; kate
   productGridTitle: 'Pilihan Hari Ini',
   emptyStateTitle: 'Belum Ada Menu Tersedia',
   emptyStateDescription: 'Database Anda saat ini kosong. Masuk ke panel penjual untuk menambahkan produk.',
+  categories: ['Roti & Sourdough', 'Viennoiserie & Croissant', 'Kue & Tart', 'Kue Kering & Cookies', 'Minuman Kopi & Teh'],
+  categoryIcons: {
+    'Roti & Sourdough': 'wheat',
+    'Viennoiserie & Croissant': 'croissant',
+    'Kue & Tart': 'cake',
+    'Kue Kering & Cookies': 'cookie',
+    'Minuman Kopi & Teh': 'coffee'
+  },
   colorBrandGreen: '#006241',
   colorGreenAccent: '#00754A',
   colorHouseGreen: '#1E3932',
