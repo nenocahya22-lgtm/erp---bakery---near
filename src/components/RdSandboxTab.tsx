@@ -150,12 +150,11 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
                   className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono" />
               </div>
               <div>
-                <label className="block text-[9px] uppercase font-bold text-gray-400 mb-1">Total HPP <span className="text-blue-500">*auto</span></label>
-                <div className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono bg-gray-100 text-gray-500">
-                  (Terhitung otomatis dari bahan + overhead)
-                </div>
-                {/* Hidden — keep for backward compat */}
-                <input type="hidden" value={newRDPrice} readOnly />
+                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Total HPP (Rp) <span className="text-blue-500">*auto dr bahan</span></label>
+                  <div className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono bg-gray-100 text-gray-500">
+                    {formatCurrency(rdIngredients.reduce((s, i) => s + getIngredientCost(i.bahanName, i.takaran), 0))}
+                  </div>
+                  <input type="hidden" value={newRDPrice} readOnly />
               </div>
             </div>
 
@@ -281,7 +280,7 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono font-bold text-gray-900">{formatCurrency(exp.estHargaJual)}</span>
+                          <span className="text-xs font-mono font-bold text-emerald-700">{formatCurrency(totalMatCost + exp.estOverhead)}</span>
                           <ChevronRight className={`w-4 h-4 text-gray-400 transition ${isSelected ? 'text-emerald-600' : ''}`} />
                         </div>
                       </div>

@@ -589,7 +589,7 @@ export default function RecipesTab({
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Harga Jual (Rp)</label>
+                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Total HPP (Rp) <span className="text-blue-500 font-normal normal-case">acuan margin</span></label>
                   <input
                     type="number"
                     min="0"
@@ -731,7 +731,7 @@ export default function RecipesTab({
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Harga Jual Normal (Rp)</label>
+                    <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Total HPP (Rp)</label>
                     <input
                       type="number"
                       required
