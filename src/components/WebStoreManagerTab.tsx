@@ -78,6 +78,8 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryIcon, setNewCategoryIcon] = useState('wheat');
   const [isSavingToFirestore, setIsSavingToFirestore] = useState(false);
   const [lastSynced, setLastSynced] = useState<string | null>(null);
   const [isFirestoreConnected, setIsFirestoreConnected] = useState(false);
@@ -545,35 +547,35 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
             <p className="text-xs text-gray-400 text-center py-4">Belum ada kategori. Tambah kategori di bawah.</p>
           )}
 
-          {/* Form tambah kategori */}
+          {/* Form tambah kategori — controlled component */}
           <div className="border-t border-gray-100 pt-4 mt-4">
             <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-3">Tambah Kategori Baru</h4>
             <div className="flex items-end gap-3">
               <div className="flex-1">
                 <label className={labelClass}>Nama Kategori</label>
                 <input
-                  id="new-category-name"
                   className={inputClass}
                   placeholder="Roti & Sourdough"
+                  value={newCategoryName}
+                  onChange={e => setNewCategoryName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
-                      const input = document.getElementById('new-category-name') as HTMLInputElement;
-                      const name = input.value.trim();
+                      const name = newCategoryName.trim();
                       if (name && !(config.categories || []).includes(name)) {
                         updateConfig({ 
                           categories: [...(config.categories || []), name],
-                          categoryIcons: { ...(config.categoryIcons || {}), [name]: 'wheat' }
+                          categoryIcons: { ...(config.categoryIcons || {}), [name]: newCategoryIcon }
                         });
-                        input.value = '';
+                        setNewCategoryName('');
                       }
                     }
                   }}
                 />
               </div>
               <select
-                id="new-category-icon"
                 className={`${inputClass} w-32`}
-                defaultValue="wheat"
+                value={newCategoryIcon}
+                onChange={e => setNewCategoryIcon(e.target.value)}
               >
                 <option value="wheat">🌾 Roti</option>
                 <option value="croissant">🥐 Croissant</option>
@@ -584,15 +586,13 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
               </select>
               <button
                 onClick={() => {
-                  const input = document.getElementById('new-category-name') as HTMLInputElement;
-                  const iconSelect = document.getElementById('new-category-icon') as HTMLSelectElement;
-                  const name = input.value.trim();
+                  const name = newCategoryName.trim();
                   if (name && !(config.categories || []).includes(name)) {
                     updateConfig({ 
                       categories: [...(config.categories || []), name],
-                      categoryIcons: { ...(config.categoryIcons || {}), [name]: iconSelect.value }
+                      categoryIcons: { ...(config.categoryIcons || {}), [name]: newCategoryIcon }
                     });
-                    input.value = '';
+                    setNewCategoryName('');
                   }
                 }}
                 className="px-3 py-2 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer"
