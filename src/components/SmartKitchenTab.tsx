@@ -24,16 +24,7 @@ interface WorkOrder {
 
 export default function SmartKitchenTab() {
   // ─── IOT DEVICES ───
-  const [devices, setDevices] = useState<IoTDevice[]>([
-    { id: 'iot-oven-1', name: 'Deck Oven Gas', type: 'oven', value: 185, unit: '°C', status: 'online', lastUpdate: new Date().toISOString(), location: 'Dapur Pusat', minThreshold: 160, maxThreshold: 220 },
-    { id: 'iot-oven-2', name: 'Convection Oven', type: 'oven', value: 175, unit: '°C', status: 'online', lastUpdate: new Date().toISOString(), location: 'Dapur Pusat', minThreshold: 150, maxThreshold: 200 },
-    { id: 'iot-freezer-1', name: 'Freezer Mentega', type: 'freezer', value: -18, unit: '°C', status: 'online', lastUpdate: new Date().toISOString(), location: 'Gudang', minThreshold: -22, maxThreshold: -12 },
-    { id: 'iot-freezer-2', name: 'Chiller Susu & Telur', type: 'freezer', value: 4, unit: '°C', status: 'online', lastUpdate: new Date().toISOString(), location: 'Dapur', minThreshold: 1, maxThreshold: 6 },
-    { id: 'iot-scale-1', name: 'Timbangan Adonan', type: 'scale', value: 0, unit: 'gr', status: 'online', lastUpdate: new Date().toISOString(), location: 'Meja Kerja' },
-    { id: 'iot-scale-2', name: 'Timbangan Bahan', type: 'scale', value: 0, unit: 'gr', status: 'offline', lastUpdate: new Date().toISOString(), location: 'Gudang' },
-    { id: 'iot-humidity-1', name: 'Kelembaban Proofing', type: 'humidity', value: 75, unit: '%', status: 'online', lastUpdate: new Date().toISOString(), location: 'Ruang Proofing', minThreshold: 65, maxThreshold: 85 },
-    { id: 'iot-mixer-1', name: 'Mixer Spiral 20L', type: 'mixer', value: 1420, unit: 'rpm', status: 'online', lastUpdate: new Date().toISOString(), location: 'Dapur Pusat' },
-  ]);
+  const [devices, setDevices] = useState<IoTDevice[]>([]);
 
   // ─── WORK ORDERS (EAM) ───
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
