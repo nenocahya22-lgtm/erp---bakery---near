@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ShoppingCart, ArrowRight, Package } from 'lucide-react';
-import { ProductHpp, DetailResep, CalculationResult } from '../types';
+import { ProductHpp, DetailResep, CalculationResult, SATUAN_OPTIONS } from '../types';
 
 interface ProductionPlannerTabProps {
   productHpp: ProductHpp[];
@@ -11,6 +11,7 @@ interface ProductionPlannerTabProps {
 
 export default function ProductionPlannerTab({ productHpp, detailResep, calculatedProducts, bahanBaku }: ProductionPlannerTabProps) {
   const [targets, setTargets] = useState<Record<string, number>>({});
+  const [targetSatuans, setTargetSatuans] = useState<Record<string, string>>({});
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
@@ -68,7 +69,11 @@ export default function ProductionPlannerTab({ productHpp, detailResep, calculat
                   onChange={(e) => setTargets(prev => ({ ...prev, [p.namaProduk]: parseInt(e.target.value) || 0 }))}
                   className="w-20 border border-gray-200 rounded-lg p-2 text-xs font-mono font-bold text-center"
                   placeholder="0" />
-                <span className="text-[10px] text-gray-400 w-8">pcs</span>
+                <select value={targetSatuans[p.namaProduk] || 'pcs'}
+                onChange={e => setTargetSatuans(prev => ({ ...prev, [p.namaProduk]: e.target.value }))}
+                className="text-[10px] border border-gray-200 rounded-lg px-1.5 py-1.5 font-bold bg-white min-w-[55px] text-center">
+                {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
               </div>
             ))}
             {productHpp.length === 0 && (

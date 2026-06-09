@@ -142,6 +142,7 @@ export default function BranchDashboard({
 
   // ─── PLANNER STATE (shared antara kiri & kanan) ───
   const [plannerTargets, setPlannerTargets] = useState<Record<string, number>>({});
+  const [plannerSatuans, setPlannerSatuans] = useState<Record<string, string>>({});
   const calcPlannerNeeds = () => {
     const needs: Record<string, { total: number; satuan: string; hargaTotal: number; perProduk: { nama: string; qty: number }[] }> = {};
     Object.entries(plannerTargets).forEach(([prodName, val]) => {
@@ -493,7 +494,11 @@ export default function BranchDashboard({
                       onChange={e => setPlannerTargets(prev => ({ ...prev, [p.namaProduk]: parseInt(e.target.value) || 0 }))}
                       className="w-20 border border-gray-200 rounded-lg p-2 text-xs font-mono font-bold text-center"
                       placeholder="0" />
-                    <span className="text-[10px] text-gray-400 w-8">pcs</span>
+                    <select value={plannerSatuans[p.namaProduk] || 'pcs'}
+                      onChange={e => setPlannerSatuans(prev => ({ ...prev, [p.namaProduk]: e.target.value }))}
+                      className="text-[10px] border border-gray-200 rounded-lg px-1.5 py-1.5 font-bold bg-white min-w-[55px] text-center">
+                      {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </div>
                 ))}
                 {productHpp.length === 0 && (

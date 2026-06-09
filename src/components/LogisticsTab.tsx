@@ -60,6 +60,8 @@ export default function LogisticsTab() {
   const [poQty, setPoQty] = useState('');
   const [poUnit, setPoUnit] = useState('');
   const [poPrice, setPoPrice] = useState('');
+  // Requisition form satuan (separate from poUnit to avoid cross-form conflict)
+  const [reqUnit, setReqUnit] = useState('pcs');
 
   const handleCreatePO = (e: React.FormEvent) => {
     e.preventDefault();
@@ -285,16 +287,19 @@ export default function LogisticsTab() {
             </div>
 
             <div>
-              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Kuantitas Permintaan (pcs/biji)</label>
-              <div className="relative">
+              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Kuantitas Permintaan</label>
+              <div className="flex gap-1">
                 <input
                   type="number"
                   required
                   value={reqQty}
                   onChange={(e) => setReqQty(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg p-2.5 text-sm font-mono font-bold"
+                  className="flex-1 border border-gray-200 rounded-lg p-2.5 text-sm font-mono font-bold"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]">PCS</span>
+                <select value={reqUnit} onChange={(e) => setReqUnit(e.target.value)}
+                  className="w-16 border border-gray-200 rounded-lg p-2 text-xs font-bold bg-white text-center">
+                  {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
               </div>
             </div>
 
