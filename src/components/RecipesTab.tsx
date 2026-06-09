@@ -144,7 +144,7 @@ export default function RecipesTab({
   const [selectedToppingsBahan, setSelectedToppingsBahan] = useState('');
   const [newToppingName, setNewToppingName] = useState('');
   const [newToppingTakaran, setNewToppingTakaran] = useState('');
-  const [newToppingHargaJual, setNewToppingHargaJual] = useState('5000');
+  const [toppingSatuan, setToppingSatuan] = useState('gr');
 
   // Find active product
   const activeProduct = productHpp.find(
@@ -315,11 +315,10 @@ export default function RecipesTab({
     if (!activeProduct) return;
 
     const finalPorsi = parseFloat(editPorsiJual) || 1;
-    const finalHargaJual = parseFloat(editHargaJual) || 0;
 
     // Update locally or via prop cascade
     activeProduct.porsiJual = finalPorsi;
-    activeProduct.hargaJual = finalHargaJual;
+    activeProduct.hargaJual = totalIngredientsCost; // auto dari bahan
     activeProduct.kategori = editKategori;
 
     // Re-trigger global listeners via triggering ingredients handler
@@ -414,16 +413,16 @@ export default function RecipesTab({
       takaran: tTakaran,
       hargaBeli: raw.hargaBeli,
       isiKemasan: raw.isiKemasan,
-      satuan: raw.satuan,
+      satuan: toppingSatuan,
       hargaSatuan: raw.hargaSatuan,
-      hargaJualTopping: parseFloat(newToppingHargaJual) || 0,
+      hargaJualTopping: Math.round(tTakaran * raw.hargaSatuan),
     };
 
     onAddTopping(newTp);
     setSelectedToppingsBahan('');
     setNewToppingName('');
     setNewToppingTakaran('');
-    setNewToppingHargaJual('5000');
+    setToppingSatuan('gr');
   };
 
   const handleDeleteTopping = (id: string) => {
@@ -740,15 +739,10 @@ export default function RecipesTab({
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Total HPP (Rp)</label>
-                    <input
-                      type="number"
-                      required
-                      min="0"
-                      value={editHargaJual}
-                      onChange={(e) => setEditHargaJual(e.target.value)}
-                      className="w-full border border-gray-200 bg-white rounded-lg p-2.5 font-mono text-emerald-800 font-bold"
-                    />
+                    <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Total HPP (Rp) <span className="text-blue-500 font-normal normal-case">auto dari bahan</span></label>
+                    <div className="w-full border border-gray-200 bg-gray-100 rounded-lg p-2.5 font-mono text-emerald-800 font-bold text-center">
+                      {formatCurrency(totalIngredientsCost)}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Grup Kategori</label>
@@ -1066,10 +1060,6 @@ export default function RecipesTab({
                 ) : (
                   <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
                     {activeToppings.map((t) => {
-                      const matObj = bahanMap.get(t.namaBahan.toLowerCase().trim());
-                      const currentHpp = matObj ? t.takaran * matObj.hargaSatuan : 0;
-                      const profit = t.hargaJualTopping - currentHpp;
-
                       return (
                         <div key={t.id} className="bg-white border border-gray-150 p-3 rounded-xl flex items-center justify-between text-xs font-semibold text-gray-700">
                           <div>
@@ -1081,18 +1071,12 @@ export default function RecipesTab({
                           
                           <div className="text-right flex items-center gap-4">
                             <div>
-                              <span className="text-[10px] text-gray-400 block font-normal uppercase">Harga Jual Topping</span>
+                              <span className="text-[10px] text-gray-400 block font-normal uppercase">Total HPP</span>
                               <span className="font-bold text-indigo-700 font-mono">{formatCurrency(t.hargaJualTopping)}</span>
                             </div>
                             <div>
-                              <span className="text-[10px] text-gray-400 block font-normal uppercase">Estimasi Modal HPP</span>
-                              <span className="font-bold text-amber-700 font-mono">{formatCurrency(currentHpp)}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-gray-400 block font-normal uppercase">Laba (Margin)</span>
-                              <span className="font-bold text-emerald-700 font-mono">
-                                +{formatCurrency(profit)}
-                              </span>
+                              <span className="text-[10px] text-gray-400 block font-normal uppercase">Takaran</span>
+                              <span className="font-bold text-gray-700 font-mono">{t.takaran} {t.satuan}</span>
                             </div>
                             <button
                               type="button"
@@ -1119,7 +1103,10 @@ export default function RecipesTab({
                         setSelectedToppingsBahan(e.target.value);
                         setNewToppingName(`Topping ${e.target.value}`);
                         const raw = bahanMap.get(e.target.value.toLowerCase().trim());
-                        if (raw) setNewToppingTakaran('15');
+                        if (raw) {
+                          setNewToppingTakaran('15');
+                          setToppingSatuan(raw.satuan);
+                        }
                       }}
                       className="w-full border border-gray-205 rounded-xl p-2.5 bg-white font-medium"
                     >
@@ -1132,12 +1119,12 @@ export default function RecipesTab({
                     </select>
                   </div>
 
-                  <div className="md:col-span-3">
-                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Nama Topping Addon</label>
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Nama Topping</label>
                     <input
                       type="text"
                       required
-                      placeholder="Misal: Keju Parut Tebal"
+                      placeholder="Keju Parut Tebal"
                       value={newToppingName}
                       onChange={(e) => setNewToppingName(e.target.value)}
                       className="w-full border border-gray-205 rounded-xl p-2.5 bg-white font-medium"
@@ -1145,29 +1132,30 @@ export default function RecipesTab({
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Takaran Topping</label>
-                    <input
-                      type="number"
-                      required
-                      min="0.1"
-                      step="any"
-                      placeholder="15"
-                      value={newToppingTakaran}
-                      onChange={(e) => setNewToppingTakaran(e.target.value)}
-                      className="w-full border border-gray-205 rounded-xl p-2.5 bg-white font-mono font-bold"
-                    />
+                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Takaran</label>
+                    <div className="flex gap-1">
+                      <input
+                        type="number"
+                        required
+                        min="0.1"
+                        step="any"
+                        placeholder="15"
+                        value={newToppingTakaran}
+                        onChange={(e) => setNewToppingTakaran(e.target.value)}
+                        className="flex-1 border border-gray-205 rounded-xl p-2.5 bg-white font-mono font-bold"
+                      />
+                      <select value={toppingSatuan} onChange={e => setToppingSatuan(e.target.value)}
+                        className="w-16 text-[10px] border border-gray-200 rounded-xl p-2 font-bold bg-white text-center">
+                        {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
                   </div>
 
-                  <div className="md:col-span-2">
-                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Harga Jual (Rp)</label>
-                    <input
-                      type="number"
-                      required
-                      min="0"
-                      value={newToppingHargaJual}
-                      onChange={(e) => setNewToppingHargaJual(e.target.value)}
-                      className="w-full border border-gray-205 rounded-xl p-2.5 bg-white font-mono font-bold text-indigo-700"
-                    />
+                  <div className="md:col-span-3">
+                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Total HPP <span className="text-blue-500 font-normal normal-case">auto</span></label>
+                    <div className="w-full border border-gray-200 bg-gray-100 rounded-xl p-2.5 font-mono font-bold text-indigo-700 text-center">
+                      {formatCurrency((parseFloat(newToppingTakaran) || 0) * (selectedToppingsBahan ? (bahanMap.get(selectedToppingsBahan.toLowerCase().trim())?.hargaSatuan || 0) : 0))}
+                    </div>
                   </div>
 
                   <div className="md:col-span-2">
