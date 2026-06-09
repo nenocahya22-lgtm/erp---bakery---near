@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Star, FileText, Printer, Package, Trash2, Plus } from 'lucide-react';
-import { BahanBaku } from '../types';
+import { BahanBaku, SATUAN_OPTIONS } from '../types';
 
 interface SupplierRating {
   name: string;
@@ -165,10 +165,16 @@ export default function SupplierTab({ bahanBaku }: SupplierTabProps) {
                 ))}
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Qty</label>
-                <input type="number" className="w-full border border-gray-200 rounded-lg p-2 font-mono" />
+                <input type="number" className="w-full border border-gray-200 rounded-lg p-2 font-mono" placeholder="0" />
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Satuan</label>
+                <select className="w-full border border-gray-200 rounded-lg p-2.5 bg-white">
+                  {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
               </div>
               <div>
                 <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Estimasi Harga</label>

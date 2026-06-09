@@ -112,6 +112,17 @@ export async function syncProductsToFirestore(
   let synced = 0;
   const batch = writeBatch(db);
 
+  // Baca webstore config sekali sebelum loop (gambar produk dari WebStoreManager)
+  let wsProductImages: Record<string, string> = {};
+  try {
+    const wsConfig = await getWebStoreConfig('pusat');
+    if (wsConfig?.products) {
+      wsConfig.products.forEach((p: any) => {
+        if (p.displayImage) wsProductImages[p.productName.toLowerCase().trim()] = p.displayImage;
+      });
+    }
+  } catch (e) { /* silent */ }
+
   for (const calc of calculatedProducts) {
     const productId = `PRD-${calc.namaProduk.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
     const productInfo = productHpp.find(
@@ -130,6 +141,11 @@ export async function syncProductsToFirestore(
       displayImage = existing.imageUrl || '';
       description = existing.description || calc.namaProduk;
       kategori = existing.category || kategori;
+    }
+
+    // Ambil gambar dari WebStoreConfig (produk images yang diupload di WebStoreManager)
+    if (!displayImage) {
+      displayImage = wsProductImages[calc.namaProduk.toLowerCase().trim()] || '';
     }
 
     // Ambil gambar dari ERP image storage (RecipesTab) jika belum ada di Firestore
