@@ -361,34 +361,34 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* KIRI: FORM KASIR */}
-        <div className="lg:col-span-5 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+        {/* KIRI: FORM CHECKOUT KOMPAK */}
+        <div className="lg:col-span-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
           <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-100 pb-2.5">
-            <ShoppingCart className="w-4 h-4 text-emerald-600" /> Form Transaksi POS
+            <ShoppingCart className="w-4 h-4 text-emerald-600" /> Checkout
           </h3>
 
           <form onSubmit={handleCreatePOSOrder} className="space-y-3.5 text-xs">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Nama Customer</label>
+                <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Customer</label>
                 <input type="text" placeholder="Nama pembeli" value={newCustName}
                   onChange={(e) => setNewCustName(e.target.value)}
                   className="w-full border border-gray-200 rounded-xl p-2.5 bg-white focus:ring-1 focus:ring-emerald-500 focus:outline-none" />
               </div>
               <div>
-                <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Sumber Transaksi</label>
+                <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Sumber</label>
                 <select value={orderSource} onChange={(e) => setOrderSource(e.target.value as RetailOrder['source'])}
                   className="w-full border border-gray-200 rounded-xl p-2.5 bg-white">
-                  <option value="Walk-In POS">Walk-In (Kasir Offline)</option>
-                  <option value="WhatsApp Order">WhatsApp Order</option>
-                  <option value="Web Toko">Web Toko Online</option>
+                  <option value="Walk-In POS">Walk-In</option>
+                  <option value="WhatsApp Order">WhatsApp</option>
+                  <option value="Web Toko">Web Toko</option>
                 </select>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <div className="flex-1">
-                <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Catatan / Request</label>
+                <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Catatan</label>
                 <input type="text" placeholder="Req pelanggan..." value={orderNotes}
                   onChange={(e) => setOrderNotes(e.target.value)}
                   className="w-full border border-gray-200 rounded-xl p-2.5 bg-white focus:ring-1 focus:ring-emerald-500 focus:outline-none" />
@@ -430,38 +430,24 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
               </div>
             )}
 
-            <div>
-              <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Pilih Produk</label>
-              <div className="grid grid-cols-2 gap-2 mb-3 max-h-[300px] overflow-y-auto">
-                {calculatedProducts.map(p => {
-                  const img = getSavedRecipeImage(p.namaProduk);
-                  const isSelected = selectedProduct === p.namaProduk;
-                  return (
-                    <button key={p.namaProduk} type="button"
-                      onClick={() => { setSelectedProduct(p.namaProduk); }}
-                      className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex gap-2 items-center ${
-                        isSelected
-                          ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20'
-                          : 'bg-white border-gray-200 hover:border-emerald-300 hover:shadow-sm'
-                      }`}>
-                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 shrink-0 border border-gray-200">
-                        <img src={img} alt={p.namaProduk}
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                      </div>
-                      <div className="min-w-0">
-                        <span className="block text-[11px] font-bold text-gray-900 truncate">{p.namaProduk}</span>
-                        <span className="block text-[10px] font-mono font-bold text-emerald-700">{formatCurrency(p.hargaJualPerPorsi)}</span>
-                      </div>
-                    </button>
-                  );
-                })}
+            {/* SELECTED PRODUCT — compact card */}
+            {selectedProduct ? (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-gray-500 block uppercase font-bold">Produk</span>
+                  <span className="font-bold text-gray-900 text-sm">{selectedProduct}</span>
+                </div>
+                <div className="text-right">
+                  <span className="font-black text-emerald-800 font-mono text-sm">
+                    {formatCurrency(calculatedProducts.find(p => p.namaProduk === selectedProduct)?.hargaJualPerPorsi || 0)}
+                  </span>
+                </div>
               </div>
-              {calculatedProducts.length === 0 && (
-                <p className="text-[10px] text-amber-600 font-medium mt-1">Belum ada produk aktif. Tambah produk di tab Formulasi Resep.</p>
-              )}
-            </div>
+            ) : (
+              <div className="bg-gray-50 border border-dashed border-gray-200 rounded-xl p-4 text-center text-xs text-gray-400">
+                👆 Pilih produk dari katalog di sebelah kanan
+              </div>
+            )}
 
             <div className="flex items-center gap-4">
               <div className="w-1/3">
@@ -481,75 +467,116 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
               </div>
             </div>
 
-            <button type="submit"
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-3 rounded-xl transition cursor-pointer shadow-sm active:scale-[0.98] uppercase tracking-wide">
+            <button type="submit" disabled={!selectedProduct}
+              className={`w-full font-bold text-xs py-3 rounded-xl transition cursor-pointer shadow-sm active:scale-[0.98] uppercase tracking-wide ${
+                selectedProduct ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}>
               <ShoppingCart className="w-4 h-4 inline mr-1" /> Transaksi POS
             </button>
           </form>
         </div>
 
-        {/* KANAN: ANTREAN PESANAN */}
-        <div className="lg:col-span-7 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
-          <div className="flex justify-between items-center border-b border-gray-100 pb-2.5">
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
-              <ChefHat className="w-4 h-4 text-emerald-600" /> Antrean Dapur
+        {/* KANAN: KATALOG PRODUK + ANTREAN */}
+        <div className="lg:col-span-8 space-y-4">
+          {/* KATALOG PRODUK — gambar besar */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-100 pb-2.5 mb-3">
+              <Image className="w-4 h-4 text-emerald-600" /> Pilih Produk
             </h3>
-            <span className="font-mono text-emerald-800 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded text-[10px] font-bold">
-              {todayOrders.length} order hari ini
-            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[420px] overflow-y-auto">
+              {calculatedProducts.map(p => {
+                const img = getSavedRecipeImage(p.namaProduk);
+                const isSelected = selectedProduct === p.namaProduk;
+                return (
+                  <button key={p.namaProduk} type="button"
+                    onClick={() => { setSelectedProduct(p.namaProduk); }}
+                    className={`p-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20 shadow-md'
+                        : 'bg-white border-gray-200 hover:border-emerald-300 hover:shadow-md'
+                    }`}>
+                    <div className="w-full aspect-square rounded-lg overflow-hidden bg-gray-50 border border-gray-100">
+                      <img src={img} alt={p.namaProduk}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    </div>
+                    <div className="w-full min-w-0">
+                      <span className="block text-[11px] font-bold text-gray-900 truncate">{p.namaProduk}</span>
+                      <span className="block text-[11px] font-mono font-bold text-emerald-700">{formatCurrency(p.hargaJualPerPorsi)}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {calculatedProducts.length === 0 && (
+              <p className="text-xs text-amber-600 font-medium text-center py-8">Belum ada produk aktif. Tambah produk di tab Formulasi Resep.</p>
+            )}
           </div>
 
-          <div className="space-y-3 max-h-[500px] overflow-y-auto">
-            {todayOrders.map((o) => (
-              <div key={o.ordId} className="p-4 bg-gray-50 border border-gray-150 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-xs">
-                <div className="space-y-1 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-[10px] font-bold text-gray-400">#{o.ordId}</span>
-                    {o.catatan && <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">📝 {o.catatan}</span>}
-                    <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded font-mono ${
-                      o.source === 'Walk-In POS' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
-                      'bg-purple-50 text-purple-700 border border-purple-200'
-                    }`}>{o.source}</span>
-                    <span className="text-[10px] text-gray-400">{o.timeAgo}</span>
-                  </div>
-                  <p className="font-bold text-gray-900">{o.customerName}</p>
-                  <p className="text-[11px] text-gray-500">{o.items}</p>
-                  {o.addOns && o.addOns.length > 0 && (
-                    <p className="text-[9px] text-amber-700">
-                      🧀 {o.addOns.map(a => `${a.nama}+${formatCurrency(a.harga)}`).join(', ')}
-                    </p>
-                  )}
-                </div>
+          {/* ANTREAN DAPUR */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-2.5">
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+                <ChefHat className="w-4 h-4 text-emerald-600" /> Antrean Dapur
+              </h3>
+              <span className="font-mono text-emerald-800 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded text-[10px] font-bold">
+                {todayOrders.length} order hari ini
+              </span>
+            </div>
 
-                <div className="flex items-center gap-3 shrink-0 border-t md:border-0 pt-2 md:pt-0 w-full md:w-auto justify-between">
-                  <div className="text-right">
-                    <span className="text-[10px] text-gray-400 block uppercase font-bold">Total</span>
-                    <span className="font-black text-gray-900 font-mono text-xs">{formatCurrency(o.totalSum)}</span>
+            <div className="space-y-3 max-h-[320px] overflow-y-auto">
+              {todayOrders.map((o) => (
+                <div key={o.ordId} className="p-4 bg-gray-50 border border-gray-150 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-xs">
+                  <div className="space-y-1 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[10px] font-bold text-gray-400">#{o.ordId}</span>
+                      {o.catatan && <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">📝 {o.catatan}</span>}
+                      <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded font-mono ${
+                        o.source === 'Walk-In POS' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                        'bg-purple-50 text-purple-700 border border-purple-200'
+                      }`}>{o.source}</span>
+                      <span className="text-[10px] text-gray-400">{o.timeAgo}</span>
+                    </div>
+                    <p className="font-bold text-gray-900">{o.customerName}</p>
+                    <p className="text-[11px] text-gray-500">{o.items}</p>
+                    {o.addOns && o.addOns.length > 0 && (
+                      <p className="text-[9px] text-amber-700">
+                        🧀 {o.addOns.map(a => `${a.nama}+${formatCurrency(a.harga)}`).join(', ')}
+                      </p>
+                    )}
                   </div>
-                  <select value={o.status}
-                    onChange={(e) => handleUpdateOrderStatus(o.ordId, e.target.value as RetailOrder['status'])}
-                    className="border border-gray-200 bg-white p-1.5 rounded-lg text-xs font-semibold cursor-pointer">
-                    <option value="Queued">Antre</option>
-                    <option value="Baking">Panggang</option>
-                    <option value="Completed">Selesai</option>
-                    <option value="Refunded">Refund</option>
-                  </select>
-                  <div className="flex gap-1">
-                    <button onClick={() => setActiveReceipt(o)}
-                      className="bg-slate-900 text-white font-bold text-[10px] uppercase px-2 py-1.5 rounded-lg hover:bg-slate-800 transition cursor-pointer">
-                      <Printer className="w-3 h-3" />
-                    </button>
-                    <button onClick={() => handlePrintThermalBill(o)}
-                      className="bg-emerald-700 text-white font-bold text-[10px] uppercase px-2 py-1.5 rounded-lg hover:bg-emerald-800 transition cursor-pointer" title="Cetak Bill Thermal">
-                      Bill
-                    </button>
+
+                  <div className="flex items-center gap-3 shrink-0 border-t md:border-0 pt-2 md:pt-0 w-full md:w-auto justify-between">
+                    <div className="text-right">
+                      <span className="text-[10px] text-gray-400 block uppercase font-bold">Total</span>
+                      <span className="font-black text-gray-900 font-mono text-xs">{formatCurrency(o.totalSum)}</span>
+                    </div>
+                    <select value={o.status}
+                      onChange={(e) => handleUpdateOrderStatus(o.ordId, e.target.value as RetailOrder['status'])}
+                      className="border border-gray-200 bg-white p-1.5 rounded-lg text-xs font-semibold cursor-pointer">
+                      <option value="Queued">Antre</option>
+                      <option value="Baking">Panggang</option>
+                      <option value="Completed">Selesai</option>
+                      <option value="Refunded">Refund</option>
+                    </select>
+                    <div className="flex gap-1">
+                      <button onClick={() => setActiveReceipt(o)}
+                        className="bg-slate-900 text-white font-bold text-[10px] uppercase px-2 py-1.5 rounded-lg hover:bg-slate-800 transition cursor-pointer">
+                        <Printer className="w-3 h-3" />
+                      </button>
+                      <button onClick={() => handlePrintThermalBill(o)}
+                        className="bg-emerald-700 text-white font-bold text-[10px] uppercase px-2 py-1.5 rounded-lg hover:bg-emerald-800 transition cursor-pointer" title="Cetak Bill Thermal">
+                        Bill
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-            {todayOrders.length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-8">Belum ada transaksi POS hari ini.</p>
-            )}
+              ))}
+              {todayOrders.length === 0 && (
+                <p className="text-xs text-gray-400 text-center py-8">Belum ada transaksi POS hari ini.</p>
+              )}
+            </div>
           </div>
         </div>
       </div>
