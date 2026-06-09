@@ -508,6 +508,13 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
                     <span className="text-xs font-bold text-gray-800 truncate">{p.productName}</span>
                     <span className="text-[9px] text-gray-400 font-mono bg-slate-200 px-1.5 py-0.5 rounded">{p.kategori}</span>
                   </div>
+                  <div className="flex items-center gap-3 mt-1">
+                    {(() => {
+                      const cp = (calculatedProducts || []).find(c => c.namaProduk === p.productName);
+                      if (cp) return <><span className="text-[9px] text-gray-400">HPP: {formatCurrency(cp.hppPerPorsi)}</span><span className="text-[10px] font-bold text-emerald-700">Jual: {formatCurrency(cp.hargaJualPerPorsi)}</span></>;
+                      return <span className="text-[9px] text-gray-400 italic">Harga belum diatur</span>;
+                    })()}
+                  </div>
                   <div className="flex gap-2 mt-1.5">
                     <input className="flex-1 px-2.5 py-1.5 text-[10px] border border-gray-200 rounded-lg outline-none focus:border-emerald-400"
                       value={p.description} onChange={e => updateProduct(idx, { description: e.target.value })} placeholder="Deskripsi produk..." />
@@ -778,6 +785,10 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
                         {p.displayImage ? <img src={p.displayImage} alt={p.productName} className="w-full h-full object-cover" /> : <ShoppingBag className="w-6 h-6 text-slate-300" />}
                       </div>
                       <p className="text-[10px] font-bold text-gray-800 mt-1.5 truncate">{p.productName}</p>
+                      {(() => {
+                        const cp = (calculatedProducts || []).find(c => c.namaProduk === p.productName);
+                        return cp ? <p className="text-[9px] text-emerald-700 font-bold">{formatCurrency(cp.hargaJualPerPorsi)}</p> : null;
+                      })()}
                     </div>
                   ))}
                 </div>
