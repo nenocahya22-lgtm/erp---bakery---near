@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BahanBaku, ProductHpp, DetailResep, ProductTopping } from '../types';
+import { BahanBaku, ProductHpp, DetailResep, ProductTopping, SATUAN_OPTIONS } from '../types';
 import {
   Plus,
   Trash2,
@@ -134,6 +134,7 @@ export default function RecipesTab({
   const [activeRecipePorsi, setActiveRecipePorsi] = useState<number>(10);
   const [selectedBahan, setSelectedBahan] = useState('');
   const [takaranBahan, setTakaranBahan] = useState('');
+  const [takaranSatuan, setTakaranSatuan] = useState('gr');
 
   // Inline ingredient quantity editing state
   const [editingBahanName, setEditingBahanName] = useState<string | null>(null);
@@ -167,6 +168,14 @@ export default function RecipesTab({
       }
     }
   }, [selectedProductName, productHpp, activeProduct]);
+
+  // Sync satuan when selected bahan changes
+  useEffect(() => {
+    if (selectedBahan) {
+      const bahan = bahanBaku.find(b => b.nama === selectedBahan);
+      if (bahan) setTakaranSatuan(bahan.satuan);
+    }
+  }, [selectedBahan, bahanBaku]);
 
   const handleGenerateImage = () => {
     if (!selectedProductName) return;
@@ -999,22 +1008,21 @@ export default function RecipesTab({
                     </select>
                   </div>
 
-                  <div className="w-full sm:w-44 relative">
+                  <div className="w-full sm:w-40 flex gap-1">
                     <input
                       type="number"
                       step="any"
                       min="0.001"
                       required
-                      placeholder="Banyaknya (takaran)"
+                      placeholder="Takaran"
                       value={takaranBahan}
                       onChange={(e) => setTakaranBahan(e.target.value)}
-                      className="w-full text-xs border border-gray-205 rounded-xl p-2.5 bg-white"
+                      className="flex-1 text-xs border border-gray-205 rounded-xl p-2.5 bg-white"
                     />
-                    {selectedBahan && (
-                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-extrabold uppercase font-mono">
-                        {bahanBaku.find((b) => b.nama === selectedBahan)?.satuan || ''}
-                      </span>
-                    )}
+                    <select value={takaranSatuan} onChange={e => setTakaranSatuan(e.target.value)}
+                      className="w-16 text-xs border border-gray-200 rounded-xl p-2.5 font-bold bg-white text-center">
+                      {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </div>
 
                   <button
