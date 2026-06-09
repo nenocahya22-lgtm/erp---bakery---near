@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BahanBaku, DetailResep, CalculationResult, PriceRecord } from '../types';
+import { BahanBaku, DetailResep, CalculationResult, PriceRecord, SATUAN_OPTIONS } from '../types';
 import {
   TrendingUp, TrendingDown, BarChart3, DollarSign, Info, Sparkles, Printer, Plus, Trash2,
   Sliders, Calendar, Sun, CloudRain, Shuffle, Calculator, AlertTriangle, CheckCircle2,
@@ -593,6 +593,7 @@ function SubstitusiSection({ bahanBaku, detailResep, calculatedProducts, formatC
   const [subOriginalBahan, setSubOriginalBahan] = useState('');
   const [substituteQty, setSubstituteQty] = useState('');
   const [substitutePrice, setSubstitutePrice] = useState('');
+  const [substituteSatuan, setSubstituteSatuan] = useState('gr');
 
   const subOriginal = bahanBaku.find(b => b.nama === subOriginalBahan);
   const substituteUnitPrice = parseFloat(substitutePrice) || 0;
@@ -616,9 +617,15 @@ function SubstitusiSection({ bahanBaku, detailResep, calculatedProducts, formatC
     return { namaProduk: r.namaProduk, oldHpp: product.hppPerPorsi, newHpp, oldMargin: product.marginPersen, newMargin, costDiff, takaran: r.takaran };
   }).filter(Boolean);
 
+  // Sync satuan when selected bahan changes
+  useEffect(() => {
+    const bahan = bahanBaku.find(b => b.nama === subOriginalBahan);
+    if (bahan) setSubstituteSatuan(bahan.satuan);
+  }, [subOriginalBahan, bahanBaku]);
+
   const handleApplySubstitution = () => {
     if (!subOriginal || substituteUnitPrice <= 0) return;
-    if (!window.confirm(`Terapkan perubahan harga untuk "${subOriginal.nama}"?\n\nHarga Satuan: ${formatCurrency(oldSatuanPrice)} → ${formatCurrency(newSatuanPrice)}\nKemasan: ${subOriginal.isiKemasan} → ${substitutePackQty}\n\n${subAffected.length} produk akan terdampak.`)) return;
+    if (!window.confirm(`Terapkan perubahan harga untuk "${subOriginal.nama}"?\n\nHarga Satuan: ${formatCurrency(oldSatuanPrice)} → ${formatCurrency(newSatuanPrice)}\nKemasan: ${subOriginal.isiKemasan} ${subOriginal.satuan} → ${substitutePackQty} ${substituteSatuan}\n\n${subAffected.length} produk akan terdampak.`)) return;
 
     if (onEditMaterial) {
       const updated: BahanBaku = {
@@ -627,6 +634,7 @@ function SubstitusiSection({ bahanBaku, detailResep, calculatedProducts, formatC
         hargaBeli: substituteUnitPrice,
         hargaBeliReal: substituteUnitPrice,
         hargaSatuan: newSatuanPrice,
+        satuan: substituteSatuan,
       };
       onEditMaterial(subOriginal.nama, updated);
     }
@@ -660,9 +668,15 @@ function SubstitusiSection({ bahanBaku, detailResep, calculatedProducts, formatC
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-[9px] uppercase font-bold text-gray-400 mb-0.5">Qty Kemasan Baru</label>
-                <input type="number" value={substituteQty} onChange={(e) => setSubstituteQty(e.target.value)}
-                  placeholder={String(subOriginal?.isiKemasan || 1000)}
-                  className="w-full border border-gray-200 rounded-lg p-2.5 font-mono" />
+                <div className="flex gap-1">
+                  <input type="number" value={substituteQty} onChange={(e) => setSubstituteQty(e.target.value)}
+                    placeholder={String(subOriginal?.isiKemasan || 1000)}
+                    className="flex-1 border border-gray-200 rounded-lg p-2.5 font-mono" />
+                  <select value={substituteSatuan} onChange={e => setSubstituteSatuan(e.target.value)}
+                    className="w-16 border border-gray-200 rounded-lg p-2.5 text-xs font-bold bg-white text-center">
+                    {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
               </div>
               <div>
                 <label className="block text-[9px] uppercase font-bold text-gray-400 mb-0.5">Harga Beli Baru (Rp)</label>
