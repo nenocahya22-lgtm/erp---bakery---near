@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Trash2, Plus, AlertTriangle, ShoppingCart, Camera, Printer, X } from 'lucide-react';
-import { CalculationResult, WriteOffLog } from '../types';
+import { CalculationResult, WriteOffLog, SATUAN_OPTIONS } from '../types';
 
 interface WasteControlTabProps {
   bahanBaku: any[];
@@ -19,11 +19,17 @@ export default function WasteControlTab({
 }: WasteControlTabProps) {
   const [selectedBahanIdx, setSelectedBahanIdx] = useState('0');
   const [wasteQty, setWasteQty] = useState('500');
+  const [wasteSatuan, setWasteSatuan] = useState('gr');
   const [wasteLocation, setWasteLocation] = useState<'Gudang Utama' | 'Dapur Pusat' | 'Storefront / Kasir'>('Dapur Pusat');
   const [wasteReason, setWasteReason] = useState('');
   const [wastePhoto, setWastePhoto] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+
+  // Sync satuan dropdown saat bahan berubah
+  useEffect(() => {
+    setWasteSatuan(bahanBaku[parseInt(selectedBahanIdx)]?.satuan || 'gr');
+  }, [selectedBahanIdx]);
 
   // Write-off states
   const [woProduct, setWoProduct] = useState('');
@@ -43,18 +49,19 @@ export default function WasteControlTab({
     const qty = parseFloat(wasteQty) || 0;
     if (qty <= 0) return;
     const lossValue = Math.round(qty * mat.hargaSatuan);
+    const finalSatuan = wasteSatuan || mat.satuan || 'gr';
     onAddWasteLog({
       id: `w-${Date.now()}`,
       bahanNama: mat.nama,
       qtyWasted: qty,
-      satuan: mat.satuan,
+      satuan: finalSatuan,
       lossValue,
       location: wasteLocation,
       reason: wasteReason.trim() || 'Wastage standar',
       dateLogged: new Date().toISOString().substring(0, 10),
       photo: wastePhoto
     });
-    setWasteQty('500'); setWasteReason(''); setWastePhoto(null);
+    setWasteQty('500'); setWasteSatuan(bahanBaku[parseInt(selectedBahanIdx)]?.satuan || 'gr'); setWasteReason(''); setWastePhoto(null);
   };
 
   const handleAddWriteOff = (e: React.FormEvent) => {
@@ -134,9 +141,10 @@ export default function WasteControlTab({
               <div className="flex items-center gap-1">
                 <input type="number" required value={wasteQty} onChange={(e) => setWasteQty(e.target.value)}
                   className="flex-1 border border-gray-200 rounded-lg p-2 font-mono" placeholder="Qty" />
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-2 rounded-lg min-w-[40px] text-center">
-                  {bahanBaku[parseInt(selectedBahanIdx)]?.satuan || 'gr'}
-                </span>
+                <select value={wasteSatuan} onChange={(e) => setWasteSatuan(e.target.value)}
+                  className="text-[10px] font-bold border border-gray-200 rounded-lg px-2 py-2 bg-white min-w-[60px] text-center">
+                  {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
               </div>
               <select value={wasteLocation} onChange={(e) => setWasteLocation(e.target.value as any)}
                 className="border border-gray-200 rounded-lg p-2">
