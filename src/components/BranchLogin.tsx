@@ -2,6 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Cabang } from '../types';
 import { Lock, User, Eye, EyeOff, Building2, ArrowLeft } from 'lucide-react';
 
+// SHA-256 hash — harus match dengan yang di DataPusatTab
+async function hashPasswordSHA256(pass: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pass);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 interface BranchLoginProps {
   cabangList: Cabang[];
   onLoginSuccess: (cabang: Cabang) => void;
@@ -24,23 +33,29 @@ export default function BranchLogin({ cabangList, onLoginSuccess, onBackToOwner 
     return () => clearInterval(interval);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanUser = username.trim().toLowerCase();
     const cleanPass = password.trim();
 
-    const found = cabangList.find(
-      c => c.username.toLowerCase() === cleanUser && c.password === cleanPass && c.isActive
-    );
+    const found = cabangList.find(c => c.username.toLowerCase() === cleanUser && c.isActive);
 
     if (found) {
-      localStorage.setItem('branch_authenticated', JSON.stringify({ id: found.id, nama: found.nama }));
-      localStorage.setItem('branch_authenticated_at', new Date().toISOString());
-      setError('');
-      onLoginSuccess(found);
-    } else {
-      setError('Username atau Password salah! Atau akun cabang belum aktif.');
+      // Hash password input dan bandingkan dengan yang tersimpan (sudah SHA-256)
+      const hashedInput = await hashPasswordSHA256(cleanPass);
+      // Fallback: cek hash dulu, lalu plaintext untuk data lama sebelum migrasi
+      const passwordMatch = found.password === hashedInput || found.password === cleanPass;
+
+      if (passwordMatch) {
+        localStorage.setItem('branch_authenticated', JSON.stringify({ id: found.id, nama: found.nama }));
+        localStorage.setItem('branch_authenticated_at', new Date().toISOString());
+        setError('');
+        onLoginSuccess(found);
+        return;
+      }
     }
+
+    setError('Username atau Password salah! Atau akun cabang belum aktif.');
   };
 
   return (

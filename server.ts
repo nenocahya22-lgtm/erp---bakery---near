@@ -11,6 +11,37 @@ const PORT = 3000;
 
 app.use(express.json());
 
+// ─── API KEY AUTHENTICATION MIDDLEWARE ───
+// Semua endpoint /api/* butuh header x-api-key yang cocok dengan GEMINI_API_KEY
+// Mencegah penyalahgunaan oleh pihak tidak berwenang
+const API_KEY = process.env.GEMINI_API_KEY || '';
+
+function requireApiKey(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const providedKey = req.headers['x-api-key'] as string;
+  
+  // Skip auth check in development mode (for local testing)
+  if (process.env.NODE_ENV === 'development') {
+    return next();
+  }
+  
+  if (!API_KEY) {
+    return res.status(500).json({ error: 'Server configuration error: API key not set' });
+  }
+  
+  if (!providedKey) {
+    return res.status(401).json({ error: 'Unauthorized: x-api-key header is required' });
+  }
+  
+  if (providedKey !== API_KEY) {
+    return res.status(403).json({ error: 'Forbidden: invalid API key' });
+  }
+  
+  next();
+}
+
+// Terapkan middleware ke semua /api/* endpoints
+app.use('/api', requireApiKey);
+
 // Lazy-initialized Gemini
 let aiClient: GoogleGenAI | null = null;
 function getAiClient() {
@@ -283,12 +314,20 @@ app.post('/api/marketing/generate-image-desc', async (req, res) => {
 });
 
 // Backup Email API Route — Send backup data via SMTP using Nodemailer
+// ⚠️ Hanya menggunakan SMTP credentials dari environment variable, BUKAN dari client!
 app.post('/api/backup/send', async (req, res) => {
   try {
-    const { smtpHost, smtpPort, smtpUser, smtpPass, fromEmail, toEmail, backupData, backupDate } = req.body;
+    const { toEmail, backupData, backupDate } = req.body;
+    
+    // Gunakan SMTP dari environment variable, bukan dari client!
+    const smtpHost = process.env.SMTP_HOST;
+    const smtpPort = process.env.SMTP_PORT;
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+    const fromEmail = process.env.SMTP_FROM || smtpUser;
 
     if (!smtpHost || !smtpPort || !smtpUser || !smtpPass || !toEmail || !backupData) {
-      return res.status(400).json({ error: 'SMTP configuration incomplete or missing backup data.' });
+      return res.status(400).json({ error: 'SMTP configuration incomplete or missing backup data. Configure SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS in environment.' });
     }
 
     const nodemailer = await import('nodemailer');

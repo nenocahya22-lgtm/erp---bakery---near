@@ -91,7 +91,28 @@ import {
 
 export default function App() {
   // Owner authentication gate
-  const [isOwnerAuthenticated, setIsOwnerAuthenticated] = useState(() => localStorage.getItem('owner_authenticated') === 'true');
+  // ─── OWNER AUTH — VERIFIKASI GANDA (localStorage + sessionStorage) ───
+  // Session storage di-clear saat browser ditutup, mencegah akses ilegal dari sesi lama
+  const [isOwnerAuthenticated, setIsOwnerAuthenticated] = useState(() => {
+    const localAuth = localStorage.getItem('owner_authenticated') === 'true';
+    const sessionAuth = sessionStorage.getItem('owner_authenticated') === 'true';
+    const sessionToken = localStorage.getItem('owner_session_token');
+    
+    // Verifikasi: localStorage + sessionStorage + token harus valid
+    if (localAuth && sessionAuth && sessionToken) {
+      return true;
+    }
+    
+    // Jika hanya localStorage yang ada (session hilang karena browser direstart)
+    if (localAuth && !sessionAuth) {
+      // Hapus auth — minta login ulang
+      localStorage.removeItem('owner_authenticated');
+      localStorage.removeItem('owner_authenticated_at');
+      localStorage.removeItem('owner_session_token');
+    }
+    
+    return false;
+  });
 
   const handleOwnerLogin = () => {
     setIsOwnerAuthenticated(true);
@@ -100,6 +121,10 @@ export default function App() {
   const handleOwnerLogout = () => {
     localStorage.removeItem('owner_authenticated');
     localStorage.removeItem('owner_authenticated_at');
+    localStorage.removeItem('owner_session_token');
+    sessionStorage.removeItem('owner_authenticated');
+    sessionStorage.removeItem('owner_authenticated_at');
+    sessionStorage.removeItem('owner_session_id');
     setIsOwnerAuthenticated(false);
   };
 

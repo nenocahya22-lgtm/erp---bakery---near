@@ -55,20 +55,43 @@ export default function DataPusatTab({
 
   const openEditCabang = (c: Cabang) => {
     setEditingCabang(c);
-    setCabangNama(c.nama); setCabangAlamat(c.alamat); setCabangUsername(c.username); setCabangPassword(c.password);
+    setCabangNama(c.nama); setCabangAlamat(c.alamat); setCabangUsername(c.username);
+    setCabangPassword(''); // Jangan pre-fill hash — biarkan kosong, user isi ulang jika ingin ganti
     setShowCabangModal(true);
   };
 
-  const handleSaveCabang = (e: React.FormEvent) => {
+  // ─── HASH PASSWORD FUNCTION ───
+  const hashPassword = async (password: string): Promise<string> => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  const handleSaveCabang = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cabangNama.trim() || !cabangUsername.trim() || !cabangPassword.trim()) return;
+    if (!cabangNama.trim() || !cabangUsername.trim()) return;
+    // Password wajib untuk cabang baru, opsional untuk edit (pertahankan hash lama)
+    if (!editingCabang && !cabangPassword.trim()) return;
+
+    // Hash password sebelum disimpan — tidak menyimpan plaintext!
+    // Hanya hash jika user mengisi password baru; jika kosong (edit), pertahankan hash lama
+    let hashedPassword: string;
+    if (cabangPassword.trim()) {
+      hashedPassword = await hashPassword(cabangPassword.trim());
+    } else if (editingCabang) {
+      hashedPassword = editingCabang.password; // Pertahankan hash yang sudah ada
+    } else {
+      return; // Cabang baru harus punya password
+    }
 
     const cabang: Cabang = {
       id: editingCabang?.id || `cab-${Date.now()}`,
       nama: cabangNama.trim(),
       alamat: cabangAlamat.trim(),
       username: cabangUsername.trim().toLowerCase(),
-      password: cabangPassword.trim(),
+      password: hashedPassword, // Hash SHA-256
       isActive: editingCabang?.isActive ?? true,
       createdAt: editingCabang?.createdAt || new Date().toISOString(),
     };

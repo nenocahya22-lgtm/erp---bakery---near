@@ -48,6 +48,10 @@ export interface CalculationResult {
   hargaJualPerPorsi: number;
   profitPerPorsi: number;
   marginPersen: number;
+  biayaOverhead?: number;
+  biayaTenagaKerja?: number;
+  biayaUtilitas?: number;
+  biayaKemasan?: number;
   bahanList: {
     namaBahan: string;
     takaran: number;
@@ -145,7 +149,8 @@ export interface Cabang {
   nama: string;
   alamat: string;
   username: string;
-  password: string;
+  password: string; // Hash SHA-256 dari password
+  passwordHint?: string; // Petunjuk untuk mengingat password (opsional)
   isActive: boolean;
   createdAt: string;
 }

@@ -25,20 +25,59 @@ export default function OwnerLogin({ onLoginSuccess }: OwnerLoginProps) {
     return () => clearInterval(interval);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // ─── PASSWORD VERIFICATION ───
+  // Menggunakan hash SHA-256 untuk verifikasi — tidak menyimpan password mentah
+  // Password default: "owner123" → hash: 6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090
+  const OWNER_PASSWORD_HASH = '6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090';
+
+  const hashPassword = async (password: string): Promise<string> => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanUser = username.trim().toLowerCase();
     const cleanPass = password.trim();
 
-    if (cleanUser === 'owner' && (cleanPass === 'owner 123' || cleanPass === 'owner123' || cleanPass.toLowerCase() === 'owner')) {
-      localStorage.setItem('owner_authenticated', 'true');
-      localStorage.setItem('owner_authenticated_at', new Date().toISOString());
-      setError('');
-      onLoginSuccess();
+    if (cleanUser === 'owner') {
+      const inputHash = await hashPassword(cleanPass);
+      
+      if (inputHash === OWNER_PASSWORD_HASH) {
+        // Gunakan sessionStorage (di-clear saat browser ditutup) + flag tambahan
+        sessionStorage.setItem('owner_authenticated', 'true');
+        sessionStorage.setItem('owner_authenticated_at', new Date().toISOString());
+        sessionStorage.setItem('owner_session_id', crypto.randomUUID());
+        // Juga set localStorage untuk persist login (tapi diverifikasi dengan session)
+        localStorage.setItem('owner_authenticated', 'true');
+        localStorage.setItem('owner_authenticated_at', new Date().toISOString());
+        localStorage.setItem('owner_session_token', inputHash.substring(0, 16));
+        setError('');
+        onLoginSuccess();
+      } else {
+        setError('Username atau Sandi salah! Hubungi administrator jika Anda lupa kata sandi.');
+      }
     } else {
       setError('Username atau Sandi salah! Hubungi administrator jika Anda lupa kata sandi.');
     }
   };
+
+  // Verifikasi session saat mount
+  React.useEffect(() => {
+    const sessionValid = sessionStorage.getItem('owner_authenticated') === 'true';
+    const localValid = localStorage.getItem('owner_authenticated') === 'true';
+    const sessionToken = localStorage.getItem('owner_session_token');
+    
+    // Jika localStorage ada tapi sessionStorage hilang (restart browser), minta login ulang
+    if (localValid && !sessionValid) {
+      localStorage.removeItem('owner_authenticated');
+      localStorage.removeItem('owner_authenticated_at');
+      localStorage.removeItem('owner_session_token');
+    }
+  }, []);
 
   return (
     <div id="owner-login-container" className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-4 relative overflow-hidden">
