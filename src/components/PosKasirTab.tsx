@@ -32,9 +32,10 @@ interface PosKasirTabProps {
   calculatedProducts: CalculationResult[];
   onCompletePOSSale: (productName: string, qty: number, totalRevenue: number, source?: string) => void;
   toppings?: { id: string; namaProduk: string; namaTopping: string; takaran: number; hargaJualTopping: number; }[];
+  detailResep?: { namaProduk: string; namaBahan: string; takaran: number }[];
 }
 
-export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, toppings }: PosKasirTabProps) {
+export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, toppings, detailResep }: PosKasirTabProps) {
   const [activeReceipt, setActiveReceipt] = useState<RetailOrder | null>(null);
   const [showLaporan, setShowLaporan] = useState(false);
   const [showRekap, setShowRekap] = useState(false);
@@ -73,9 +74,26 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
     safeGetLocalStorage<ShiftLog[]>('pos_shift_logs', [])
   );
 
+  // Sync dari localStorage — menangkap data baru dari App.tsx (Web Store orders)
   useEffect(() => {
     localStorage.setItem('pos_orders_data', JSON.stringify(orders));
   }, [orders]);
+
+  // Sync balik dari localStorage saat window regain focus atau storage berubah dari tab lain
+  useEffect(() => {
+    const syncOrders = () => {
+      const savedOrders = safeGetLocalStorage<RetailOrder[]>('pos_orders_data', []);
+      if (savedOrders.length !== orders.length) {
+        setOrders(savedOrders);
+      }
+    };
+    window.addEventListener('focus', syncOrders);
+    window.addEventListener('storage', syncOrders);
+    return () => {
+      window.removeEventListener('focus', syncOrders);
+      window.removeEventListener('storage', syncOrders);
+    };
+  }, [orders.length]);
 
   useEffect(() => {
     localStorage.setItem('pos_shift_logs', JSON.stringify(shiftLogs));
@@ -94,6 +112,20 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
   const handleCreatePOSOrder = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProduct) { alert('Silakan pilih produk terlebih dahulu!'); return; }
+
+    // Validasi: produk harus punya resep (BOM) agar stok bisa otomatis terpotong
+    const hasRecipe = detailResep && detailResep.some(
+      r => r.namaProduk.toLowerCase().trim() === selectedProduct.toLowerCase().trim()
+    );
+    if (!hasRecipe) {
+      const confirmNoRecipe = window.confirm(
+        `⚠️ "${selectedProduct}" BELUM punya resep (BOM)!\n\n` +
+        `Stok bahan baku TIDAK akan terpotong secara otomatis.\n` +
+        `HPP dan laporan keuangan bisa menjadi tidak akurat.\n\n` +
+        `Tetap jual produk ini?`
+      );
+      if (!confirmNoRecipe) return;
+    }
 
     const prodInfo = calculatedProducts.find(p => p.namaProduk === selectedProduct);
     const price = prodInfo ? prodInfo.hargaJualPerPorsi : 19000;

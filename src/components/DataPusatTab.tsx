@@ -70,6 +70,10 @@ export default function DataPusatTab({
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   };
 
+  // ─── HELPERS ───
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
+
   const handleSaveCabang = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cabangNama.trim() || !cabangUsername.trim()) return;
@@ -135,9 +139,20 @@ export default function DataPusatTab({
 
   const handleTerimaSO = (soId: string) => {
     const so = suratOrders.find(s => s.id === soId);
-    if (so) {
-      onUpdateSuratOrder(soId, { ...so, status: 'diterima' });
-    }
+    if (!so) return;
+    // Minta input qtyTerima untuk setiap item — biarkan cabang mengisi jumlah real
+    const newItems = so.items.map(item => {
+      const input = window.prompt(`Jumlah "${item.bahanNama}" yang diterima (dikirim: ${item.qty}):`, String(item.qty));
+      if (input === null) return null; // Cancel
+      const qtyTerima = parseFloat(input) || 0;
+      return { ...item, qtyTerima: Math.max(0, qtyTerima) };
+    });
+    if (newItems.some(i => i === null)) return; // User cancelled
+    onUpdateSuratOrder(soId, {
+      ...so,
+      status: 'diterima',
+      items: newItems as typeof so.items,
+    });
   };
 
   const handleSetujuiSO = (soId: string) => {
@@ -176,7 +191,7 @@ export default function DataPusatTab({
   const [showBahanModal, setShowBahanModal] = useState(false);
   const [editingBahan, setEditingBahan] = useState<BahanBaku | null>(null);
   const [bahanForm, setBahanForm] = useState({kode:'',nama:'',satuan:'gr',isiKemasan:1000,hargaBeliReal:0,markupPercent:25,kategori:'Produk'});
-  
+
   // ─── KATEGORI DINAMIS ───
   const [bahanKategoriList, setBahanKategoriList] = useState<string[]>(() => {
     const saved = safeGetLocalStorage<string[]>('bahan_kategori_list', []);
@@ -604,9 +619,6 @@ export default function DataPusatTab({
     </button>
   );
 
-  const formatCurrency = (val: number) =>
-    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
-
   return (
     <div className="space-y-6">
       {/* HEADER */}
@@ -887,30 +899,34 @@ export default function DataPusatTab({
           </div>
 
           {/* Daftar stok per bahan */}
+          {/* NOTE: b.isiKemasan sudah termasuk pengurangan dari SO yang dikirim (via App.tsx handleAddSuratOrder/handleUpdateSuratOrder).
+              Kalkulasi tambahan di sini hanya untuk display historis — jangan kurangi lagi! */}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50">
                   <th className="px-3 py-2.5 rounded-l-lg">Bahan</th>
-                  <th className="px-3 py-2.5 text-right">Stok Input</th>
-                  <th className="px-3 py-2.5 text-right">Dikirim ke Cabang</th>
-                  <th className="px-3 py-2.5 text-right rounded-r-lg">Stok Tersisa</th>
+                  <th className="px-3 py-2.5 text-right">Stok Gudang</th>
+                  <th className="px-3 py-2.5 text-right">Total Dikirim</th>
+                  <th className="px-3 py-2.5 text-right rounded-r-lg">Sisa (Display)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {bahanBaku.map(b => {
+                  // Hitung total yang pernah dikirim (historis, untuk display saja)
                   const totalDikirim = suratOrders
                     .filter(s => s.status === 'dikirim' || s.status === 'diterima')
                     .flatMap(s => s.items)
                     .filter(i => i.bahanNama === b.nama)
                     .reduce((acc, i) => acc + i.qty, 0);
-                  const stokTersisa = Math.max(0, b.isiKemasan - totalDikirim);
+                  // Rekonstruksi stok awal sebelum pengiriman
+                  const stokAwal = b.isiKemasan + totalDikirim;
                   return (
                     <tr key={b.nama} className="hover:bg-gray-50">
                       <td className="px-3 py-2.5 font-semibold text-gray-900">{b.nama}</td>
                       <td className="px-3 py-2.5 text-right font-mono">{b.isiKemasan} {b.satuan}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-red-600">-{totalDikirim} {b.satuan}</td>
-                      <td className={`px-3 py-2.5 text-right font-mono font-bold ${stokTersisa < 10 ? 'text-red-700' : 'text-emerald-700'}`}>{stokTersisa} {b.satuan}</td>
+                      <td className="px-3 py-2.5 text-right font-mono text-red-600">{totalDikirim > 0 ? `-${totalDikirim}` : '-'} {b.satuan}</td>
+                      <td className={`px-3 py-2.5 text-right font-mono font-bold ${b.isiKemasan < 10 ? 'text-red-700' : 'text-emerald-700'}`}>{b.isiKemasan} {b.satuan}</td>
                     </tr>
                   );
                 })}

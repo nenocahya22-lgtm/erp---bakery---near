@@ -123,24 +123,41 @@ export async function syncProductsToFirestore(
     }
   } catch (e) { /* silent */ }
 
-  for (const calc of calculatedProducts) {
-    const productId = `PRD-${calc.namaProduk.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
-    const productInfo = productHpp.find(
+  // Batch: ambil semua existing products dari Firestore dalam 1 parallel call
+  // (daripada sequential getDoc per produk yang lambat untuk >50 produk)
+  const productRefs = calculatedProducts.map(calc => ({
+    calc,
+    productId: `PRD-${calc.namaProduk.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+    productInfo: productHpp.find(
       (p) => p.namaProduk.toLowerCase().trim() === calc.namaProduk.toLowerCase().trim()
-    );
+    ),
+  }));
+
+  const existingSnaps = await Promise.all(
+    productRefs.map(p => getDoc(doc(db, 'products', p.productId)).catch(() => null))
+  );
+
+  // Map productId -> existing data untuk lookup cepat
+  const existingDataMap = new Map<string, any>();
+  existingSnaps.forEach((snap, i) => {
+    if (snap?.exists()) {
+      existingDataMap.set(productRefs[i].productId, snap.data());
+    }
+  });
+
+  for (const pRef of productRefs) {
+    const { calc, productId, productInfo } = pRef;
 
     // Cari deskripsi & gambar dari berbagai sumber
     let displayImage = '';
     let description = calc.namaProduk;
     let kategori = productInfo?.kategori || 'Lainnya';
 
-    const docRef = doc(db, 'products', productId);
-    const existingSnap = await getDoc(docRef);
-    if (existingSnap.exists()) {
-      const existing = existingSnap.data() as any;
-      displayImage = existing.imageUrl || '';
-      description = existing.description || calc.namaProduk;
-      kategori = existing.category || kategori;
+    const existingData = existingDataMap.get(productId);
+    if (existingData) {
+      displayImage = existingData.imageUrl || '';
+      description = existingData.description || calc.namaProduk;
+      kategori = existingData.category || kategori;
     }
 
     // Ambil gambar dari WebStoreConfig (produk images yang diupload di WebStoreManager)
@@ -184,7 +201,7 @@ export async function syncProductsToFirestore(
       }
     }
 
-    batch.set(docRef, {
+    batch.set(doc(db, 'products', productId), {
       id: productId,
       name: calc.namaProduk,
       description,
@@ -194,8 +211,8 @@ export async function syncProductsToFirestore(
       stock: Math.max(0, minStock),
       imageUrl: displayImage,
       category: kategori,
-      rating: existingSnap.exists() ? (existingSnap.data() as any).rating || 5.0 : 5.0,
-      reviewCount: existingSnap.exists() ? (existingSnap.data() as any).reviewCount || 0 : 0,
+      rating: existingData ? (existingData as any).rating || 5.0 : 5.0,
+      reviewCount: existingData ? (existingData as any).reviewCount || 0 : 0,
       // HPP & margin TIDAK disinkron ke produk publik — hanya untuk internal ERP
       // Pelanggan web store tidak boleh melihat biaya produksi
       updatedAt: serverTimestamp(),

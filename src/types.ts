@@ -17,6 +17,7 @@ export interface ProductHpp {
   porsiJual: number; // Berapa porsi yang dihasilkan dalam satu resep
   hargaJual: number; // Harga jual total resep atau per porsi
   kategori?: string; // e.g. 'Roti', 'Cake', 'Cookies', 'Coffee', 'Lainnya'
+  wastePercent?: number; // Waste/shrinkage % (default 0). Example: 5 berarti 5% shrinkage
 }
 
 export interface ProductTopping {
@@ -46,13 +47,14 @@ export interface CalculationResult {
   hppTotalResep: number;
   hppPerPorsi: number;
   hargaJualPerPorsi: number;
-  profitPerPorsi: number;
-  marginPersen: number;
-  biayaOverhead?: number;
-  biayaTenagaKerja?: number;
-  biayaUtilitas?: number;
-  biayaKemasan?: number;
-  bahanList: {
+  profitPerPorsi: number;    marginPersen: number;
+    wastePercent: number; // Waste/shrinkage factor used in calculation
+    hppBeforeWaste: number; // HPP before applying waste factor
+    biayaOverhead?: number;
+    biayaTenagaKerja?: number;
+    biayaUtilitas?: number;
+    biayaKemasan?: number;
+    bahanList: {
     namaBahan: string;
     takaran: number;
     satuan: string;
@@ -161,7 +163,7 @@ export interface SuratOrder {
   cabangNama: string;
   tanggalKirim: string;
   status: 'minta' | 'dikirim' | 'diterima';
-  items: { bahanNama: string; qty: number }[];
+  items: { bahanNama: string; qty: number; qtyTerima?: number }[];
 }
 
 export interface StockOpname {

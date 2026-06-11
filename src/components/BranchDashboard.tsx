@@ -756,8 +756,15 @@ export default function BranchDashboard({
                       {so.status === 'dikirim' ? (
                         <button
                           onClick={() => {
-                            if (window.confirm('Apakah Anda yakin sudah menerima barang-barang ini? Stok cabang akan bertambah secara otomatis.')) {
-                              onUpdateSuratOrder(so.id, { ...so, status: 'diterima' });
+                            const newItems = so.items.map(item => {
+                              const input = window.prompt(`Jumlah "${item.bahanNama}" yang diterima (dikirim: ${item.qty}):`, String(item.qty));
+                              if (input === null) return null;
+                              const qtyTerima = parseFloat(input) || 0;
+                              return { ...item, qtyTerima: Math.max(0, qtyTerima) };
+                            });
+                            if (newItems.some(i => i === null)) return;
+                            if (window.confirm('Konfirmasi penerimaan barang? Stok cabang akan bertambah sesuai jumlah yang diterima.')) {
+                              onUpdateSuratOrder(so.id, { ...so, status: 'diterima', items: newItems as typeof so.items });
                             }
                           }}
                           className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer"

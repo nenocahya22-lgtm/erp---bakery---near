@@ -97,12 +97,17 @@ export function calculateAllProducts(
     // ─── HPP LENGKAP ───
     // HPP = Biaya Bahan murni (tanpa overhead)
     // Overhead ditangani terpisah di modul Anggaran & Alokasi
+    // Waste % — shrinkage factor untuk bisnis bakery (misal: adonan nempel, tumpah, over-proof)
+    const wastePct = product.wastePercent || 0;
+    const wasteMultiplier = 1 / (1 - Math.min(wastePct, 50) / 100); // Cap at 50% max
+    
     const biayaOverhead = 0;
     const biayaTenagaKerja = 0;
     const biayaUtilitas = 0;
     const biayaKemasan = 0;
     
-    const hppTotalResep = biayaBahanTotal;
+    const hppBeforeWaste = biayaBahanTotal;
+    const hppTotalResep = biayaBahanTotal * wasteMultiplier; // Biaya bahan + waste/shrinkage
     const hppPerPorsi = hppTotalResep / (product.porsiJual || 1);
     const hargaJualPerPorsi = product.hargaJual / (product.porsiJual || 1);
     const profitPerPorsi = hargaJualPerPorsi - hppPerPorsi;
@@ -118,6 +123,8 @@ export function calculateAllProducts(
       hargaJualPerPorsi,
       profitPerPorsi,
       marginPersen,
+      wastePercent: wastePct,
+      hppBeforeWaste,
       biayaOverhead,
       biayaTenagaKerja,
       biayaUtilitas,

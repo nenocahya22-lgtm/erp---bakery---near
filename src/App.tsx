@@ -610,6 +610,11 @@ export default function App() {
 
   // State mutators for components
   const handleAddMaterial = (m: BahanBaku) => {
+    // Validasi isiKemasan > 0 (mencegah Infinity di hargaSatuan)
+    if (m.isiKemasan <= 0) {
+      showToast('Isi kemasan harus lebih dari 0!', 'error');
+      return;
+    }
     // Check key duplicate
     const duplicate = bahanBaku.some((b) => b.nama.toLowerCase().trim() === m.nama.toLowerCase().trim());
     if (duplicate) {
@@ -622,6 +627,11 @@ export default function App() {
   };
 
   const handleEditMaterial = (oldName: string, updated: BahanBaku) => {
+    // Validasi isiKemasan > 0
+    if (updated.isiKemasan <= 0) {
+      showToast('Isi kemasan harus lebih dari 0!', 'error');
+      return;
+    }
     setBahanBaku((prev) =>
       prev.map((b) => (b.nama.toLowerCase().trim() === oldName.toLowerCase().trim() ? updated : b))
     );
@@ -737,29 +747,31 @@ export default function App() {
           return b;
         });
       });
-    }
 
-    // 4. Also deduct multi-warehouse stock levels inside localStorage 'stock_levels_data' for high visual accuracy in InventoryTab! (Only if it's not a branch sale)
-    const savedStocks = localStorage.getItem('stock_levels_data');
-    if (savedStocks && !cabangId) {
-      try {
-        const parsed = JSON.parse(savedStocks);
-        ingredientsForProduct.forEach((ing) => {
-          const keys = Object.keys(parsed);
-          const matchedKey = keys.find(k => k.toLowerCase().includes(ing.namaBahan.toLowerCase()) || ing.namaBahan.toLowerCase().includes(k.toLowerCase()));
-          if (matchedKey) {
-            const spec = parsed[matchedKey];
-            if (spec.kitchen >= 1) {
-              spec.kitchen = Math.max(0, Number((spec.kitchen - (ing.takaran * soldQty / 1000)).toFixed(2)));
-            } else if (spec.mainWh >= 1) {
-              spec.mainWh = Math.max(0, Number((spec.mainWh - (ing.takaran * soldQty / 1000)).toFixed(2)));
-            }
+      // 4. Deduct warehouse stock levels AFTER state update via setTimeout (mencegah race condition localStorage)
+      setTimeout(() => {
+        const savedStocks = localStorage.getItem('stock_levels_data');
+        if (savedStocks) {
+          try {
+            const parsed = JSON.parse(savedStocks);
+            ingredientsForProduct.forEach((ing) => {
+              const keys = Object.keys(parsed);
+              const matchedKey = keys.find(k => k.toLowerCase().includes(ing.namaBahan.toLowerCase()) || ing.namaBahan.toLowerCase().includes(k.toLowerCase()));
+              if (matchedKey) {
+                const spec = parsed[matchedKey];
+                if (spec.kitchen >= 1) {
+                  spec.kitchen = Math.max(0, Number((spec.kitchen - (ing.takaran * soldQty / 1000)).toFixed(2)));
+                } else if (spec.mainWh >= 1) {
+                  spec.mainWh = Math.max(0, Number((spec.mainWh - (ing.takaran * soldQty / 1000)).toFixed(2)));
+                }
+              }
+            });
+            localStorage.setItem('stock_levels_data', JSON.stringify(parsed));
+          } catch (err) {
+            console.error('Failed to deduct warehouse level stocks:', err);
           }
-        });
-        localStorage.setItem('stock_levels_data', JSON.stringify(parsed));
-      } catch (err) {
-        console.error('Failed to deduct warehouse level stocks:', err);
-      }
+        }
+      }, 100);
     }
 
     // 5. Record revenue to revenue tracker (for profit distribution)
@@ -876,9 +888,18 @@ export default function App() {
     showToast(msg, 'success');
   };
 
+  // Cache untuk mencegah double-processing order (Web Store auto-deduct)
+  const processedOrderIdsRef = useRef<Set<string>>(new Set());
+
   const handleUpdateSuratOrder = (id: string, so: SuratOrder) => {
     const prevStatus = suratOrders.find(s => s.id === id)?.status;
     setSuratOrders(prev => prev.map(s => s.id === id ? so : s));
+
+    // Guard: cegah double Terima (Bug #6 - Phantom Stock)
+    if (so.status === 'diterima' && prevStatus === 'diterima') {
+      showToast('⚠️ Surat Order ini sudah diterima sebelumnya!', 'info');
+      return;
+    }
 
     if (so.status === 'dikirim' && prevStatus === 'minta') {
       // Owner setujui permintaan cabang → kurangi stok pusat
@@ -892,13 +913,14 @@ export default function App() {
       showToast(`Permintaan "${so.cabangNama}" disetujui! Stok pusat berkurang.`, 'success');
     }
 
-    if (so.status === 'diterima') {
-      // Cabang terima barang → tambah stok cabang
+    if (so.status === 'diterima' && prevStatus !== 'diterima') {
+      // Cabang terima barang → tambah stok cabang (pakai qtyTerima jika ada)
       const original = suratOrders.find(s => s.id === id);
       const items = original?.items || so.items;
       items.forEach(item => {
+        const actualQty = item.qtyTerima ?? item.qty; // Pakai qtyTerima jika cabang mengisi
         const bahan = bahanBaku.find(b => b.nama === item.bahanNama);
-        updateBranchStock(so.cabangId, item.bahanNama, item.qty, bahan?.satuan || 'pcs');
+        updateBranchStock(so.cabangId, item.bahanNama, actualQty, bahan?.satuan || 'pcs');
         addBranchTransaction({
           cabangId: so.cabangId,
           tipe: 'so_terima',
@@ -948,6 +970,16 @@ export default function App() {
 
   // Compute calculated results array of all products
   const calculatedProducts: CalculationResult[] = calculateAllProducts(bahanBaku, productHpp, detailResep);
+
+  // Ref untuk state yang dibutuhkan di Firestore listener (mencegah stale closure serta re-subscribe tiap state berubah)
+  const bahanBakuRef = useRef(bahanBaku);
+  const productHppRef = useRef(productHpp);
+  const detailResepRef = useRef(detailResep);
+  const calculatedProductsRef = useRef(calculatedProducts);
+  useEffect(() => { bahanBakuRef.current = bahanBaku; }, [bahanBaku]);
+  useEffect(() => { productHppRef.current = productHpp; }, [productHpp]);
+  useEffect(() => { detailResepRef.current = detailResep; }, [detailResep]);
+  useEffect(() => { calculatedProductsRef.current = calculatedProducts; }, [calculatedProducts]);
 
   // Helpers for waste & rd totals
   const wasteTotalLoss = wasteLogs.reduce((acc, curr) => acc + curr.lossValue, 0);
@@ -1006,36 +1038,52 @@ export default function App() {
     }, (err) => console.warn('Order listener error:', err));
 
     // ─── LISTENER: Auto-deduct stok hanya saat status order berubah jadi Diproses/Lunas ───
+    // Gunakan refs untuk menghindari stale closure
     const unsubStatus = listenOrderStatusChanges((order, previousStatus) => {
+      // Guard: cegah double deduction untuk order yang sudah diproses
+      if (processedOrderIdsRef.current.has(order.id)) {
+        console.log(`Order ${order.id.slice(-8)} sudah diproses, skip.`);
+        return;
+      }
+      processedOrderIdsRef.current.add(order.id);
+
       showToast(`🔔 Pembayaran dikonfirmasi untuk pesanan ${order.id.slice(-8)}! Status: ${previousStatus} → ${order.status}. Memotong stok bahan baku...`, 'success');
 
-      // Deduct bahan baku stok berdasarkan resep
-      const newBahanBaku = JSON.parse(JSON.stringify(bahanBaku)) as typeof bahanBaku;
-      order.items.forEach((item) => {
-        const ingredientsForProduct = detailResep.filter(
-          (r) => r.namaProduk.toLowerCase().trim() === item.name.toLowerCase().trim()
-        );
-        const productInfo = productHpp.find(
-          (p) => p.namaProduk.toLowerCase().trim() === item.name.toLowerCase().trim()
-        );
-        const yieldPortions = productInfo?.porsiJual || 1;
+      // Pakai refs agar selalu dapat data terbaru tanpa re-subscribe
+      const currentBahan = bahanBakuRef.current;
+      const currentResep = detailResepRef.current;
+      const currentHpp = productHppRef.current;
+      const currentCalc = calculatedProductsRef.current;
 
-        ingredientsForProduct.forEach((ing) => {
-          const idx = newBahanBaku.findIndex((b) => b.nama.toLowerCase().trim() === ing.namaBahan.toLowerCase().trim());
-          if (idx !== -1) {
-            const consumedAmount = (ing.takaran / yieldPortions) * item.quantity;
-            const oldStock = newBahanBaku[idx].isiKemasan;
-            const newStock = oldStock - consumedAmount;
-            newBahanBaku[idx] = { ...newBahanBaku[idx], isiKemasan: Math.max(0, Number(newStock.toFixed(2))) };
-            if (newStock < 50 && oldStock >= 50) {
-              showToast(`⚠️ Stok ${newBahanBaku[idx].nama} menipis (sisa ${Math.round(newStock)} ${newBahanBaku[idx].satuan}) — segera order!`, 'info');
+      // Deduct bahan baku stok berdasarkan resep (pakai functional update untuk race condition safety)
+      setBahanBaku((prevBahan) => {
+        const newBahanBaku = JSON.parse(JSON.stringify(prevBahan)) as typeof prevBahan;
+        order.items.forEach((item) => {
+          const ingredientsForProduct = currentResep.filter(
+            (r) => r.namaProduk.toLowerCase().trim() === item.name.toLowerCase().trim()
+          );
+          const productInfo = currentHpp.find(
+            (p) => p.namaProduk.toLowerCase().trim() === item.name.toLowerCase().trim()
+          );
+          const yieldPortions = productInfo?.porsiJual || 1;
+
+          ingredientsForProduct.forEach((ing) => {
+            const idx = newBahanBaku.findIndex((b) => b.nama.toLowerCase().trim() === ing.namaBahan.toLowerCase().trim());
+            if (idx !== -1) {
+              const consumedAmount = (ing.takaran / yieldPortions) * item.quantity;
+              const oldStock = newBahanBaku[idx].isiKemasan;
+              const newStock = oldStock - consumedAmount;
+              newBahanBaku[idx] = { ...newBahanBaku[idx], isiKemasan: Math.max(0, Number(newStock.toFixed(2))) };
+              if (newStock < 50 && oldStock >= 50) {
+                showToast(`⚠️ Stok ${newBahanBaku[idx].nama} menipis (sisa ${Math.round(newStock)} ${newBahanBaku[idx].satuan}) — segera order!`, 'info');
+              }
             }
-          }
+          });
         });
+        return newBahanBaku;
       });
-      setBahanBaku(newBahanBaku);
 
-      // Update status order di pos_orders_data
+      // Update status order di pos_orders_data (baca fresh)
       try {
         const savedOrders = localStorage.getItem('pos_orders_data');
         if (savedOrders) {
@@ -1047,12 +1095,12 @@ export default function App() {
         }
       } catch (e) { /* silent */ }
 
-      // Sync produk ke Firestore dengan data stok terbaru
-      if (calculatedProducts.length > 0) {
-        const updatedCalc = calculateAllProducts(newBahanBaku, productHpp, detailResep);
+      // Sync produk ke Firestore dengan data stok terbaru (delay biar state settled)
+      if (currentCalc.length > 0) {
         setTimeout(() => {
-          syncProductsToFirestore(updatedCalc, productHpp, detailResep, newBahanBaku, 'pusat').catch(console.warn);
-        }, 1000);
+          const updatedCalc = calculateAllProducts(bahanBakuRef.current, currentHpp, currentResep);
+          syncProductsToFirestore(updatedCalc, currentHpp, currentResep, bahanBakuRef.current, 'pusat').catch(console.warn);
+        }, 2000);
       }
     }, (err) => console.warn('Status change listener error:', err));
 
@@ -1423,6 +1471,7 @@ export default function App() {
                 calculatedProducts={calculatedProducts}
                 onCompletePOSSale={handleCompletePOSSale}
                 toppings={toppings}
+                detailResep={detailResep}
               />
             )}
             {activeTab === 'erp_online' && (

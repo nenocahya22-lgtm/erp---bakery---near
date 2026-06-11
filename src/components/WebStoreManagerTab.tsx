@@ -423,7 +423,10 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
             className="px-3 py-2 text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm">
             <Eye className="w-3.5 h-3.5" /> Preview
           </button>
-          <a href="https://near-bakery-store.web.app" target="_blank" rel="noreferrer"
+          <a href={config.branchSubdomain && config.branchSubdomain !== 'pusat'
+            ? `https://${config.branchSubdomain}.near-bakery-store.web.app`
+            : 'https://near-bakery-store.web.app'}
+            target="_blank" rel="noreferrer"
             className="px-3 py-2 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm">
             <ExternalLink className="w-3.5 h-3.5" /> 🌐 Lihat Toko Sekarang
           </a>
