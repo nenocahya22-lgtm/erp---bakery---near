@@ -128,12 +128,29 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
     }
   }, []);
 
-  // Fetch categories from Firestore — untuk panel Data Web Store
+  // Fetch categories dari Firestore — fallback dari webstore_config jika categories collection kosong
   const fetchFirestoreCategories = useCallback(async () => {
     setIsFetchingCategories(true);
     try {
       const cabangId = config.cabangId || 'pusat';
-      const cats = await getFirestoreCategories(cabangId);
+      // Coba baca dari collection categories dulu
+      let cats = await getFirestoreCategories(cabangId);
+      
+      // Fallback: baca kategori dari webstore_config (yang diisi dari Web Store)
+      if (!cats || !cats.categories.length) {
+        try {
+          const wsConfig = await getWebStoreConfig(cabangId);
+          if (wsConfig?.categories && wsConfig.categories.length > 0) {
+            cats = {
+              categories: wsConfig.categories,
+              categoryIcons: wsConfig.categoryIcons || {},
+            };
+          }
+        } catch (e) {
+          console.warn('Fallback webstore_config categories failed:', e);
+        }
+      }
+      
       setFirestoreCategories(cats);
     } catch (e) {
       console.warn('Failed to fetch firestore categories:', e);
