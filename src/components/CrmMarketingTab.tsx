@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { CalculationResult, BahanBaku, ProductHpp, DetailResep, WasteLog, Cabang, SuratOrder } from '../types';
+import { safeGetLocalStorage } from '../lib/safe-json';
 import { Megaphone, RefreshCw, Sparkles, Send, Users, Mail, TrendingUp, ShoppingCart, BarChart3, AlertTriangle, Tag, Globe, Brain, Lightbulb, ClipboardList } from 'lucide-react';
 
 interface CrmMarketingTabProps {
@@ -36,19 +37,13 @@ export default function CrmMarketingTab({
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
   // ─── AMBIL DATA DARI LOCALSTORAGE (revenue, orders) ───
-  const revenueData = useMemo(() => {
-    try {
-      const saved = localStorage.getItem('revenue_tracker_data');
-      return saved ? JSON.parse(saved) : { transactions: [], dailyTotals: {} };
-    } catch { return { transactions: [], dailyTotals: {} }; }
-  }, []);
+  const revenueData = useMemo(() =>
+    safeGetLocalStorage<{ transactions: any[]; dailyTotals: Record<string, { total: number; sources: Record<string, number> }> }>('revenue_tracker_data', { transactions: [], dailyTotals: {} })
+  , []);
 
-  const ordersData = useMemo(() => {
-    try {
-      const saved = localStorage.getItem('pos_orders_data');
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
-  }, []);
+  const ordersData = useMemo(() =>
+    safeGetLocalStorage<any[]>('pos_orders_data', [])
+  , []);
 
   // ─── AUTO-ANALYSIS (local, fallback) ───
   const autoAnalysis = useMemo(() => {

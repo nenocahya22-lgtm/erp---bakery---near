@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BahanBaku, DetailResep, CalculationResult, PriceRecord, SATUAN_OPTIONS } from '../types';
+import { safeGetLocalStorage } from '../lib/safe-json';
 import {
   TrendingUp, TrendingDown, BarChart3, DollarSign, Info, Sparkles, Printer, Plus, Trash2,
   Sliders, Calendar, Sun, CloudRain, Shuffle, Calculator, AlertTriangle, CheckCircle2,
@@ -86,10 +87,9 @@ export default function HargaHppTab({ bahanBaku, calculatedProducts, detailResep
 function HargaPrediksiSection({ bahanBaku, calculatedProducts, formatCurrency }: {
   bahanBaku: BahanBaku[]; calculatedProducts: CalculationResult[]; formatCurrency: (v: number) => string;
 }) {
-  const [records, setRecords] = useState<PriceRecord[]>(() => {
-    const saved = localStorage.getItem('harga_prediksi_data');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [records, setRecords] = useState<PriceRecord[]>(() =>
+    safeGetLocalStorage<PriceRecord[]>('harga_prediksi_data', [])
+  );
   const [selectedBahan, setSelectedBahan] = useState('');
   const [hargaInput, setHargaInput] = useState('');
   const [note, setNote] = useState('');

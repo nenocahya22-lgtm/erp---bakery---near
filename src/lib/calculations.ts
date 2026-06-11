@@ -55,13 +55,10 @@ export function formatWithSatuan(value: number, satuan: string): string {
   return `${formatted} ${bestSat}`;
 }
 
-// ─── KOMPONEN BIAYA TAMBAHAN UNTUK HPP ───
-// Persentase overhead dari total biaya bahan (default 30%)
-// Meliputi: tenaga kerja, gas/listrik/air, kemasan, penyusutan alat
-const OVERHEAD_PERSEN = 30; // 30% dari biaya bahan
-const OVERHEAD_LABOR_PERSEN = 15; // 15% untuk tenaga kerja
-const OVERHEAD_UTILITY_PERSEN = 10; // 10% untuk gas/listrik/air
-const OVERHEAD_PACKAGING_PERSEN = 5; // 5% untuk kemasan
+// ─── OVERHEAD DIHAPUS ───
+// Biaya overhead (tenaga kerja, utilitas, kemasan) tidak lagi ditambahkan ke HPP.
+// Sudah ditangani secara terpisah di modul Anggaran & Alokasi (AnggaranAlokasiTab).
+// HPP sekarang = Biaya Bahan murni.
 
 export function calculateAllProducts(
   bahanBaku: BahanBaku[],
@@ -98,13 +95,14 @@ export function calculateAllProducts(
     });
 
     // ─── HPP LENGKAP ───
-    // HPP = Biaya Bahan + Overhead (Tenaga Kerja + Utilitas + Kemasan)
-    const biayaOverhead = biayaBahanTotal * (OVERHEAD_PERSEN / 100);
-    const biayaTenagaKerja = biayaBahanTotal * (OVERHEAD_LABOR_PERSEN / 100);
-    const biayaUtilitas = biayaBahanTotal * (OVERHEAD_UTILITY_PERSEN / 100);
-    const biayaKemasan = biayaBahanTotal * (OVERHEAD_PACKAGING_PERSEN / 100);
+    // HPP = Biaya Bahan murni (tanpa overhead)
+    // Overhead ditangani terpisah di modul Anggaran & Alokasi
+    const biayaOverhead = 0;
+    const biayaTenagaKerja = 0;
+    const biayaUtilitas = 0;
+    const biayaKemasan = 0;
     
-    const hppTotalResep = biayaBahanTotal + biayaOverhead;
+    const hppTotalResep = biayaBahanTotal;
     const hppPerPorsi = hppTotalResep / (product.porsiJual || 1);
     const hargaJualPerPorsi = product.hargaJual / (product.porsiJual || 1);
     const profitPerPorsi = hargaJualPerPorsi - hppPerPorsi;

@@ -16,6 +16,7 @@ import {
   Check
 } from 'lucide-react';
 import { getSavedRecipeImage, saveRecipeImage, deleteRecipeImage, getFoodImageForPrompt, buildAutoPrompt } from '../lib/image-generator';
+import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface RecipesTabProps {
   bahanBaku: BahanBaku[];
@@ -42,10 +43,9 @@ export default function RecipesTab({
 
   // Categories Filter State — Dynamic with add/edit/delete
   const [categoriesList, setCategoriesList] = useState<string[]>(() => {
-    const saved = localStorage.getItem('recipe_categories_data');
+    const saved = safeGetLocalStorage<string[]>('recipe_categories_data', null);
     if (saved) {
-      const parsed = JSON.parse(saved);
-      return ['Semua', ...parsed];
+      return ['Semua', ...saved];
     }
     return ['Semua', 'Roti', 'Cake', 'Cookies', 'Coffee', 'Lainnya'];
   });

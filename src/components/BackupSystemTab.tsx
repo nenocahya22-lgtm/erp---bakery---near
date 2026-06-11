@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Cloud, Download, Mail, Settings, Clock, CheckCircle2, AlertTriangle, Trash2, Send, RefreshCw, Database } from 'lucide-react';
 import { BahanBaku, ProductHpp, DetailResep, CalculationResult } from '../types';
+import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface BackupSettings {
   smtpHost: string;
@@ -51,14 +52,12 @@ const DEFAULT_SETTINGS: BackupSettings = {
 };
 
 export default function BackupSystemTab({ bahanBaku, productHpp, detailResep, calculatedProducts }: BackupSystemTabProps) {
-  const [settings, setSettings] = useState<BackupSettings>(() => {
-    const saved = localStorage.getItem('backup_settings');
-    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
-  });
-  const [history, setHistory] = useState<BackupHistory[]>(() => {
-    const saved = localStorage.getItem('backup_history');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [settings, setSettings] = useState<BackupSettings>(() =>
+    safeGetLocalStorage<BackupSettings>('backup_settings', DEFAULT_SETTINGS)
+  );
+  const [history, setHistory] = useState<BackupHistory[]>(() =>
+    safeGetLocalStorage<BackupHistory[]>('backup_history', [])
+  );
   const [activeView, setActiveView] = useState<'backup' | 'settings' | 'history'>('backup');
   const [isSending, setIsSending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -113,35 +112,35 @@ export default function BackupSystemTab({ bahanBaku, productHpp, detailResep, ca
     if (settings.includeRevenue) {
       try {
         const saved = localStorage.getItem('revenue_tracker_data');
-        if (saved) data.revenue = JSON.parse(saved);
+        if (saved) data.revenue = safeGetLocalStorage<object>('revenue_tracker_data', {});
       } catch {}
       try {
         const saved = localStorage.getItem('profit_distribution_history');
-        if (saved) data.profitHistory = JSON.parse(saved);
+        if (saved) data.profitHistory = safeGetLocalStorage<object>('profit_distribution_history', {});
       } catch {}
     }
 
     if (settings.includeWaste) {
       try {
         const saved = localStorage.getItem('waste_logs_data');
-        if (saved) data.waste = JSON.parse(saved);
+        if (saved) data.waste = safeGetLocalStorage<object>('waste_logs_data', {});
       } catch {}
       try {
         const saved = localStorage.getItem('writeoff_logs_data');
-        if (saved) data.writeOff = JSON.parse(saved);
+        if (saved) data.writeOff = safeGetLocalStorage<object>('writeoff_logs_data', {});
       } catch {}
     }
 
     if (settings.includeRd) {
       try {
         const saved = localStorage.getItem('rd_experiments_data');
-        if (saved) data.rd = JSON.parse(saved);
+        if (saved) data.rd = safeGetLocalStorage<object>('rd_experiments_data', {});
       } catch {}
     }
 
     // Always include system info
     try {
-      data.stockLevels = JSON.parse(localStorage.getItem('stock_levels_data') || '{}');
+      data.stockLevels = safeGetLocalStorage<object>('stock_levels_data', {});
       data.platformKeys = localStorage.getItem('ojol_api_keys') ? '*** tersimpan ***' : 'belum diatur';
     } catch {}
 

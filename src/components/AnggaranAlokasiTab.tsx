@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, DollarSign, Percent, TrendingUp, CheckCircle2, AlertTriangle, Coins, Sliders, Plus, Trash2, Clock, Printer, RefreshCw, X } from 'lucide-react';
 import { CalculationResult, BahanBaku } from '../types';
+import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface AllocationRule {
   id: string;
@@ -41,8 +42,7 @@ const PRESET_COLORS = ['#10b981', '#ef4444', '#8b5cf6', '#f59e0b', '#3b82f6', '#
 const PRESET_ICONS = ['🏭', '🗑️', '🔬', '🏠', '👨‍🍳', '💡', '🏦', '📊', '🚚', '💻', '📋', '🎯'];
 
 function getRevenueTracker(): RevenueTracker {
-  const saved = localStorage.getItem('revenue_tracker_data');
-  return saved ? JSON.parse(saved) : { transactions: [], dailyTotals: {} };
+  return safeGetLocalStorage<RevenueTracker>('revenue_tracker_data', { transactions: [], dailyTotals: {} });
 }
 
 interface AnggaranAlokasiTabProps {
@@ -54,14 +54,12 @@ interface AnggaranAlokasiTabProps {
 
 export default function AnggaranAlokasiTab({ calculatedProducts, bahanBaku, wasteTotalLoss, rdTotalCost }: AnggaranAlokasiTabProps) {
   const [activeTab, setActiveTab] = useState<'alokasi' | 'history'>('alokasi');
-  const [rules, setRules] = useState<AllocationRule[]>(() => {
-    const saved = localStorage.getItem('anggaran_alokasi_rules');
-    return saved ? JSON.parse(saved) : DEFAULT_RULES;
-  });
-  const [history, setHistory] = useState<AllocationHistory[]>(() => {
-    const saved = localStorage.getItem('anggaran_alokasi_history');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [rules, setRules] = useState<AllocationRule[]>(() =>
+    safeGetLocalStorage<AllocationRule[]>('anggaran_alokasi_rules', DEFAULT_RULES)
+  );
+  const [history, setHistory] = useState<AllocationHistory[]>(() =>
+    safeGetLocalStorage<AllocationHistory[]>('anggaran_alokasi_history', [])
+  );
   const [revenueTracker, setRevenueTracker] = useState<RevenueTracker>(getRevenueTracker);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newRule, setNewRule] = useState({ label: '', icon: '📋', pct: 5, budgetLimit: 10, color: '#6366f1' });

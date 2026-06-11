@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart3, Info, TrendingDown, CheckCircle2, Plus, Trash2 } from 'lucide-react';
 import { CalculationResult, WasteLog } from '../types';
+import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface BepTabProps {
   calculatedProducts: CalculationResult[];
@@ -8,10 +9,9 @@ interface BepTabProps {
 
 export default function BepTab({ calculatedProducts }: BepTabProps) {
   // Biaya tetap — dinamis (bisa tambah/hapus)
-  const [fixedCosts, setFixedCosts] = useState<{ id: string; label: string; amount: number }[]>(() => {
-    const saved = localStorage.getItem('bep_fixed_costs');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [fixedCosts, setFixedCosts] = useState<{ id: string; label: string; amount: number }[]>(() =>
+    safeGetLocalStorage<{ id: string; label: string; amount: number }[]>('bep_fixed_costs', [])
+  );
   const [newLabel, setNewLabel] = useState('');
   const [newAmount, setNewAmount] = useState('');
 

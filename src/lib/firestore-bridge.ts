@@ -209,18 +209,42 @@ export async function syncProductsToFirestore(
   }
 
   // ─── SYNC KATEGORI ke collection terpisah agar web store bisa baca ───
+  // Selalu sync kategori dari wsConfig (webstore_config) ke collection 'categories'
+  // Fallback ke kategori default jika wsConfig tidak tersedia
+  let catList: string[] = [];
+  let catIcons: Record<string, string> = {};
+  
   if (wsConfig?.categories && wsConfig.categories.length > 0) {
-    try {
-      const catDocRef = doc(db, 'categories', cabangId);
-      await setDoc(catDocRef, {
-        cabangId,
-        categories: wsConfig.categories,
-        categoryIcons: wsConfig.categoryIcons || {},
-        updatedAt: serverTimestamp(),
-      });
-    } catch (e) {
-      console.warn('Failed to sync categories:', e);
+    catList = wsConfig.categories;
+    catIcons = wsConfig.categoryIcons || {};
+  } else {
+    // Gunakan kategori dari product yang di-sync
+    const uniqueCategories = [...new Set(productHpp.map(p => p.kategori || 'Lainnya').filter(Boolean))];
+    if (uniqueCategories.length > 0) {
+      catList = uniqueCategories;
+      catIcons = Object.fromEntries(uniqueCategories.map(c => [c, 'package']));
+    } else {
+      catList = ['Roti & Sourdough', 'Viennoiserie & Croissant', 'Kue & Tart', 'Kue Kering & Cookies', 'Minuman Kopi & Teh'];
+      catIcons = {
+        'Roti & Sourdough': 'wheat',
+        'Viennoiserie & Croissant': 'croissant',
+        'Kue & Tart': 'cake',
+        'Kue Kering & Cookies': 'cookie',
+        'Minuman Kopi & Teh': 'coffee'
+      };
     }
+  }
+  
+  try {
+    const catDocRef = doc(db, 'categories', cabangId);
+    await setDoc(catDocRef, {
+      cabangId,
+      categories: catList,
+      categoryIcons: catIcons,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (e) {
+    console.warn('Failed to sync categories:', e);
   }
 
   return synced;

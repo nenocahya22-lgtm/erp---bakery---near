@@ -5,6 +5,7 @@ import {
   Clock, ChevronRight, Flame, Percent
 } from 'lucide-react';
 import { ProductHpp, DetailResep, CalculationResult, BahanBaku, ProductionCalendarEntry, SATUAN_OPTIONS } from '../types';
+import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface ProductionCenterTabProps {
   productHpp: ProductHpp[];
@@ -23,8 +24,7 @@ export default function ProductionCenterTab({
 
   // ─── KALENDER PRODUKSI ───
   const [calendarEntries, setCalendarEntries] = useState<ProductionCalendarEntry[]>(() => {
-    const saved = localStorage.getItem('production_calendar_entries');
-    return saved ? JSON.parse(saved) : [];
+    return safeGetLocalStorage<ProductionCalendarEntry[]>('production_calendar_entries', []);
   });
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [calLabel, setCalLabel] = useState('');
@@ -104,8 +104,7 @@ export default function ProductionCenterTab({
 
   // ─── DAILY CHECKLIST STATE ───
   const [checklistItems, setChecklistItems] = useState<Record<string, boolean>>(() => {
-    const saved = localStorage.getItem('production_checklist_data');
-    return saved ? JSON.parse(saved) : {};
+    return safeGetLocalStorage<Record<string, boolean>>('production_checklist_data', {});
   });
 
   const defaultChecklist = [
@@ -137,8 +136,11 @@ export default function ProductionCenterTab({
     doughTemp: number; ovenTemp: number; startTime: string; endTime: string;
     notes: string;
   }[]>(() => {
-    const saved = localStorage.getItem('production_baking_logs');
-    return saved ? JSON.parse(saved) : [];
+    return safeGetLocalStorage<{
+      id: string; date: string; productName: string; batchQty: number;
+      doughTemp: number; ovenTemp: number; startTime: string; endTime: string;
+      notes: string;
+    }[]>('production_baking_logs', []);
   });
   const [showBakingLogModal, setShowBakingLogModal] = useState(false);
   const [blProduct, setBlProduct] = useState('');

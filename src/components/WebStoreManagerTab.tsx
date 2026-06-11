@@ -26,17 +26,17 @@ import {
   Building2,
   Copy,
   Cpu,
-} from 'lucide-react';
-import {
-  saveWebStoreConfig,
+} from 'lucide-react';import { saveWebStoreConfig,
   getWebStoreConfig,
   getAllWebStoreConfigs,
   syncProductsToFirestore,
   registerSubdomain,
   getAllSubdomains,
   getAllFirestoreProducts,
+  getFirestoreCategories,
   FirestoreProductSummary,
 } from '../lib/firestore-bridge';
+import { safeGetLocalStorage } from '../lib/safe-json';
 
 const STORAGE_KEY = 'storenear_web_config';
 
@@ -64,13 +64,7 @@ const formatCurrency = (val: number) =>
 
 export default function WebStoreManagerTab({ productHpp, calculatedProducts, bahanBaku, detailResep, cabangList, onImportProduct }: Props) {
   const [config, setConfig] = useState<WebStoreConfig>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch { /* fall through */ }
-    }
-    return createDefaultWebStoreConfig(productHpp);
+    return safeGetLocalStorage<WebStoreConfig | null>(STORAGE_KEY, null) || createDefaultWebStoreConfig(productHpp);
   });
 
   const [activeSection, setActiveSection] = useState<string>('identity');
@@ -88,6 +82,8 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
   const [isFirestoreConnected, setIsFirestoreConnected] = useState(false);
   const [firestoreProducts, setFirestoreProducts] = useState<FirestoreProductSummary[]>([]);
   const [isFetchingWebProducts, setIsFetchingWebProducts] = useState(false);
+  const [firestoreCategories, setFirestoreCategories] = useState<{ categories: string[]; categoryIcons: Record<string, string> } | null>(null);
+  const [isFetchingCategories, setIsFetchingCategories] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const promoInputRef = useRef<HTMLInputElement>(null);
@@ -132,11 +128,46 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
     }
   }, []);
 
+  // Fetch categories from Firestore — untuk panel Data Web Store
+  const fetchFirestoreCategories = useCallback(async () => {
+    setIsFetchingCategories(true);
+    try {
+      const cabangId = config.cabangId || 'pusat';
+      const cats = await getFirestoreCategories(cabangId);
+      setFirestoreCategories(cats);
+    } catch (e) {
+      console.warn('Failed to fetch firestore categories:', e);
+    } finally {
+      setIsFetchingCategories(false);
+    }
+  }, [config.cabangId]);
+
+  // Import categories from Firestore ke local config
+  const handleImportCategoriesFromFirestore = useCallback(() => {
+    if (!firestoreCategories || !firestoreCategories.categories.length) {
+      showToast('Tidak ada kategori di Firestore untuk diimpor.', 'info');
+      return;
+    }
+    // Merge categories — tambah yang belum ada
+    const existingCats = new Set(config.categories || []);
+    const newCats = firestoreCategories.categories.filter(c => !existingCats.has(c));
+    if (newCats.length === 0) {
+      showToast('Semua kategori sudah terdaftar di ERP.', 'info');
+      return;
+    }
+    updateConfig({
+      categories: [...(config.categories || []), ...newCats],
+      categoryIcons: { ...(config.categoryIcons || {}), ...firestoreCategories.categoryIcons },
+    });
+    showToast(`✅ ${newCats.length} kategori berhasil diimpor dari Firestore!`, 'success');
+  }, [firestoreCategories, config.categories, config.categoryIcons]);
+
   useEffect(() => {
     if (isFirestoreConnected) {
       fetchFirestoreProducts();
+      fetchFirestoreCategories();
     }
-  }, [isFirestoreConnected, fetchFirestoreProducts]);
+  }, [isFirestoreConnected, fetchFirestoreProducts, fetchFirestoreCategories]);
 
   // Sync products from productHpp
   useEffect(() => {
@@ -1312,15 +1343,17 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
                 📡 Data Web Store (Firestore)
               </h3>
               <p className="text-[10px] text-gray-500 mt-1">
-                Semua produk yang ada di Firestore — baik dari ERP maupun dari Web Store. 
-                Dari sini Anda bisa melihat dan mengimpor produk yang belum terdaftar di ERP.
+                Semua produk & kategori yang ada di Firestore — baik dari ERP maupun dari Web Store. 
+                Dari sini Anda bisa melihat dan mengimpor produk/kategori yang belum terdaftar di ERP.
               </p>
             </div>
-            <button onClick={fetchFirestoreProducts} disabled={isFetchingWebProducts}
-              className="px-3 py-2 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer flex items-center gap-1.5">
-              <RefreshCw className={`w-3.5 h-3.5 ${isFetchingWebProducts ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
+            <div className="flex gap-2">
+              <button onClick={() => { fetchFirestoreProducts(); fetchFirestoreCategories(); }} disabled={isFetchingWebProducts || isFetchingCategories}
+                className="px-3 py-2 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer flex items-center gap-1.5">
+                <RefreshCw className={`w-3.5 h-3.5 ${isFetchingWebProducts || isFetchingCategories ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
           </div>
 
           {isFetchingWebProducts ? (
@@ -1410,6 +1443,70 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
             <span>Total di Firestore: <strong>{firestoreProducts.length}</strong> produk</span>
             <span>Di ERP: <strong>{firestoreProducts.filter(fp => productHpp.some(p => p.namaProduk.toLowerCase().trim() === fp.name.toLowerCase().trim())).length}</strong></span>
             <span>Web Store Only: <strong>{firestoreProducts.filter(fp => !productHpp.some(p => p.namaProduk.toLowerCase().trim() === fp.name.toLowerCase().trim())).length}</strong></span>
+          </div>
+
+          {/* ─── KATEGORI DARI FIRESTORE ─── */}
+          <div className="border-t border-gray-100 pt-4 mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-[10px] font-bold text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
+                <FileJson className="w-3.5 h-3.5" />
+                Kategori dari Firestore
+              </h4>
+              <div className="flex gap-2">
+                <button onClick={fetchFirestoreCategories} disabled={isFetchingCategories}
+                  className="px-2 py-1 text-[9px] font-bold bg-slate-100 hover:bg-slate-200 rounded-lg transition-all cursor-pointer flex items-center gap-1">
+                  <RefreshCw className={`w-3 h-3 ${isFetchingCategories ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+                <button onClick={handleImportCategoriesFromFirestore}
+                  className="px-2 py-1 text-[9px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg transition-all cursor-pointer flex items-center gap-1">
+                  <Plus className="w-3 h-3" />
+                  Import ke ERP
+                </button>
+              </div>
+            </div>
+
+            {isFetchingCategories ? (
+              <div className="text-center py-4">
+                <RefreshCw className="w-5 h-5 animate-spin text-indigo-400 mx-auto" />
+              </div>
+            ) : firestoreCategories && firestoreCategories.categories.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {firestoreCategories.categories.map((cat, idx) => {
+                  const existsInLocal = (config.categories || []).includes(cat);
+                  return (
+                    <div key={idx}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border ${
+                        existsInLocal
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                          : 'bg-amber-50 border-amber-200 text-amber-700'
+                      }`}
+                    >
+                      <span className="text-xs">
+                        {(firestoreCategories.categoryIcons || {})[cat] === 'wheat' ? '🌾' :
+                         (firestoreCategories.categoryIcons || {})[cat] === 'croissant' ? '🥐' :
+                         (firestoreCategories.categoryIcons || {})[cat] === 'cake' ? '🎂' :
+                         (firestoreCategories.categoryIcons || {})[cat] === 'cookie' ? '🍪' :
+                         (firestoreCategories.categoryIcons || {})[cat] === 'coffee' ? '☕' : '📦'}
+                      </span>
+                      <span>{cat}</span>
+                      {existsInLocal ? (
+                        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                      ) : (
+                        <span className="text-[8px] text-amber-500 font-bold">🆕</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-[10px] text-gray-400 text-center py-3">
+                Belum ada kategori di Firestore. Sync produk dari ERP untuk membuat kategori.
+              </p>
+            )}
+            <div className="text-[9px] text-gray-400 mt-2">
+              {firestoreCategories ? `${firestoreCategories.categories.length} kategori ditemukan` : 'Belum dimuat'}
+            </div>
           </div>
         </div>
       )}

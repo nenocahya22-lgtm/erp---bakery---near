@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CalculationResult, BahanBaku, Cabang, BranchTransaction } from '../types';
 import { TrendingUp, FolderTree, Package, DollarSign, AlertCircle, Sparkles, AlertTriangle, Lightbulb, RefreshCw, Copy, Check, FileDown, Rocket, ArrowRight, Bell, X, Trash2, MessageSquare, Send, Settings, CheckCircle2, Building2, ShoppingCart } from 'lucide-react';
+import { safeGetLocalStorage } from '../lib/safe-json';
 import { jsPDF } from 'jspdf';
 
 interface AlertItem {
@@ -50,14 +51,12 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList
 
   // ─── MONITORING & ALERT SYSTEM ───
   const [showAlerts, setShowAlerts] = useState(false);
-  const [alerts, setAlerts] = useState<AlertItem[]>(() => {
-    const saved = localStorage.getItem('system_alerts_data');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [waNotifications, setWaNotifications] = useState<WaNotification[]>(() => {
-    const saved = localStorage.getItem('wa_notification_queue');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [alerts, setAlerts] = useState<AlertItem[]>(() =>
+    safeGetLocalStorage<AlertItem[]>('system_alerts_data', [])
+  );
+  const [waNotifications, setWaNotifications] = useState<WaNotification[]>(() =>
+    safeGetLocalStorage<WaNotification[]>('wa_notification_queue', [])
+  );
   const [syncingToFirestore, setSyncingToFirestore] = useState(false);
 
   const handleSyncToFirestore = async () => {
@@ -105,14 +104,12 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList
   }, [calculatedProducts, bahanBaku]);
 
   // ─── BRANCH SALES DATA ───
-  const [posOrders, setPosOrders] = useState<RetailOrder[]>(() => {
-    const saved = localStorage.getItem('pos_orders_data');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [revenueTracker, setRevenueTracker] = useState<{ transactions: any[]; dailyTotals: Record<string, { total: number; sources: Record<string, number> }> }>(() => {
-    const saved = localStorage.getItem('revenue_tracker_data');
-    return saved ? JSON.parse(saved) : { transactions: [], dailyTotals: {} };
-  });
+  const [posOrders, setPosOrders] = useState<RetailOrder[]>(() =>
+    safeGetLocalStorage<RetailOrder[]>('pos_orders_data', [])
+  );
+  const [revenueTracker, setRevenueTracker] = useState<{ transactions: any[]; dailyTotals: Record<string, { total: number; sources: Record<string, number> }> }>(() =>
+    safeGetLocalStorage<{ transactions: any[]; dailyTotals: Record<string, { total: number; sources: Record<string, number> }> }>('revenue_tracker_data', { transactions: [], dailyTotals: {} })
+  );
 
   useEffect(() => {
     const saved = localStorage.getItem('pos_orders_data');

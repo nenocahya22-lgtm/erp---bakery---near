@@ -5,6 +5,7 @@ import {
   AlertTriangle, Search, Users, KeyRound, Eye, EyeOff, BarChart3,
   Printer, Star, FileText, ClipboardCheck, Save
 } from 'lucide-react';
+import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface DataPusatTabProps {
   bahanBaku: BahanBaku[];
@@ -149,14 +150,12 @@ export default function DataPusatTab({
   };
 
   // ─── SUPPLIER & PO STATE ───
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(() => {
-    const saved = localStorage.getItem('pusat_purchase_orders');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [suppliers, setSuppliers] = useState<{ name: string; kontak: string; bahan: string[] }[]>(() => {
-    const saved = localStorage.getItem('pusat_suppliers');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(() =>
+    safeGetLocalStorage<PurchaseOrder[]>('pusat_purchase_orders', [])
+  );
+  const [suppliers, setSuppliers] = useState<{ name: string; kontak: string; bahan: string[] }[]>(() =>
+    safeGetLocalStorage<{ name: string; kontak: string; bahan: string[] }[]>('pusat_suppliers', [])
+  );
   const [newSupName, setNewSupName] = useState('');
   const [newSupKontak, setNewSupKontak] = useState('');
   const [newSupBahan, setNewSupBahan] = useState<string[]>([]);
@@ -168,10 +167,9 @@ export default function DataPusatTab({
   const [stokOpnameFilter, setStokOpnameFilter] = useState<string>('all');
   const [soCabangFilter, setSoCabangFilter] = useState<string>('all');
   const [showExportHistory, setShowExportHistory] = useState(false);
-  const [exportHistory, setExportHistory] = useState<{type:string;format:string;timestamp:string;count:number}[]>(() => {
-    const saved = localStorage.getItem('pusat_export_history');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [exportHistory, setExportHistory] = useState<{type:string;format:string;timestamp:string;count:number}[]>(() =>
+    safeGetLocalStorage<{type:string;format:string;timestamp:string;count:number}[]>('pusat_export_history', [])
+  );
 
   // ─── BAHAN MODAL STATE ───
   const [bahanSearch, setBahanSearch] = useState('');
@@ -181,10 +179,9 @@ export default function DataPusatTab({
   
   // ─── KATEGORI DINAMIS ───
   const [bahanKategoriList, setBahanKategoriList] = useState<string[]>(() => {
-    const saved = localStorage.getItem('bahan_kategori_list');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return ['Semua', ...parsed];
+    const saved = safeGetLocalStorage<string[]>('bahan_kategori_list', []);
+    if (saved && saved.length > 0) {
+      return ['Semua', ...saved];
     }
     return ['Semua', 'Produk', 'Minuman', 'Alat'];
   });

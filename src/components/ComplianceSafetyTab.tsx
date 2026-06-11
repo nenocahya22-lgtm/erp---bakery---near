@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Printer, Search, RefreshCw, AlertTriangle, Layers, ArrowRight, Package, Trash2, X, CheckCircle2 } from 'lucide-react';
 import { ProductHpp } from '../types';
+import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface ComplianceSafetyTabProps {
   productHpp: ProductHpp[];
@@ -21,10 +22,9 @@ interface BatchItem {
 
 export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangList = [] }: ComplianceSafetyTabProps) {
   // ─── BATCH & EXPIRED TRACKING ───
-  const [batchItems, setBatchItems] = useState<BatchItem[]>(() => {
-    const saved = localStorage.getItem('compliance_batch_items');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [batchItems, setBatchItems] = useState<BatchItem[]>(() =>
+    safeGetLocalStorage<BatchItem[]>('compliance_batch_items', [])
+  );
 
   useEffect(() => {
     localStorage.setItem('compliance_batch_items', JSON.stringify(batchItems));
@@ -40,10 +40,9 @@ export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangL
 
   // Auto-check expired every 30 seconds
   const [expiredItems, setExpiredItems] = useState<BatchItem[]>([]);
-  const [autoWasteLog, setAutoWasteLog] = useState<{ batchId: string; bahanNama: string; qty: number; satuan: string; date: string }[]>(() => {
-    const saved = localStorage.getItem('compliance_auto_waste_log');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [autoWasteLog, setAutoWasteLog] = useState<{ batchId: string; bahanNama: string; qty: number; satuan: string; date: string }[]>(() =>
+    safeGetLocalStorage<{ batchId: string; bahanNama: string; qty: number; satuan: string; date: string }[]>('compliance_auto_waste_log', [])
+  );
 
   useEffect(() => {
     localStorage.setItem('compliance_auto_waste_log', JSON.stringify(autoWasteLog));

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Truck, QrCode, Move, ShoppingCart, CheckCircle, RefreshCw, FolderSearch, FileText, Printer, Plus, X, Trash2 } from 'lucide-react';
 import { SATUAN_OPTIONS } from '../types';
+import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface RequisitionItem {
   reqNo: string;
@@ -27,16 +28,14 @@ interface PurchaseOrder {
 
 export default function LogisticsTab() {
   // Store requisitions list simulation state
-  const [requisitions, setRequisitions] = useState<RequisitionItem[]>(() => {
-    const saved = localStorage.getItem('logistics_requisitions_data');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [requisitions, setRequisitions] = useState<RequisitionItem[]>(() =>
+    safeGetLocalStorage<RequisitionItem[]>('logistics_requisitions_data', [])
+  );
 
   // Supplier purchase orders simulation data
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(() => {
-    const saved = localStorage.getItem('logistics_purchase_orders_data');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(() =>
+    safeGetLocalStorage<PurchaseOrder[]>('logistics_purchase_orders_data', [])
+  );
 
   useEffect(() => {
     localStorage.setItem('logistics_requisitions_data', JSON.stringify(requisitions));

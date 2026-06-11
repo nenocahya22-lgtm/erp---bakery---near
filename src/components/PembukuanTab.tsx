@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CalculationResult, BahanBaku } from '../types';
 import { BookOpen, TrendingUp, TrendingDown, DollarSign, Package, AlertTriangle, FileDown, Printer } from 'lucide-react';
+import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface RevenueTx {
   id: string; time: string; product: string; qty: number; amount: number; source: string; date: string;
@@ -18,8 +19,7 @@ export default function PembukuanTab({ calculatedProducts, bahanBaku, wasteTotal
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
   const getRevenueData = () => {
-    const saved = localStorage.getItem('revenue_tracker_data');
-    return saved ? JSON.parse(saved) : { transactions: [], dailyTotals: {} };
+    return safeGetLocalStorage<{ transactions: any[]; dailyTotals: Record<string, number> }>('revenue_tracker_data', { transactions: [], dailyTotals: {} });
   };
 
   const [revenueData, setRevenueData] = useState(getRevenueData);
@@ -46,10 +46,8 @@ export default function PembukuanTab({ calculatedProducts, bahanBaku, wasteTotal
   }, 0);
 
   // Data cabang
-  const savedCabang = localStorage.getItem('cabang_list_data');
-  const cabangList = savedCabang ? JSON.parse(savedCabang) : [];
-  const savedBranchTx = localStorage.getItem('branch_transactions_data');
-  const branchTx = savedBranchTx ? JSON.parse(savedBranchTx) : [];
+  const cabangList = safeGetLocalStorage<any[]>('cabang_list_data', []);
+  const branchTx = safeGetLocalStorage<any[]>('branch_transactions_data', []);
 
   // Laba bersih
   const totalOPEX = 0; // user sets in cash flow module

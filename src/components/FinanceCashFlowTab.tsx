@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CalculationResult } from '../types';
+import { safeGetLocalStorage } from '../lib/safe-json';
 import { CircleDollarSign, Coins, RefreshCw, ShoppingCart, Trash2, Plus } from 'lucide-react';
 
 interface RevenueTx {
@@ -28,10 +29,8 @@ export default function FinanceCashFlowTab({ calculatedProducts, wasteTotalLoss,
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
   // Baca data revenue REAL dari localStorage
-  const getRevenueData = (): RevenueTracker => {
-    const saved = localStorage.getItem('revenue_tracker_data');
-    return saved ? JSON.parse(saved) : { transactions: [], dailyTotals: {} };
-  };
+  const getRevenueData = (): RevenueTracker =>
+    safeGetLocalStorage<RevenueTracker>('revenue_tracker_data', { transactions: [], dailyTotals: {} });
 
   const [revenueData, setRevenueData] = useState<RevenueTracker>(getRevenueData);
 
@@ -43,10 +42,9 @@ export default function FinanceCashFlowTab({ calculatedProducts, wasteTotalLoss,
   }, []);
 
   // OPEX — dinamis, bisa tambah/hapus baris
-  const [opexItems, setOpexItems] = useState<{ id: string; label: string; amount: number }[]>(() => {
-    const saved = localStorage.getItem('opex_items_data');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [opexItems, setOpexItems] = useState<{ id: string; label: string; amount: number }[]>(() =>
+    safeGetLocalStorage<{ id: string; label: string; amount: number }[]>('opex_items_data', [])
+  );
   const [newOpexLabel, setNewOpexLabel] = useState('');
   const [newOpexAmount, setNewOpexAmount] = useState('');
 
@@ -294,9 +292,8 @@ export default function FinanceCashFlowTab({ calculatedProducts, wasteTotalLoss,
                         if (window.confirm(`Hapus transaksi ${tx.id} (${tx.product})?`)) {
                           // Hapus dari revenue_tracker_data
                           try {
-                            const saved = localStorage.getItem('revenue_tracker_data');
-                            if (saved) {
-                              const data = JSON.parse(saved);
+                            const saved = localStorage.getItem('revenue_tracker_data');                              if (saved) {
+                              const data = safeGetLocalStorage<RevenueTracker>('revenue_tracker_data', { transactions: [], dailyTotals: {} });
                               data.transactions = data.transactions.filter((t: any) => t.id !== tx.id);
                               // Recalc daily totals
                               data.dailyTotals = {};

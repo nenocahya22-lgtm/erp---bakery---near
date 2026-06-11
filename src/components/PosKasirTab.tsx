@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShoppingCart, ChefHat, Printer, X, Coins, RefreshCw, Calendar, Clock, TrendingUp, BarChart3, Image } from 'lucide-react';
 import { CalculationResult } from '../types';
+import { safeGetLocalStorage } from '../lib/safe-json';
 import { getSavedRecipeImage } from '../lib/image-generator';
 
 interface RetailOrder {
@@ -45,10 +46,9 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
   const [orderAddOns, setOrderAddOns] = useState<{ nama: string; harga: number }[]>([]);
   const [showAddOnPicker, setShowAddOnPicker] = useState(false);
 
-  const [orders, setOrders] = useState<RetailOrder[]>(() => {
-    const saved = localStorage.getItem('pos_orders_data');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [orders, setOrders] = useState<RetailOrder[]>(() =>
+    safeGetLocalStorage<RetailOrder[]>('pos_orders_data', [])
+  );
 
   // Data topping dari modul Resep (global state)
   const availableAddOns = React.useMemo(() => {
@@ -69,10 +69,9 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
     }));
   }, [toppings]);
 
-  const [shiftLogs, setShiftLogs] = useState<ShiftLog[]>(() => {
-    const saved = localStorage.getItem('pos_shift_logs');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [shiftLogs, setShiftLogs] = useState<ShiftLog[]>(() =>
+    safeGetLocalStorage<ShiftLog[]>('pos_shift_logs', [])
+  );
 
   useEffect(() => {
     localStorage.setItem('pos_orders_data', JSON.stringify(orders));

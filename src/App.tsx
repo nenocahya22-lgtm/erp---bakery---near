@@ -14,6 +14,7 @@ import {
   loadRevenueFromSheets,
 } from './lib/sheets';
 import { calculateAllProducts } from './lib/calculations';
+import { safeGetLocalStorage } from './lib/safe-json';
 import { listenNewOrders, listenNotifications, syncProductsToFirestore, listenNewChats } from './lib/firestore-bridge';
 import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, WasteLog, Cabang, SuratOrder, BranchStock, BranchTransaction, ProductTopping } from './types';
 
@@ -145,27 +146,24 @@ export default function App() {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
 
   // Core records state — persisted to localStorage for offline mode
-  const [bahanBaku, setBahanBaku] = useState<BahanBaku[]>(() => {
-    const saved = localStorage.getItem('bahan_baku_data');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [productHpp, setProductHpp] = useState<ProductHpp[]>(() => {
-    const saved = localStorage.getItem('product_hpp_data');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [detailResep, setDetailResep] = useState<DetailResep[]>(() => {
-    const saved = localStorage.getItem('detail_resep_data');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // Menggunakan safeGetLocalStorage untuk mencegah crash jika localStorage corrupted
+  const [bahanBaku, setBahanBaku] = useState<BahanBaku[]>(() =>
+    safeGetLocalStorage<BahanBaku[]>('bahan_baku_data', [])
+  );
+  const [productHpp, setProductHpp] = useState<ProductHpp[]>(() =>
+    safeGetLocalStorage<ProductHpp[]>('product_hpp_data', [])
+  );
+  const [detailResep, setDetailResep] = useState<DetailResep[]>(() =>
+    safeGetLocalStorage<DetailResep[]>('detail_resep_data', [])
+  );
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lastAutoSaved, setLastAutoSaved] = useState<Date | null>(null);
 
   // ─── TOPPINGS GLOBAL STATE ───
-  const [toppings, setToppings] = useState<ProductTopping[]>(() => {
-    const saved = localStorage.getItem('toppings_data');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [toppings, setToppings] = useState<ProductTopping[]>(() =>
+    safeGetLocalStorage<ProductTopping[]>('toppings_data', [])
+  );
 
   useEffect(() => {
     localStorage.setItem('toppings_data', JSON.stringify(toppings));
@@ -184,29 +182,24 @@ export default function App() {
   };
 
   // ─── MULTI-CABANG STATE ───
-  const [cabangList, setCabangList] = useState<Cabang[]>(() => {
-    const saved = localStorage.getItem('cabang_list_data');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [suratOrders, setSuratOrders] = useState<SuratOrder[]>(() => {
-    const saved = localStorage.getItem('surat_orders_data');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [branchAuth, setBranchAuth] = useState<{ id: string; nama: string } | null>(() => {
-    const saved = localStorage.getItem('branch_authenticated');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [cabangList, setCabangList] = useState<Cabang[]>(() =>
+    safeGetLocalStorage<Cabang[]>('cabang_list_data', [])
+  );
+  const [suratOrders, setSuratOrders] = useState<SuratOrder[]>(() =>
+    safeGetLocalStorage<SuratOrder[]>('surat_orders_data', [])
+  );
+  const [branchAuth, setBranchAuth] = useState<{ id: string; nama: string } | null>(() =>
+    safeGetLocalStorage<{ id: string; nama: string } | null>('branch_authenticated', null)
+  );
 
   useEffect(() => { localStorage.setItem('cabang_list_data', JSON.stringify(cabangList)); }, [cabangList]);
   // ─── BRANCH STOCK & TRANSACTION TRACKING ───
-  const [cabangStok, setCabangStok] = useState<BranchStock[]>(() => {
-    const saved = localStorage.getItem('cabang_stok_data');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [branchTransactions, setBranchTransactions] = useState<BranchTransaction[]>(() => {
-    const saved = localStorage.getItem('branch_transactions_data');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [cabangStok, setCabangStok] = useState<BranchStock[]>(() =>
+    safeGetLocalStorage<BranchStock[]>('cabang_stok_data', [])
+  );
+  const [branchTransactions, setBranchTransactions] = useState<BranchTransaction[]>(() =>
+    safeGetLocalStorage<BranchTransaction[]>('branch_transactions_data', [])
+  );
 
   useEffect(() => { localStorage.setItem('surat_orders_data', JSON.stringify(suratOrders)); }, [suratOrders]);
   useEffect(() => { localStorage.setItem('cabang_stok_data', JSON.stringify(cabangStok)); }, [cabangStok]);
@@ -274,20 +267,17 @@ export default function App() {
   >('dashboard');
 
   // --- Lifted States with persistent syncing back to localStorage ---
-  const [rdExperiments, setRdExperiments] = useState<RDExperiment[]>(() => {
-    const saved = localStorage.getItem('rd_experiments_data');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [rdExperiments, setRdExperiments] = useState<RDExperiment[]>(() =>
+    safeGetLocalStorage<RDExperiment[]>('rd_experiments_data', [])
+  );
 
-  const [wasteLogs, setWasteLogs] = useState<WasteLog[]>(() => {
-    const saved = localStorage.getItem('waste_logs_data');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [wasteLogs, setWasteLogs] = useState<WasteLog[]>(() =>
+    safeGetLocalStorage<WasteLog[]>('waste_logs_data', [])
+  );
 
-  const [writeOffLogs, setWriteOffLogs] = useState<WriteOffLog[]>(() => {
-    const saved = localStorage.getItem('writeoff_logs_data');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [writeOffLogs, setWriteOffLogs] = useState<WriteOffLog[]>(() =>
+    safeGetLocalStorage<WriteOffLog[]>('writeoff_logs_data', [])
+  );
 
   // State sync effects
   useEffect(() => {

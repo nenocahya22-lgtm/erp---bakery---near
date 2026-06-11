@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Cabang, BahanBaku, SuratOrder, WasteLog, CalculationResult, DetailResep, ProductHpp, BranchStock, BranchTransaction, SATUAN_OPTIONS } from '../types';
+import { safeGetLocalStorage } from '../lib/safe-json';
 import {
   ShoppingCart, Package, ClipboardList, Trash2, TrendingUp,
   Plus, X, Truck, LogOut, Building2, AlertTriangle, BarChart3, ClipboardCheck,
@@ -34,10 +35,9 @@ export default function BranchDashboard({
   const [activeModul, setActiveModul] = useState<'pos' | 'minta' | 'so' | 'waste' | 'laporan' | 'planner' | 'prodcenter'>('pos');
 
   // ─── LOCAL STOCK OPNAME ───
-  const [stokOpname, setStokOpname] = useState<Record<string, number>>(() => {
-    const saved = localStorage.getItem(`stok_opname_${cabang.id}`);
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [stokOpname, setStokOpname] = useState<Record<string, number>>(() =>
+    safeGetLocalStorage<Record<string, number>>(`stok_opname_${cabang.id}`, {})
+  );
   useEffect(() => {
     localStorage.setItem(`stok_opname_${cabang.id}`, JSON.stringify(stokOpname));
   }, [stokOpname, cabang.id]);

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CalculationResult, BahanBaku } from '../types';
+import { safeGetLocalStorage } from '../lib/safe-json';
 import { TrendingUp, DollarSign, BarChart3, FileDown, RefreshCw } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -30,10 +31,8 @@ export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDa
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
   // Baca data revenue REAL dari localStorage
-  const getRevenueData = () => {
-    const saved = localStorage.getItem('revenue_tracker_data');
-    return saved ? JSON.parse(saved) : { transactions: [], dailyTotals: {} };
-  };
+  const getRevenueData = () =>
+    safeGetLocalStorage<{ transactions: any[]; dailyTotals: Record<string, { total: number; sources: Record<string, number> }> }>('revenue_tracker_data', { transactions: [], dailyTotals: {} });
   const [revenueData, setRevenueData] = useState(getRevenueData);
 
   React.useEffect(() => {

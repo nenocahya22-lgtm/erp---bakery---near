@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layers, ShieldCheck, ShoppingCart, Key, AlertTriangle, CheckCircle2, ExternalLink, Globe, RefreshCw } from 'lucide-react';
 import { CalculationResult } from '../types';
+import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface PlatformApiKey {
   platform: string;
@@ -43,8 +44,7 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
   const [webStoreUrl, setWebStoreUrl] = useState(() => localStorage.getItem('web_store_url') || '');
   const [webStoreStatus, setWebStoreStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
   const [webStoreOrders, setWebStoreOrders] = useState<{ id: string; customer: string; items: string; total: number; date: string; status: string }[]>(() => {
-    const saved = localStorage.getItem('web_store_bridge_orders');
-    return saved ? JSON.parse(saved) : [];
+    return safeGetLocalStorage<{ id: string; customer: string; items: string; total: number; date: string; status: string }[]>('web_store_bridge_orders', []);
   });
 
   useEffect(() => {

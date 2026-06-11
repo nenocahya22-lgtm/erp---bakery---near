@@ -43,8 +43,8 @@ export default function BranchLogin({ cabangList, onLoginSuccess, onBackToOwner 
     if (found) {
       // Hash password input dan bandingkan dengan yang tersimpan (sudah SHA-256)
       const hashedInput = await hashPasswordSHA256(cleanPass);
-      // Fallback: cek hash dulu, lalu plaintext untuk data lama sebelum migrasi
-      const passwordMatch = found.password === hashedInput || found.password === cleanPass;
+      // Hanya cocokkan dengan hash — tidak ada fallback plaintext demi keamanan
+      const passwordMatch = found.password === hashedInput;
 
       if (passwordMatch) {
         localStorage.setItem('branch_authenticated', JSON.stringify({ id: found.id, nama: found.nama }));

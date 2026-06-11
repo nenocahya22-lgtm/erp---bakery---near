@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ShieldAlert, Calendar, AlertTriangle, Clock, Package, Trash2, Plus, Printer, RefreshCw, AlertOctagon, Database, Zap, CheckCircle2, Truck } from 'lucide-react';
 import { BahanBaku, ProductHpp, WasteLog, Cabang, SuratOrder, SATUAN_OPTIONS } from '../types';
+import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface BatchLog {
   id: string;
@@ -32,10 +33,9 @@ interface FefoExpiryTabProps {
 }
 
 export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog, cabangList = [], suratOrders = [] }: FefoExpiryTabProps) {
-  const [batches, setBatches] = useState<BatchLog[]>(() => {
-    const saved = localStorage.getItem('fefo_expiry_batches_data');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [batches, setBatches] = useState<BatchLog[]>(() =>
+    safeGetLocalStorage<BatchLog[]>('fefo_expiry_batches_data', [])
+  );
   const [showForm, setShowForm] = useState(false);
   const [formBahan, setFormBahan] = useState('');
   const [formBatch, setFormBatch] = useState('');
@@ -43,10 +43,9 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog, ca
   const [formSatuan, setFormSatuan] = useState('gr');
   const [formSupplier, setFormSupplier] = useState('');
   const [formExpiry, setFormExpiry] = useState('');
-  const [safetyStock, setSafetyStock] = useState<Record<string, number>>(() => {
-    const saved = localStorage.getItem('fefo_safety_stock_data');
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [safetyStock, setSafetyStock] = useState<Record<string, number>>(() =>
+    safeGetLocalStorage<Record<string, number>>('fefo_safety_stock_data', {})
+  );
   const [showSyncConfirm, setShowSyncConfirm] = useState(false);
   const [syncResult, setSyncResult] = useState<{ added: number; skipped: string[] } | null>(null);
 
@@ -165,10 +164,9 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog, ca
     return d > in3Days && d <= in7Days;
   });
 
-  const [productExpiry, setProductExpiry] = useState<ProductExpiryLog[]>(() => {
-    const saved = localStorage.getItem('fefo_product_expiry_data');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [productExpiry, setProductExpiry] = useState<ProductExpiryLog[]>(() =>
+    safeGetLocalStorage<ProductExpiryLog[]>('fefo_product_expiry_data', [])
+  );
 
   useEffect(() => {
     localStorage.setItem('fefo_product_expiry_data', JSON.stringify(productExpiry));

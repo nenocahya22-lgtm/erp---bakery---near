@@ -4,6 +4,7 @@ import {
   MessageSquare, Trash2, Send, Settings
 } from 'lucide-react';
 import { CalculationResult, BahanBaku } from '../types';
+import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface AlertItem {
   id: string;
@@ -31,28 +32,25 @@ interface AlertSystemTabProps {
 
 export default function AlertSystemTab({ calculatedProducts, bahanBaku, hasUnsavedChanges, spreadsheetId }: AlertSystemTabProps) {
   const [activeView, setActiveView] = useState<'alerts' | 'wa_queue' | 'settings'>('alerts');
-  const [waSettings, setWaSettings] = useState(() => {
-    const saved = localStorage.getItem('wa_notification_settings');
-    return saved ? JSON.parse(saved) : {
+  const [waSettings, setWaSettings] = useState(() =>
+    safeGetLocalStorage('wa_notification_settings', {
       phoneNumber: '',
       apiKey: '',
       autoSend: false,
       notifyOrderMasuk: true,
       notifyMarginWarning: true,
       notifyStockCritical: true,
-    };
-  });
+    })
+  );
 
   // Generate alerts from current system state
-  const [alerts, setAlerts] = useState<AlertItem[]>(() => {
-    const saved = localStorage.getItem('system_alerts_data');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [alerts, setAlerts] = useState<AlertItem[]>(() =>
+    safeGetLocalStorage<AlertItem[]>('system_alerts_data', [])
+  );
 
-  const [waNotifications, setWaNotifications] = useState<WaNotification[]>(() => {
-    const saved = localStorage.getItem('wa_notification_queue');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [waNotifications, setWaNotifications] = useState<WaNotification[]>(() =>
+    safeGetLocalStorage<WaNotification[]>('wa_notification_queue', [])
+  );
 
   // Save to localStorage
   useEffect(() => {

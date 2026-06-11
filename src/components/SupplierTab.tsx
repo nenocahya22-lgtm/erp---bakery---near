@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Star, FileText, Printer, Package, Trash2, Plus } from 'lucide-react';
 import { BahanBaku, SATUAN_OPTIONS } from '../types';
+import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface SupplierRating {
   name: string;
@@ -16,8 +17,7 @@ interface SupplierTabProps {
 
 export default function SupplierTab({ bahanBaku }: SupplierTabProps) {
   const [suppliers, setSuppliers] = useState<SupplierRating[]>(() => {
-    const saved = localStorage.getItem('erp_suppliers_data');
-    return saved ? JSON.parse(saved) : [];
+    return safeGetLocalStorage<SupplierRating[]>('erp_suppliers_data', []);
   });
   const [newSup, setNewSup] = useState({ name: '', contractPrice: '', complianceRatio: 90, rating: 4, bahanSupplier: [] as string[] });
   const [selectedBahan, setSelectedBahan] = useState('');
