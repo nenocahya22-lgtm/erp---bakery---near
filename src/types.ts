@@ -245,6 +245,21 @@ export interface WebStoreConfig {
   heroBadgeText1: string;
   heroBadgeText2: string;
   heroBadgeText3: string;
+
+  // Badge Premium Circle Styling
+  badgeCircleBgColor?: string;
+  badgeCircleTextColor?: string;
+  badgeCircleBorderColor?: string;
+  badgeCircleBorderWidth?: number;
+  badgeCircleSize?: 'sm' | 'md' | 'lg';
+
+  // Category Circle Styling
+  categoryCircleBgColor?: string;
+  categoryCircleTextColor?: string;
+  categoryCircleBorderColor?: string;
+  categoryCircleSize?: 'sm' | 'md' | 'lg';
+  categoryCircleGap?: 'tight' | 'normal' | 'loose';
+
   heroBgColor: string;
   
   // Products
@@ -333,6 +348,17 @@ export const createDefaultWebStoreConfig = (products: { namaProduk: string; kate
   heroBadgeText1: '100% ALAMI',
   heroBadgeText2: 'Ragi Alami',
   heroBadgeText3: 'TANPA PENGAWET',
+  badgeCircleBgColor: '#1E3932',
+  badgeCircleTextColor: '#cba258',
+  badgeCircleBorderColor: '#cba258',
+  badgeCircleBorderWidth: 2,
+  badgeCircleSize: 'md',
+
+  categoryCircleBgColor: '#f0ebe3',
+  categoryCircleTextColor: '#006241',
+  categoryCircleBorderColor: '#d4c9b8',
+  categoryCircleSize: 'md',
+  categoryCircleGap: 'normal',
   heroBgColor: '#1E3932',
   products: products.map(p => ({
     productName: p.namaProduk,

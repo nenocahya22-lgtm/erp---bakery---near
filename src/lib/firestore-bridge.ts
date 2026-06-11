@@ -105,15 +105,17 @@ export async function syncProductsToFirestore(
   calculatedProducts: CalculationResult[],
   productHpp: ProductHpp[],
   detailResep: DetailResep[],
-  bahanBaku: BahanBaku[]
+  bahanBaku: BahanBaku[],
+  cabangId: string = 'pusat'
 ): Promise<number> {
   let synced = 0;
   const batch = writeBatch(db);
 
-  // Baca webstore config sekali sebelum loop (gambar produk dari WebStoreManager)
+  // Baca webstore config sekali sebelum loop (gambar produk, kategori, diskon)
   let wsProductImages: Record<string, string> = {};
+  let wsConfig: WebStoreConfig | null = null;
   try {
-    const wsConfig = await getWebStoreConfig('pusat');
+    wsConfig = await getWebStoreConfig(cabangId);
     if (wsConfig?.products) {
       wsConfig.products.forEach((p: any) => {
         if (p.displayImage) wsProductImages[p.productName.toLowerCase().trim()] = p.displayImage;
@@ -206,7 +208,82 @@ export async function syncProductsToFirestore(
     await batch.commit();
   }
 
+  // ─── SYNC KATEGORI ke collection terpisah agar web store bisa baca ───
+  if (wsConfig?.categories && wsConfig.categories.length > 0) {
+    try {
+      const catDocRef = doc(db, 'categories', cabangId);
+      await setDoc(catDocRef, {
+        cabangId,
+        categories: wsConfig.categories,
+        categoryIcons: wsConfig.categoryIcons || {},
+        updatedAt: serverTimestamp(),
+      });
+    } catch (e) {
+      console.warn('Failed to sync categories:', e);
+    }
+  }
+
   return synced;
+}
+
+// ============================================================================
+// PRODUCT FETCH — baca semua produk yang ada di Firestore (dari web store)
+// ============================================================================
+
+export interface FirestoreProductSummary {
+  docId: string;
+  name: string;
+  price: number;
+  category: string;
+  stock: number;
+  imageUrl?: string;
+  hpp?: number;
+  margin?: number;
+  discountPercent?: number;
+}
+
+/** Ambil semua produk dari collection 'products' di Firestore (web store products) */
+export async function getAllFirestoreProducts(): Promise<FirestoreProductSummary[]> {
+  try {
+    const colRef = collection(db, 'products');
+    const snap = await getDocs(colRef);
+    const products: FirestoreProductSummary[] = [];
+    snap.forEach((d) => {
+      const data = d.data() as any;
+      products.push({
+        docId: data.id || d.id,
+        name: data.name || '',
+        price: data.price || 0,
+        category: data.category || 'Lainnya',
+        stock: data.stock || 0,
+        imageUrl: data.imageUrl || '',
+        hpp: data.hpp || 0,
+        margin: data.margin || 0,
+        discountPercent: data.discountPercent || 0,
+      });
+    });
+    return products;
+  } catch (e) {
+    console.warn('Failed to fetch firestore products:', e);
+    return [];
+  }
+}
+
+/** Ambil daftar kategori dari Firestore (collection categories/{cabangId}) */
+export async function getFirestoreCategories(cabangId: string = 'pusat'): Promise<{ categories: string[]; categoryIcons: Record<string, string> } | null> {
+  try {
+    const docRef = doc(db, 'categories', cabangId);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) return null;
+    const data = snap.data() as any;
+    return {
+      categories: data.categories || [],
+      categoryIcons: data.categoryIcons || {},
+    };
+  } catch (e) {
+    console.warn('Failed to fetch categories:', e);
+    return null;
+  }
 }
 
 // ============================================================================
@@ -401,4 +478,79 @@ export function listenNotifications(
 export async function markNotificationRead(notifId: string): Promise<void> {
   const docRef = doc(db, 'erp_notifications', notifId);
   await setDoc(docRef, { read: true }, { merge: true });
+}
+
+// ============================================================================
+// CHAT — listen chat dari Web Store (LiveChat) untuk ERP
+// ============================================================================
+
+export interface ChatSummary {
+  id: string;
+  buyerId: string;
+  buyerName: string;
+  buyerEmail: string;
+  lastMessage?: string;
+  lastMessageTime?: any;
+  unreadBySeller?: boolean;
+  unreadByBuyer?: boolean;
+}
+
+/** Listen real-time untuk chat rooms baru / update dari Web Store */
+export function listenNewChats(
+  onChatUpdate: (chat: ChatSummary) => void,
+  onError?: (err: Error) => void
+) {
+  const q = query(
+    collection(db, 'chats'),
+    orderBy('lastMessageTime', 'desc'),
+    limit(20)
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added' || change.type === 'modified') {
+          const data = change.doc.data() as any;
+          onChatUpdate({
+            id: change.doc.id,
+            buyerId: data.buyerId,
+            buyerName: data.buyerName || 'Pelanggan',
+            buyerEmail: data.buyerEmail || '',
+            lastMessage: data.lastMessage || '',
+            lastMessageTime: data.lastMessageTime,
+            unreadBySeller: data.unreadBySeller || false,
+            unreadByBuyer: data.unreadByBuyer || false,
+          });
+        }
+      });
+    },
+    onError
+  );
+}
+
+/** Ambil semua chat rooms untuk ditampilkan */
+export async function getAllChats(): Promise<ChatSummary[]> {
+  try {
+    const q = query(collection(db, 'chats'), orderBy('lastMessageTime', 'desc'), limit(50));
+    const snap = await getDocs(q);
+    const chats: ChatSummary[] = [];
+    snap.forEach((d) => {
+      const data = d.data() as any;
+      chats.push({
+        id: d.id,
+        buyerId: data.buyerId,
+        buyerName: data.buyerName || 'Pelanggan',
+        buyerEmail: data.buyerEmail || '',
+        lastMessage: data.lastMessage || '',
+        lastMessageTime: data.lastMessageTime,
+        unreadBySeller: data.unreadBySeller || false,
+        unreadByBuyer: data.unreadByBuyer || false,
+      });
+    });
+    return chats;
+  } catch (e) {
+    console.warn('Failed to fetch chats:', e);
+    return [];
+  }
 }

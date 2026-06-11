@@ -39,9 +39,10 @@ interface DashboardTabProps {
   cabangList?: Cabang[];
   branchTransactions?: BranchTransaction[];
   onWipeAllData?: () => void;
+  onSyncToFirestore?: () => Promise<void>;
 }
 
-export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList = [], branchTransactions = [], onWipeAllData }: DashboardTabProps) {
+export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList = [], branchTransactions = [], onWipeAllData, onSyncToFirestore }: DashboardTabProps) {
   // AI Marketing Assistant states
   const [analysisResult, setAnalysisResult] = React.useState<string>('');
   const [loading, setLoading] = React.useState<boolean>(false);
@@ -57,6 +58,17 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList
     const saved = localStorage.getItem('wa_notification_queue');
     return saved ? JSON.parse(saved) : [];
   });
+  const [syncingToFirestore, setSyncingToFirestore] = useState(false);
+
+  const handleSyncToFirestore = async () => {
+    if (!onSyncToFirestore) return;
+    setSyncingToFirestore(true);
+    try {
+      await onSyncToFirestore();
+    } finally {
+      setSyncingToFirestore(false);
+    }
+  };
 
   useEffect(() => { localStorage.setItem('system_alerts_data', JSON.stringify(alerts)); }, [alerts]);
   useEffect(() => { localStorage.setItem('wa_notification_queue', JSON.stringify(waNotifications)); }, [waNotifications]);
@@ -535,6 +547,29 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList
       </div>
 
 
+
+      {/* QUICK SYNC BUTTON */}
+      {onSyncToFirestore && (
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-4 shadow-md text-white flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <RefreshCw className="w-6 h-6 text-blue-200" />
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-wider">Sinkronisasi Web Store</h3>
+              <p className="text-[10px] text-blue-200 mt-0.5">
+                Kirim data produk, harga & kategori terbaru ke Firestore — Web Store akan langsung update
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleSyncToFirestore}
+            disabled={syncingToFirestore}
+            className="px-5 py-2.5 bg-white text-indigo-700 hover:bg-blue-50 disabled:bg-slate-200 disabled:text-slate-400 text-xs font-extrabold uppercase rounded-xl shadow-lg transition-all cursor-pointer flex items-center gap-2 shrink-0"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncingToFirestore ? 'animate-spin' : ''}`} />
+            {syncingToFirestore ? 'Sync...' : '🔄 Sync Sekarang'}
+          </button>
+        </div>
+      )}
 
       {/* 1. TOP METRIC CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

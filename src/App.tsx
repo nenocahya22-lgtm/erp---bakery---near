@@ -14,7 +14,7 @@ import {
   loadRevenueFromSheets,
 } from './lib/sheets';
 import { calculateAllProducts } from './lib/calculations';
-import { listenNewOrders, listenNotifications, syncProductsToFirestore } from './lib/firestore-bridge';
+import { listenNewOrders, listenNotifications, syncProductsToFirestore, listenNewChats } from './lib/firestore-bridge';
 import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, WasteLog, Cabang, SuratOrder, BranchStock, BranchTransaction, ProductTopping } from './types';
 
 import OwnerLogin from './components/OwnerLogin';
@@ -321,9 +321,22 @@ export default function App() {
     showToast('Write-off dihapus.', 'info');
   };
 
+  // ─── SYNC KE FIRESTORE (dari Dashboard) ───
+  const handleSyncToFirestore = async () => {
+    const cabangId = 'pusat';
+    try {
+      showToast('⏳ Sinkronisasi produk & kategori ke Web Store...', 'info');
+      const count = await syncProductsToFirestore(
+        calculatedProducts, productHpp, detailResep, bahanBaku, cabangId
+      );
+      showToast(`✅ ${count} produk + kategori berhasil disinkronisasi! Web Store akan update.`, 'success');
+    } catch (err: any) {
+      showToast('❌ Gagal sync: ' + (err.message || 'Unknown'), 'error');
+    }
+  };
+
   const handleWipeAllData = () => {
     setBahanBaku([]);
-    setProductHpp([]);
     setDetailResep([]);
     setRdExperiments([]);
     setWasteLogs([]);
@@ -1004,7 +1017,7 @@ export default function App() {
       if (calculatedProducts.length > 0) {
         const updatedCalc = calculateAllProducts(newBahanBaku, productHpp, detailResep);
         setTimeout(() => {
-          syncProductsToFirestore(updatedCalc, productHpp, detailResep, newBahanBaku).catch(console.warn);
+          syncProductsToFirestore(updatedCalc, productHpp, detailResep, newBahanBaku, 'pusat').catch(console.warn);
         }, 1000);
       }
     }, (err) => console.warn('Order listener error:', err));
@@ -1014,9 +1027,29 @@ export default function App() {
       showToast(`📢 ${notif.title}: ${notif.body}`, 'info');
     }, (err) => console.warn('Notification listener error:', err));
 
+    // Listen for new chat messages from Web Store
+    const unsubChats = listenNewChats((chat) => {
+      if (chat.unreadBySeller && chat.lastMessage) {
+        showToast(`💬 Chat dari ${chat.buyerName}: "${chat.lastMessage.length > 50 ? chat.lastMessage.substring(0, 50) + '...' : chat.lastMessage}"`, 'info');
+        // Also record to local storage so dashboard can show count
+        try {
+          const saved = localStorage.getItem('unread_chats_data');
+          const chats = saved ? JSON.parse(saved) : [];
+          const existing = chats.findIndex((c: any) => c.id === chat.id);
+          if (existing >= 0) {
+            chats[existing] = { ...chats[existing], ...chat, lastSeen: Date.now() };
+          } else {
+            chats.push({ ...chat, lastSeen: Date.now() });
+          }
+          localStorage.setItem('unread_chats_data', JSON.stringify(chats));
+        } catch (e) { /* silent */ }
+      }
+    }, (err) => console.warn('Chat listener error:', err));
+
     return () => {
       unsubOrders();
       unsubNotif();
+      unsubChats();
     };
   }, [bahanBaku, productHpp, detailResep, calculatedProducts]);
 
@@ -1283,6 +1316,7 @@ export default function App() {
                 cabangList={cabangList}
                 branchTransactions={branchTransactions}
                 onWipeAllData={handleWipeAllData}
+                onSyncToFirestore={handleSyncToFirestore}
               />
             )}
             {activeTab === 'recipes' && (
@@ -1440,6 +1474,19 @@ export default function App() {
                 bahanBaku={bahanBaku}
                 detailResep={detailResep}
                 cabangList={cabangList}
+                onImportProduct={(product) => {
+                  // Cek duplikasi
+                  const exists = productHpp.some(
+                    p => p.namaProduk.toLowerCase().trim() === product.namaProduk.toLowerCase().trim()
+                  );
+                  if (exists) {
+                    showToast(`Produk "${product.namaProduk}" sudah ada di ERP!`, 'error');
+                    return;
+                  }
+                  setProductHpp(prev => [...prev, product]);
+                  setHasUnsavedChanges(true);
+                  showToast(`✅ "${product.namaProduk}" berhasil diimpor dari Web Store! Atur resep di tab Formulasi Resep.`, 'success');
+                }}
               />
             )}
             {activeTab === 'erp_pembukuan' && (
