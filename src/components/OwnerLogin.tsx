@@ -27,8 +27,8 @@ export default function OwnerLogin({ onLoginSuccess }: OwnerLoginProps) {
 
   // ─── PASSWORD VERIFICATION ───
   // Menggunakan hash SHA-256 untuk verifikasi — tidak menyimpan password mentah
-  // Password default: "owner123" → hash: 6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090
-  const OWNER_PASSWORD_HASH = '6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090';
+  // Password default: "owner123" → hash: 43a0d17178a9d26c9e0fe9a74b0b45e38d32f27aed887a008a54bf6e033bf7b9
+  const OWNER_PASSWORD_HASH = '43a0d17178a9d26c9e0fe9a74b0b45e38d32f27aed887a008a54bf6e033bf7b9';
 
   const hashPassword = async (password: string): Promise<string> => {
     const encoder = new TextEncoder();
