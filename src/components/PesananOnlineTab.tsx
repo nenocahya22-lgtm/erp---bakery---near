@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Layers, ShieldCheck, ShoppingCart, Key, AlertTriangle, CheckCircle2, ExternalLink, Globe, RefreshCw } from 'lucide-react';
 import { CalculationResult } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
+import { listenNewOrders, getAllOrders, WebStoreOrder } from '../lib/firestore-bridge';
 
 interface PlatformApiKey {
   platform: string;
@@ -40,24 +41,53 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
   const [editingKey, setEditingKey] = useState('');
   const [editingPlatform, setEditingPlatform] = useState('');
 
-  // ─── WEB STORE BRIDGE ───
-  const [webStoreUrl, setWebStoreUrl] = useState(() => localStorage.getItem('web_store_url') || '');
-  const [webStoreStatus, setWebStoreStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
-  const [webStoreOrders, setWebStoreOrders] = useState<{ id: string; customer: string; items: string; total: number; date: string; status: string }[]>(() => {
-    return safeGetLocalStorage<{ id: string; customer: string; items: string; total: number; date: string; status: string }[]>('web_store_bridge_orders', []);
-  });
+  // ─── WEB STORE BRIDGE — Real-time dari Firestore ───
+  const [webStoreStatus, setWebStoreStatus] = useState<'disconnected' | 'connecting' | 'connected'>(
+    () => safeGetLocalStorage<boolean>('firestore_connected', false) ? 'connected' : 'disconnected'
+  );
+  const [firestoreOrders, setFirestoreOrders] = useState<WebStoreOrder[]>([]);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+
+  // Load initial orders & listen for new ones
+  useEffect(() => {
+    setIsLoadingOrders(true);
+    
+    // Load existing orders
+    getAllOrders()
+      .then(orders => {
+        setFirestoreOrders(orders);
+        setWebStoreStatus('connected');
+        localStorage.setItem('firestore_connected', 'true');
+        setIsLoadingOrders(false);
+      })
+      .catch(err => {
+        console.warn('Failed to get orders from Firestore:', err);
+        setWebStoreStatus('disconnected');
+        localStorage.setItem('firestore_connected', 'false');
+        setIsLoadingOrders(false);
+      });
+
+    // Listen for new orders in real-time
+    const unsub = listenNewOrders((order) => {
+      setFirestoreOrders(prev => {
+        // Avoid duplicates
+        if (prev.some(o => o.id === order.id)) return prev;
+        return [order, ...prev];
+      });
+      showLocalToast(`🛒 Pesanan baru dari ${order.userName}!`, 'success');
+    }, (err) => {
+      console.warn('Order listener error:', err);
+      setWebStoreStatus('disconnected');
+    });
+
+    return () => {
+      unsub();
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('ojol_api_keys', JSON.stringify(platforms));
   }, [platforms]);
-
-  useEffect(() => {
-    localStorage.setItem('web_store_url', webStoreUrl);
-  }, [webStoreUrl]);
-
-  useEffect(() => {
-    localStorage.setItem('web_store_bridge_orders', JSON.stringify(webStoreOrders));
-  }, [webStoreOrders]);
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
@@ -77,29 +107,19 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
     setEditingKey(platform.key);
   };
 
-  const handleConnectWebStore = () => {
-    if (!webStoreUrl.trim()) return;
-    setWebStoreStatus('connecting');
-    setTimeout(() => {
-      // Simulate connection
+  const handleRefreshOrders = async () => {
+    setIsLoadingOrders(true);
+    try {
+      const orders = await getAllOrders();
+      setFirestoreOrders(orders);
       setWebStoreStatus('connected');
-      showLocalToast('✅ Terhubung ke Web Store!', 'success');
-      // Simulate some mock orders from web store
-      const mockOrders = [
-        { id: `WS-${Date.now()}-1`, customer: 'Budi Santoso', items: '2x Roti Sobek Cokelat, 1x Kopi Susu', total: 65000, date: new Date().toISOString(), status: 'baru' },
-        { id: `WS-${Date.now()}-2`, customer: 'Siti Nurhaliza', items: '3x Donat Glaze, 1x Coklat Panas', total: 42000, date: new Date().toISOString(), status: 'diproses' },
-      ];
-      setWebStoreOrders(prev => [...mockOrders, ...prev].slice(0, 50));
-    }, 2000);
-  };
-
-  const handleSyncWebStore = () => {
-    if (webStoreStatus !== 'connected') return;
-    setWebStoreStatus('connecting');
-    setTimeout(() => {
-      setWebStoreStatus('connected');
-      showLocalToast('✅ Sinkronisasi berhasil!', 'success');
-    }, 1500);
+      showLocalToast('✅ Orders berhasil dimuat!', 'success');
+    } catch (err) {
+      console.warn('Failed to refresh orders:', err);
+      showLocalToast('❌ Gagal memuat orders dari Firestore.', 'error');
+    } finally {
+      setIsLoadingOrders(false);
+    }
   };
 
   // Local toast
@@ -196,7 +216,7 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
         </div>
       )}
 
-      {/* ─── WEB STORE BRIDGE ─── */}
+      {/* ─── WEB STORE BRIDGE — REAL-TIME DARI FIRESTORE ─── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
         <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-emerald-50">
           <div className="flex items-start justify-between">
@@ -204,118 +224,128 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
               <Globe className="w-6 h-6 text-indigo-600" />
               <div>
                 <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                  🌐 Jembatan Web Store (storenear)
+                  🌐 Pesanan Web Store (Firestore Real-time)
                   {webStoreStatus === 'connected' && (
                     <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-bold rounded-lg flex items-center gap-1">
                       <CheckCircle2 className="w-2.5 h-2.5" /> Terhubung
                     </span>
                   )}
                 </h3>
-                <p className="text-[10px] text-gray-500">Hubungkan ke aplikasi Web Store (storenear) untuk sinkronisasi pesanan otomatis.</p>
+                <p className="text-[10px] text-gray-500">
+                  Pesanan dari Web Store (storenear) langsung masuk secara real-time dari Firestore.
+                  Stok bahan baku akan otomatis berkurang saat pesanan dikonfirmasi (lunas/diproses).
+                </p>
               </div>
             </div>
           </div>
         </div>
 
         <div className="p-5 space-y-4">
-          {/* Form koneksi */}
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex-1">
-              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">URL Web Store / API Endpoint</label>
-              <input type="text" value={webStoreUrl}
-                onChange={(e) => setWebStoreUrl(e.target.value)}
-                placeholder="https://storenear.vercel.app/api/orders"
-                disabled={webStoreStatus === 'connecting'}
-                className="w-full text-xs border border-gray-200 rounded-lg p-2.5 font-mono disabled:bg-gray-100" />
-            </div>
-            <div className="flex items-end gap-2">
-              <button onClick={handleConnectWebStore}
-                disabled={!webStoreUrl.trim() || webStoreStatus === 'connecting'}
-                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white text-xs font-bold rounded-lg transition cursor-pointer disabled:cursor-not-allowed flex items-center gap-1.5">
-                {webStoreStatus === 'connecting' ? (
-                  <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Menghubungkan...</>
-                ) : webStoreStatus === 'connected' ? (
-                  <><CheckCircle2 className="w-3.5 h-3.5" /> Terhubung</>
-                ) : (
-                  <><ExternalLink className="w-3.5 h-3.5" /> Hubungkan</>
-                )}
-              </button>
-              {webStoreStatus === 'connected' && (
-                <button onClick={handleSyncWebStore}
-                  className="px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1">
-                  <RefreshCw className="w-3.5 h-3.5" /> Sync
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Info koneksi */}
-          {webStoreStatus === 'connected' && (
+          {/* Status koneksi */}
+          {webStoreStatus === 'connected' ? (
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-[10px] text-emerald-800 flex items-start gap-2">
               <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
-                <strong>Web Store Terhubung!</strong> Pesanan dari storenear akan otomatis masuk ke sistem ERP dan mengurangi stok bahan baku. 
-                URL: <code className="bg-emerald-100 px-1 rounded">{webStoreUrl}</code>
+                <strong>Firestore Terhubung!</strong> Pesanan dari Web Store muncul secara real-time. 
+                Stok bahan baku akan otomatis dipotong saat pembayaran dikonfirmasi (status → Diproses/Lunas).
               </div>
             </div>
-          )}
-
-          {webStoreStatus === 'disconnected' && (
+          ) : (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-[10px] text-blue-800 flex items-start gap-2">
               <Globe className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
-                <strong>Belum terhubung.</strong> Masukkan URL Web Store (storenear) Anda dan klik "Hubungkan". 
-                Contoh: <code className="bg-blue-100 px-1 rounded">https://storenear.vercel.app</code>
+                <strong>Belum terhubung ke Firestore.</strong> Configurasi Firebase diperlukan untuk menerima pesanan real-time.
+                Pastikan aplikasi Web Store sudah aktif dan terhubung ke Firebase project yang sama.
               </div>
             </div>
           )}
 
-          {/* Daftar Pesanan dari Web Store */}
-          {webStoreOrders.length > 0 && (
+          {/* Tombol refresh */}
+          <div className="flex items-center gap-3">
+            <button onClick={handleRefreshOrders} disabled={isLoadingOrders}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white text-xs font-bold rounded-lg transition cursor-pointer disabled:cursor-not-allowed flex items-center gap-1.5">
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingOrders ? 'animate-spin' : ''}`} />
+              {isLoadingOrders ? 'Memuat...' : 'Refresh Orders'}
+            </button>
+            <span className="text-[10px] text-gray-400">
+              Total {firestoreOrders.length} pesanan{isLoadingOrders ? ' (memuat...)' : ''}
+            </span>
+          </div>
+
+          {/* Daftar Pesanan dari Firestore */}
+          {firestoreOrders.length > 0 && (
             <div className="border-t border-gray-100 pt-4">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1">
-                  <ShoppingCart className="w-3.5 h-3.5 text-indigo-600" /> Pesanan Web Store ({webStoreOrders.length})
+                  <ShoppingCart className="w-3.5 h-3.5 text-indigo-600" /> Pesanan Web Store ({firestoreOrders.length})
                 </h4>
-                <button onClick={() => {
-                  if (window.confirm('Hapus semua pesanan web store?')) setWebStoreOrders([]);
-                }} className="text-[10px] text-red-500 hover:text-red-700 font-bold cursor-pointer">Hapus Semua</button>
               </div>
-              <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                {webStoreOrders.map(o => (
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {firestoreOrders.map(o => (
                   <div key={o.id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-100 rounded-xl">
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-[9px] text-gray-400">#{o.id.slice(-8)}</span>
-                        <span className="text-xs font-bold text-gray-900">{o.customer}</span>
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${
-                          o.status === 'baru' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                        <span className="text-xs font-bold text-gray-900 truncate">{o.userName}</span>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap ${
+                          o.status === 'Diproses' || o.status === 'Lunas' ? 'bg-emerald-100 text-emerald-800' :
+                          o.status === 'Selesai' ? 'bg-blue-100 text-blue-800' :
+                          o.status === 'Dibatalkan' ? 'bg-red-100 text-red-800' :
+                          'bg-amber-100 text-amber-800'
                         }`}>{o.status}</span>
+                        {o.paymentStatus && (
+                          <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold ${
+                            o.paymentStatus === 'Lunas' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                          }`}>{o.paymentStatus}</span>
+                        )}
                       </div>
-                      <p className="text-[10px] text-gray-600 mt-0.5">{o.items}</p>
+                      <p className="text-[10px] text-gray-600 mt-0.5 truncate">
+                        {o.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}
+                      </p>
+                      {o.paymentMethod && (
+                        <p className="text-[9px] text-gray-400 mt-0.5">
+                          💳 {o.paymentMethod} | {o.userEmail}
+                        </p>
+                      )}
                     </div>
-                    <span className="font-mono font-bold text-emerald-700 text-xs">{formatCurrency(o.total)}</span>
+                    <div className="text-right shrink-0 ml-3">
+                      <span className="font-mono font-bold text-emerald-700 text-xs block">
+                        {formatCurrency(o.totalAmount)}
+                      </span>
+                      <span className="text-[9px] text-gray-400">
+                        {o.items.reduce((s, i) => s + i.quantity, 0)} items
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
+          {!isLoadingOrders && firestoreOrders.length === 0 && webStoreStatus === 'connected' && (
+            <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-xl">
+              <ShoppingCart className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-xs text-gray-400">Belum ada pesanan dari Web Store. Pesanan akan muncul secara real-time saat ada pelanggan checkout.</p>
+            </div>
+          )}
+
+          {isLoadingOrders && (
+            <div className="text-center py-8">
+              <RefreshCw className="w-6 h-6 animate-spin text-indigo-400 mx-auto mb-2" />
+              <p className="text-xs text-gray-400">Memuat pesanan dari Firestore...</p>
+            </div>
+          )}
+
           {/* Dokumentasi Integrasi */}
           <div className="bg-slate-900 text-slate-200 p-4 rounded-xl border border-slate-800 text-[10px] space-y-2">
-            <p className="font-bold text-white flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Cara Integrasi Web Store (storenear):</p>
+            <p className="font-bold text-white flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Cara Kerja Integrasi Web Store (Firestore):</p>
             <ol className="list-decimal ml-4 space-y-1 text-slate-400">
-              <li>Deploy web store (storenear) ke Vercel atau hosting pilihan Anda</li>
-              <li>Dapatkan URL endpoint API: <code className="bg-slate-800 px-1 rounded text-emerald-300">https://storenear.vercel.app/api/orders</code></li>
-              <li>Masukkan URL di atas dan klik <strong className="text-white">"Hubungkan"</strong></li>
-              <li>Setelah terhubung, setiap pesanan dari storenear akan otomatis:
-                <ul className="list-disc ml-4 mt-1 text-slate-500">
-                  <li>Masuk ke daftar pesanan di sini</li>
-                  <li>Mengurangi stok bahan baku sesuai formulasi resep</li>
-                  <li>Mencatat revenue ke sistem</li>
-                </ul>
-              </li>
-              <li>Gunakan API Key keamanan untuk autentikasi antar sistem</li>
+              <li>Web Store dan ERP menggunakan Firebase project yang SAMA</li>
+              <li>Setiap checkout di Web Store → order tersimpan di Firestore collection <code className="bg-slate-800 px-1 rounded text-emerald-300">orders</code></li>
+              <li>ERP mendengarkan (listen) perubahan collection orders secara real-time</li>
+              <li>Saat order baru masuk → muncul notifikasi + tercatat di revenue tracker</li>
+              <li>Saat order berubah status jadi <strong className="text-white">Diproses / Lunas</strong> → stok bahan baku OTOMATIS terpotong</li>
+              <li>Stok hanya dipotong setelah pembayaran dikonfirmasi — AMAN dari pembatalan</li>
             </ol>
           </div>
         </div>

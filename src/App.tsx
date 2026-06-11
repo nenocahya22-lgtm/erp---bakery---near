@@ -15,7 +15,7 @@ import {
 } from './lib/sheets';
 import { calculateAllProducts } from './lib/calculations';
 import { safeGetLocalStorage } from './lib/safe-json';
-import { listenNewOrders, listenNotifications, syncProductsToFirestore, listenNewChats } from './lib/firestore-bridge';
+import { listenNewOrders, listenNotifications, syncProductsToFirestore, listenNewChats, listenOrderStatusChanges } from './lib/firestore-bridge';
 import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, WasteLog, Cabang, SuratOrder, BranchStock, BranchTransaction, ProductTopping } from './types';
 
 import OwnerLogin from './components/OwnerLogin';
@@ -959,7 +959,7 @@ export default function App() {
     const unsubOrders = listenNewOrders((order) => {
       // Show notification toast
       const totalStr = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(order.totalAmount);
-      showToast(`🛒 Pesanan Baru dari Web Store! ${order.userName} — ${totalStr}`, 'success');
+      showToast(`🛒 Pesanan Baru dari Web Store! ${order.userName} — ${totalStr} (${order.status})`, 'success');
 
       // 🔥 Catat order ke pos_orders_data (biar muncul di Ringkasan Dashboard)
       try {
@@ -1001,8 +1001,15 @@ export default function App() {
         tracker.dailyTotals[today].sources['Web Store'] += order.totalAmount;
         localStorage.setItem('revenue_tracker_data', JSON.stringify(tracker));
       } catch (e) { console.warn('Failed to save revenue_tracker_data:', e); }
+      // ⚠️ Stok TIDAK langsung dipotong saat order masuk — tunggu sampai pembayaran dikonfirmasi
+      // Lihat listener listenOrderStatusChanges di bawah untuk auto-deduct stok
+    }, (err) => console.warn('Order listener error:', err));
 
-      // Auto-deduct bahan baku stok berdasarkan resep — single pass untuk hindari overlap
+    // ─── LISTENER: Auto-deduct stok hanya saat status order berubah jadi Diproses/Lunas ───
+    const unsubStatus = listenOrderStatusChanges((order, previousStatus) => {
+      showToast(`🔔 Pembayaran dikonfirmasi untuk pesanan ${order.id.slice(-8)}! Status: ${previousStatus} → ${order.status}. Memotong stok bahan baku...`, 'success');
+
+      // Deduct bahan baku stok berdasarkan resep
       const newBahanBaku = JSON.parse(JSON.stringify(bahanBaku)) as typeof bahanBaku;
       order.items.forEach((item) => {
         const ingredientsForProduct = detailResep.filter(
@@ -1028,6 +1035,18 @@ export default function App() {
       });
       setBahanBaku(newBahanBaku);
 
+      // Update status order di pos_orders_data
+      try {
+        const savedOrders = localStorage.getItem('pos_orders_data');
+        if (savedOrders) {
+          const posOrders = JSON.parse(savedOrders);
+          const updated = posOrders.map((p: any) => 
+            p.ordId === `ws-${order.id}` ? { ...p, status: order.status } : p
+          );
+          localStorage.setItem('pos_orders_data', JSON.stringify(updated));
+        }
+      } catch (e) { /* silent */ }
+
       // Sync produk ke Firestore dengan data stok terbaru
       if (calculatedProducts.length > 0) {
         const updatedCalc = calculateAllProducts(newBahanBaku, productHpp, detailResep);
@@ -1035,7 +1054,7 @@ export default function App() {
           syncProductsToFirestore(updatedCalc, productHpp, detailResep, newBahanBaku, 'pusat').catch(console.warn);
         }, 1000);
       }
-    }, (err) => console.warn('Order listener error:', err));
+    }, (err) => console.warn('Status change listener error:', err));
 
     // Listen for ERP notifications
     const unsubNotif = listenNotifications((notif) => {
@@ -1063,6 +1082,7 @@ export default function App() {
 
     return () => {
       unsubOrders();
+      unsubStatus();
       unsubNotif();
       unsubChats();
     };

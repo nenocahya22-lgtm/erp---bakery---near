@@ -196,8 +196,8 @@ export async function syncProductsToFirestore(
       category: kategori,
       rating: existingSnap.exists() ? (existingSnap.data() as any).rating || 5.0 : 5.0,
       reviewCount: existingSnap.exists() ? (existingSnap.data() as any).reviewCount || 0 : 0,
-      hpp: Math.round(calc.hppPerPorsi),
-      margin: Math.round(calc.marginPersen),
+      // HPP & margin TIDAK disinkron ke produk publik — hanya untuk internal ERP
+      // Pelanggan web store tidak boleh melihat biaya produksi
       updatedAt: serverTimestamp(),
     });
 
@@ -392,6 +392,54 @@ export function listenBranchOrders(
     onError
   );
 }
+
+/** Listen perubahan status order — untuk auto-deduct stok saat order diproses/dibayar
+ *  Hanya trigger callback ketika status berubah dari 'Menunggu Pembayaran' / 'Belum Bayar'
+ *  menjadi 'Diproses' / 'Lunas' / 'Selesai' (pembayaran sudah dikonfirmasi).
+ */
+export function listenOrderStatusChanges(
+  onStatusChange: (order: WebStoreOrder, previousStatus: string) => void,
+  onError?: (err: Error) => void
+) {
+  const q = query(
+    collection(db, 'orders'),
+    orderBy('createdAt', 'desc'),
+    limit(100)
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          // Track initial status untuk order yang baru masuk
+          orderStatusCache.set(change.doc.id, (change.doc.data() as WebStoreOrder).status);
+        } else if (change.type === 'modified') {
+          const newData = change.doc.data() as WebStoreOrder;
+          const prevStatus = orderStatusCache.get(change.doc.id);
+          
+          if (prevStatus && prevStatus !== newData.status) {
+            // Status berubah! Cek apakah dari pending → confirmed
+            const pendingStatuses = ['Menunggu Pembayaran', 'Belum Bayar', ''];
+            const confirmedStatuses = ['Diproses', 'Lunas', 'Selesai'];
+            
+            if (pendingStatuses.includes(prevStatus) && confirmedStatuses.includes(newData.status)) {
+              // Pembayaran sudah dikonfirmasi! Saatnya deduct stok bahan baku
+              onStatusChange(newData, prevStatus);
+            }
+          }
+          
+          // Update cache dengan status terbaru
+          orderStatusCache.set(change.doc.id, newData.status);
+        }
+      });
+    },
+    onError
+  );
+}
+
+// Local cache untuk melacak status order sebelumnya (untuk deteksi perubahan status)
+const orderStatusCache = new Map<string, string>();
 
 /** Ambil semua orders untuk ditampilkan di dashboard */
 export async function getAllOrders(cabangId?: string): Promise<WebStoreOrder[]> {
