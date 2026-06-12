@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { ShieldAlert, Calendar, AlertTriangle, Clock, Package, Trash2, Plus, Printer, RefreshCw, AlertOctagon, Database, Zap, CheckCircle2, Truck } from 'lucide-react';
-import { BahanBaku, ProductHpp, WasteLog, Cabang, SuratOrder, SATUAN_OPTIONS } from '../types';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { ShieldAlert, Calendar, AlertTriangle, Clock, Package, Trash2, Plus, Printer, RefreshCw, AlertOctagon, Database, Zap, CheckCircle2, Truck, TrendingUp, GitBranch, Percent, Sparkles, Share2, MapPin, ArrowRight } from 'lucide-react';
+import { BahanBaku, ProductHpp, DetailResep, WasteLog, Cabang, SuratOrder, BranchStock, SATUAN_OPTIONS, DistributionRecommendation, StockSwapSuggestion, AutoPromoSignal } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
+import { calculateBahanADS } from '../lib/calculations';
 
 interface BatchLog {
   id: string;
@@ -27,12 +28,14 @@ interface ProductExpiryLog {
 interface FefoExpiryTabProps {
   bahanBaku: BahanBaku[];
   productHpp?: ProductHpp[];
+  detailResep?: DetailResep[];
   onAddWasteLog?: (log: WasteLog, cabangId?: string) => void;
   cabangList?: Cabang[];
   suratOrders?: SuratOrder[];
+  cabangStok?: BranchStock[];
 }
 
-export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog, cabangList = [], suratOrders = [] }: FefoExpiryTabProps) {
+export default function FefoExpiryTab({ bahanBaku, productHpp, detailResep = [], onAddWasteLog, cabangList = [], suratOrders = [], cabangStok = [] }: FefoExpiryTabProps) {
   const [batches, setBatches] = useState<BatchLog[]>(() =>
     safeGetLocalStorage<BatchLog[]>('fefo_expiry_batches_data', [])
   );
@@ -48,6 +51,24 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog, ca
   );
   const [showSyncConfirm, setShowSyncConfirm] = useState(false);
   const [syncResult, setSyncResult] = useState<{ added: number; skipped: string[] } | null>(null);
+  
+  // ─── SMART DISTRIBUTION STATE ───
+  const [leadTimes, setLeadTimes] = useState<Record<string, number>>(() =>
+    safeGetLocalStorage<Record<string, number>>('fefo_lead_times', {})
+  );
+  const [showDistribusi, setShowDistribusi] = useState(false);
+  const [distribusiBatchId] = useState<string | null>(null);
+  const [autoPromoSignals, setAutoPromoSignals] = useState<AutoPromoSignal[]>(() =>
+    safeGetLocalStorage<AutoPromoSignal[]>('fefo_auto_promo_signals', [])
+  );
+  const [localNotif, setLocalNotif] = useState<{ msg: string; type: 'success' | 'info' } | null>(null);
+  
+  useEffect(() => {
+    if (localNotif) {
+      const t = setTimeout(() => setLocalNotif(null), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [localNotif]);
 
   useEffect(() => {
     localStorage.setItem('fefo_expiry_batches_data', JSON.stringify(batches));
@@ -56,6 +77,14 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog, ca
   useEffect(() => {
     localStorage.setItem('fefo_safety_stock_data', JSON.stringify(safetyStock));
   }, [safetyStock]);
+
+  useEffect(() => {
+    localStorage.setItem('fefo_lead_times', JSON.stringify(leadTimes));
+  }, [leadTimes]);
+
+  useEffect(() => {
+    localStorage.setItem('fefo_auto_promo_signals', JSON.stringify(autoPromoSignals));
+  }, [autoPromoSignals]);
 
   // ─── SYNC FROM STOK PUSAT ───
   const handleSyncFromStok = () => {
@@ -196,8 +225,219 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog, ca
     return Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   };
 
+  // ─── SMART DISTRIBUTION FUNCTIONS ───
+  const getDistributionRecommendation = useCallback((batch: BatchLog): DistributionRecommendation | null => {
+    const sisaHari = daysUntil(batch.expiryDate);
+    if (sisaHari <= 0) return null;
+    
+    const lt = leadTimes[batch.bahanNama] || 1;
+    const sisaHariEfektif = sisaHari - lt;
+    if (sisaHariEfektif <= 0) {
+      return {
+        batchId: batch.id,
+        batchNo: batch.batchNo,
+        bahanNama: batch.bahanNama,
+        expiryDate: batch.expiryDate,
+        sisaHari,
+        leadTime: lt,
+        sisaHariEfektif: 0,
+        adsPerCabang: [],
+        rekomendasiCabangId: '',
+        rekomendasiCabangNama: '⚠️ Tidak bisa dikirim (waktu kirim > sisa hari)',
+        wasteRisk: 'tinggi',
+      };
+    }
+    
+    // Hitung ADS per cabang untuk bahan ini
+    // Gunakan cabangList yang ada + data dummy untuk demo (karena detailResep tidak di-pass ke FEFO)
+    const adsPerCabang = cabangList.map(cabang => {
+      // Estimasi ADS berdasarkan data penjualan dari localStorage
+      let ads = 0.5; // Default conservative
+      try {
+        const revenueRaw = localStorage.getItem('revenue_tracker_data');
+        if (revenueRaw) {
+          const parsed = JSON.parse(revenueRaw);
+          const txns = parsed.transactions || [];
+          // Filter transaksi untuk cabang ini dalam 14 hari terakhir
+          const cutoff = new Date();
+          cutoff.setDate(cutoff.getDate() - 14);
+          const recentTxns = txns.filter((t: any) => {
+            if (!t.date || !t.qty) return false;
+            const txSource = (t.source || '').toLowerCase();
+            const cabangMatch = txSource.includes(cabang.nama.toLowerCase()) || 
+              (cabang.id === 'pusat' && (txSource.includes('walk-in') || txSource.includes('pos')));
+            return cabangMatch && new Date(t.date) >= cutoff;
+          });
+          const totalQty = recentTxns.reduce((s: number, t: any) => s + (t.qty || 0), 0);
+          ads = totalQty / 14;
+        }
+      } catch (e) { /* silent */ }
+      
+      const kapasitasJual = ads * sisaHariEfektif;
+      let skorPrioritas = 0;
+      if (sisaHari <= 7) {
+        skorPrioritas = kapasitasJual;
+      } else {
+        const stokSaatIni = cabangStok.find(s => s.cabangId === cabang.id && s.bahanNama === batch.bahanNama)?.stokTeoritis || 0;
+        skorPrioritas = stokSaatIni > 0 && ads > 0 ? stokSaatIni / ads : kapasitasJual;
+      }
+      
+      // Faktor bobot: makin tinggi ADS, makin cepat laku
+      const rekomendasiQty = Math.round(kapasitasJual * 0.8); // 80% dari kapasitas untuk safety
+      
+      return { 
+        cabangId: cabang.id, 
+        cabangNama: cabang.nama, 
+        ads: Math.round(ads * 10) / 10,
+        rekomendasiQty: Math.max(1, rekomendasiQty),
+        skorPrioritas,
+      };
+    });
+    
+    // Sortir berdasarkan prioritas
+    adsPerCabang.sort((a, b) => b.skorPrioritas - a.skorPrioritas);
+    
+    const rekomendasi = adsPerCabang[0];
+    const wasteRisk: 'rendah' | 'sedang' | 'tinggi' = 
+      sisaHariEfektif <= 3 ? 'tinggi' :
+      sisaHariEfektif <= 7 ? 'sedang' : 'rendah';
+    
+    return {
+      batchId: batch.id,
+      batchNo: batch.batchNo,
+      bahanNama: batch.bahanNama,
+      expiryDate: batch.expiryDate,
+      sisaHari,
+      leadTime: lt,
+      sisaHariEfektif,
+      adsPerCabang,
+      rekomendasiCabangId: rekomendasi?.cabangId || '',
+      rekomendasiCabangNama: rekomendasi?.cabangNama || '-',
+      wasteRisk,
+    };
+  }, [cabangList, leadTimes, bahanBaku, cabangStok]);
+  
+  // ─── INTER-BRANCH REBALANCING (Stock Swap) ───
+  const stockSwapSuggestions = useMemo((): StockSwapSuggestion[] => {
+    if (cabangList.length < 2 || batches.length === 0) return [];
+    
+    const suggestions: StockSwapSuggestion[] = [];
+    const today = new Date();
+    
+    // Cari batch yang akan expired dalam 7 hari
+    const nearExpiryBatches = batches.filter(b => {
+      const days = daysUntil(b.expiryDate);
+      return days > 0 && days <= 7;
+    });
+    
+    nearExpiryBatches.forEach(batch => {
+      // Cari cabang yang punya stok bahan ini (teoritis) dan yang tidak punya
+      interface CabangStokItem { cabang: Cabang; stok: number }
+      const stokPerCabang: CabangStokItem[] = cabangList.map(c => ({
+        cabang: c,
+        stok: cabangStok.find(s => s.cabangId === c.id && s.bahanNama === batch.bahanNama)?.stokTeoritis || 0,
+      }));
+      const cabangWithStock: CabangStokItem[] = stokPerCabang.filter((c): c is CabangStokItem => c.stok > 0);
+      
+      const cabangWithoutStock: Cabang[] = cabangList.filter(c => 
+        !cabangWithStock.some(cs => cs.cabang.id === c.id)
+      );
+      
+      if (cabangWithStock.length >= 2) {
+        // Ada cabang yang kelebihan stok hampir expired — rekomendasikan pindah ke cabang lain
+        cabangWithStock.sort((a, b) => b.stok - a.stok);
+        const cabangSumber = cabangWithStock[0];
+        const cabangTujuan = cabangWithoutStock.length > 0 
+          ? { id: cabangWithoutStock[0].id, nama: cabangWithoutStock[0].nama }
+          : { id: cabangWithStock[cabangWithStock.length - 1].cabang.id, nama: cabangWithStock[cabangWithStock.length - 1].cabang.nama };
+        
+        if (cabangSumber.cabang.id !== cabangTujuan.id) {
+          const lossValue = batch.qty * (bahanBaku.find(b => b.nama === batch.bahanNama)?.hargaSatuan || 0);
+          suggestions.push({
+            bahanNama: batch.bahanNama,
+            dariCabangId: cabangSumber.cabang.id,
+            dariCabangNama: cabangSumber.cabang.nama,
+            keCabangId: cabangTujuan.id,
+            keCabangNama: cabangTujuan.nama,
+            qty: Math.min(batch.qty, cabangSumber.stok),
+            satuan: batch.satuan,
+            alasan: `Batch ${batch.batchNo} akan expired dalam ${daysUntil(batch.expiryDate)} hari di ${cabangSumber.cabang.nama}. Pindahkan ke ${cabangTujuan.nama} yang stoknya lebih rendah.`,
+            potensiSavedValue: lossValue,
+          });
+        }
+      }
+    });
+    
+    return suggestions.slice(0, 5); // Max 5 suggestions
+  }, [batches, cabangList, cabangStok, bahanBaku]);
+  
+  // ─── AUTO-PROMO TRIGGER ───
+  const generateAutoPromoSignals = useCallback(() => {
+    const today = new Date();
+    const newSignals: AutoPromoSignal[] = [];
+    
+    const nearExpiryBatches = batches.filter(b => {
+      const days = daysUntil(b.expiryDate);
+      return days > 0 && days <= 5; // ≤5 hari lagi expired
+    });
+    
+    nearExpiryBatches.forEach(batch => {
+      // Cari produk yang menggunakan bahan ini
+      const produkTerkait = productHpp?.filter(p => 
+        // Infer dari nama — fallback
+        p.namaProduk.toLowerCase().includes(batch.bahanNama.toLowerCase().split(' ')[0])
+      ) || [];
+      
+      if (produkTerkait.length === 0) return;
+      
+      // Cari cabang dengan ADS tertinggi untuk produk ini
+      // Simulasi: pilih cabang dengan penjualan tertinggi
+      const cabangDenganStok = cabangList.filter(c => 
+        cabangStok.some(s => s.cabangId === c.id && s.bahanNama === batch.bahanNama)
+      );
+      
+      cabangDenganStok.forEach(cabang => {
+        const existing = autoPromoSignals.find(
+          s => s.productName === produkTerkait[0]?.namaProduk && 
+              s.cabangId === cabang.id && 
+              s.status === 'pending'
+        );
+        if (existing) return; // Sudah ada signal pending untuk produk+cabang ini
+        
+        const daysLeft = daysUntil(batch.expiryDate);
+        const suggestedDiscount = daysLeft <= 2 ? 50 : daysLeft <= 4 ? 30 : 20;
+        
+        newSignals.push({
+          id: `promo-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          productName: produkTerkait[0].namaProduk,
+          cabangId: cabang.id,
+          cabangNama: cabang.nama,
+          reason: `Batch bahan ${batch.bahanNama} (${batch.batchNo}) akan expired ${daysLeft} hari lagi. Diskon ${suggestedDiscount}% untuk mempercepat penjualan.`,
+          suggestedDiscount,
+          batchExpiry: batch.expiryDate,
+          createdAt: today.toISOString(),
+          status: 'pending',
+        });
+      });
+    });
+    
+    if (newSignals.length > 0) {
+      setAutoPromoSignals(prev => [...newSignals, ...prev]);
+      return newSignals.length;
+    }
+    return 0;
+  }, [batches, cabangList, cabangStok, productHpp, autoPromoSignals]);
+
   return (
     <div className="space-y-6">
+      {/* LOCAL NOTIFICATION */}
+      {localNotif && (
+        <div className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl shadow-lg border text-xs font-bold transition-all ${
+          localNotif.type === 'success' ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-slate-800 text-white border-slate-600'
+        }`}>
+          {localNotif.msg}
+        </div>
+      )}
       {/* HEADER */}
       <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div>
@@ -523,6 +763,236 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, onAddWasteLog, ca
                 className="mt-3 w-full bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-bold py-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1">
                 <Database className="w-3.5 h-3.5" /> Sync {bahanTanpaBatch.length} Bahan
               </button>
+            </div>
+          )}
+
+          {/* ─── SALES VELOCITY / ADS ─── */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+                <TrendingUp className="w-4 h-4 text-emerald-600" /> Sales Velocity
+              </h4>
+              <button onClick={() => setShowDistribusi(!showDistribusi)}
+                className="px-2 py-1 text-[9px] font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition cursor-pointer">
+                {showDistribusi ? 'Tutup' : 'Smart Distribusi ▸'}
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-500 mb-2">Average Daily Sales per bahan — dihitung dari data transaksi 14 hari terakhir.</p>
+            <div className="space-y-2 max-h-[250px] overflow-y-auto">
+              {batches.slice(0, 10).map(batch => {
+                const adsPerCabang = calculateBahanADS(batch.bahanNama, detailResep, 14);
+                const cabangAds = Array.from(adsPerCabang.values());
+                return (
+                  <div key={batch.id} className="border border-gray-100 rounded-lg p-2 text-[10px]">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-gray-700">{batch.bahanNama}</span>
+                      <span className="text-gray-400">Batch: {batch.batchNo}</span>
+                    </div>
+                    {cabangAds.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {cabangAds.map((ad, i) => (
+                          <span key={i} className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded font-bold">
+                            {ad.cabangNama}: {ad.dailyConsumption.toFixed(1)} {batch.satuan}/hari
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 italic">Belum ada data transaksi untuk bahan ini</span>
+                    )}
+                  </div>
+                );
+              })}
+              {batches.length === 0 && (
+                <p className="text-xs text-gray-400 text-center py-3">Tambahkan batch untuk melihat Sales Velocity.</p>
+              )}
+            </div>
+          </div>
+
+          {/* ─── SMART DISTRIBUTION PANEL ─── */}
+          {showDistribusi && (
+            <div className="bg-white rounded-2xl border border-emerald-200 shadow-xs overflow-hidden">
+              <div className="p-4 bg-emerald-50 border-b border-emerald-100">
+                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <GitBranch className="w-4 h-4 text-emerald-600" /> Smart Distribution
+                </h4>
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Rekomendasi distribusi batch ke cabang berdasarkan ADS (kecepatan jual) + lead time.
+                </p>
+              </div>
+              
+              {/* Lead Time Settings */}
+              <div className="p-3 border-b border-gray-100">
+                <h5 className="text-[10px] font-bold text-gray-600 uppercase mb-2">Lead Time (hari) per Bahan</h5>
+                <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
+                  {bahanBaku.slice(0, 15).map(b => (
+                    <div key={b.nama} className="flex items-center gap-2 text-[10px]">
+                      <span className="flex-1 truncate font-medium text-gray-600">{b.nama}</span>
+                      <input type="number" min="0" max="7" value={leadTimes[b.nama] || 1}
+                        onChange={(e) => setLeadTimes({ ...leadTimes, [b.nama]: Math.max(0, parseInt(e.target.value) || 1) })}
+                        className="w-10 border border-gray-200 rounded p-1 text-center font-mono" />
+                      <span className="text-gray-400">hari</span>
+                    </div>
+                  ))}
+                  {bahanBaku.length === 0 && <p className="text-xs text-gray-400">Tambah bahan dulu.</p>}
+                </div>
+              </div>
+              
+              {/* Recommendations per Batch */}
+              <div className="p-3 space-y-2 max-h-[350px] overflow-y-auto">
+                {batches.filter(b => new Date(b.expiryDate) >= new Date()).slice(0, 10).map(batch => {
+                  const rec = getDistributionRecommendation(batch);
+                  if (!rec) return null;
+                  return (
+                    <div key={batch.id} className={`border rounded-lg p-2.5 text-[10px] ${
+                      rec.wasteRisk === 'tinggi' ? 'border-red-200 bg-red-50/30' :
+                      rec.wasteRisk === 'sedang' ? 'border-amber-200 bg-amber-50/30' :
+                      'border-emerald-200 bg-emerald-50/30'
+                    }`}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="font-bold text-gray-800">{batch.bahanNama}</span>
+                        <span className={`px-1.5 py-0.5 rounded-full font-bold text-[8px] ${
+                          rec.wasteRisk === 'tinggi' ? 'bg-red-100 text-red-700' :
+                          rec.wasteRisk === 'sedang' ? 'bg-amber-100 text-amber-700' :
+                          'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          Risiko Waste: {rec.wasteRisk.toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1 text-gray-600 mb-1.5">
+                        <div>Batch: <span className="font-mono font-bold">{batch.batchNo}</span></div>
+                        <div>Exp: <span className="font-bold">{formatDate(batch.expiryDate)}</span></div>
+                        <div>Sisa: <span className="font-bold">{rec.sisaHari} hari</span></div>
+                        <div>Lead: <span className="font-bold">{rec.leadTime} hari</span></div>
+                        <div className="col-span-2">Efektif: <span className={`font-bold ${rec.sisaHariEfektif <= 3 ? 'text-red-600' : 'text-emerald-600'}`}>{rec.sisaHariEfektif} hari</span></div>
+                      </div>
+                      {rec.adsPerCabang.length > 0 && (
+                        <div className="space-y-1 mb-1.5">
+                          <span className="font-bold text-gray-500 text-[9px]">Prioritas Kirim:</span>
+                          {rec.adsPerCabang.map((ac, i) => (
+                            <div key={i} className={`flex items-center justify-between px-2 py-1 rounded ${
+                              i === 0 ? 'bg-emerald-100 border border-emerald-200' : 'bg-gray-50'
+                            }`}>
+                              <div className="flex items-center gap-1.5">
+                                <MapPin className="w-2.5 h-2.5 text-gray-400" />
+                                <span className="font-bold text-gray-700">{ac.cabangNama}</span>
+                                {i === 0 && <span className="text-[8px] bg-emerald-600 text-white px-1 py-0.5 rounded-full font-bold">TOP</span>}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-500">ADS: {ac.ads}/hr</span>
+                                <span className="font-bold text-gray-700">{ac.rekomendasiQty} {batch.satuan}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="text-[9px] text-gray-500 italic">
+                        Rekomendasi: kirim <strong>{rec.rekomendasiCabangNama}</strong> — {rec.wasteRisk === 'tinggi' ? 'prioritas tinggi untuk mencegah waste' : 'distribusi optimal berdasarkan ADS'}
+                      </div>
+                    </div>
+                  );
+                })}
+                {batches.filter(b => new Date(b.expiryDate) >= new Date()).length === 0 && (
+                  <p className="text-xs text-gray-400 text-center py-3">Semua batch aktif. Tidak ada rekomendasi distribusi.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ─── AUTO-PROMO TRIGGER ─── */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+                <Percent className="w-4 h-4 text-amber-600" /> Auto-Promo Trigger
+              </h4>
+              <button onClick={() => {
+                const count = generateAutoPromoSignals();
+                if (count > 0) {
+                  setLocalNotif({ msg: `🎯 ${count} sinyal promo otomatis dibuat!`, type: 'success' });
+                } else {
+                  setLocalNotif({ msg: '✅ Tidak ada batch yang perlu dipromokan saat ini.', type: 'info' });
+                }
+              }}
+                className="px-2 py-1 text-[9px] font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition cursor-pointer flex items-center gap-1">
+                <Sparkles className="w-3 h-3" /> Generate Sinyal
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-500 mb-2">
+              Deteksi batch yang akan expired ≤5 hari & buat sinyal diskon otomatis untuk Web Store.
+            </p>
+            {autoPromoSignals.filter(s => s.status === 'pending').length > 0 ? (
+              <div className="space-y-2 max-h-[250px] overflow-y-auto">
+                {autoPromoSignals.filter(s => s.status === 'pending').slice(0, 5).map(signal => (
+                  <div key={signal.id} className="border border-amber-200 bg-amber-50/30 rounded-lg p-2.5 text-[10px]">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-gray-800">{signal.productName}</span>
+                      <span className="px-1.5 py-0.5 bg-red-100 text-red-700 font-bold rounded text-[8px]">-{signal.suggestedDiscount}%</span>
+                    </div>
+                    <p className="text-gray-600 mb-1">{signal.reason}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">📍 {signal.cabangNama}</span>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => {
+                          setAutoPromoSignals(prev => prev.map(s => 
+                            s.id === signal.id ? { ...s, status: 'activated' as const } : s
+                          ));
+                          setLocalNotif({ msg: `✅ Sinyal promo untuk "${signal.productName}" diaktifkan!`, type: 'success' });
+                        }}
+                          className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[8px] transition cursor-pointer">
+                          Aktifkan
+                        </button>
+                        <button onClick={() => {
+                          setAutoPromoSignals(prev => prev.map(s => 
+                            s.id === signal.id ? { ...s, status: 'dismissed' as const } : s
+                          ));
+                        }}
+                          className="px-2 py-0.5 text-gray-400 hover:text-red-600 font-bold text-[8px] transition cursor-pointer">
+                          Abaikan
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400 text-center py-3">
+                Belum ada sinyal promo. Klik "Generate Sinyal" untuk scan batch yang akan expired.
+              </p>
+            )}
+            {autoPromoSignals.filter(s => s.status === 'activated').length > 0 && (
+              <div className="mt-2 pt-2 border-t border-gray-100">
+                <p className="text-[10px] text-emerald-700 font-bold">✅ {autoPromoSignals.filter(s => s.status === 'activated').length} sinyal sudah diaktifkan.</p>
+              </div>
+            )}
+          </div>
+
+          {/* ─── INTER-BRANCH REBALANCING ─── */}
+          {stockSwapSuggestions.length > 0 && (
+            <div className="bg-white p-5 rounded-2xl border border-amber-200 shadow-xs border-l-4 border-l-amber-500">
+              <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <Share2 className="w-4 h-4 text-amber-600" /> Inter-Branch Rebalancing
+              </h4>
+              <p className="text-[10px] text-gray-500 mb-3">
+                Deteksi stok yang hampir expired di satu cabang & rekomendasi pemindahan ke cabang lain untuk mencegah waste.
+              </p>
+              <div className="space-y-2">
+                {stockSwapSuggestions.map((s, i) => (
+                  <div key={i} className="border border-amber-100 bg-amber-50/30 rounded-lg p-2.5 text-[10px]">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="font-bold text-gray-800">{s.bahanNama}</span>
+                      <span className="text-gray-400">{s.qty} {s.satuan}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <span className="px-1.5 py-0.5 bg-red-50 text-red-700 rounded font-bold">{s.dariCabangNama}</span>
+                      <ArrowRight className="w-3 h-3 text-gray-400" />
+                      <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded font-bold">{s.keCabangNama}</span>
+                    </div>
+                    <p className="text-gray-500 mt-1">{s.alasan}</p>
+                    <p className="text-[9px] text-amber-700 font-bold mt-1">
+                      💰 Potensi selamat: {formatCurrency(s.potensiSavedValue)}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

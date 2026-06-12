@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { WebStoreConfig, WebStoreProduct, WebStorePromo, PaymentMethod, ProductHpp, Cabang, createDefaultWebStoreConfig, createDefaultPaymentMethods } from '../types';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { WebStoreConfig, WebStoreProduct, WebStorePromo, PaymentMethod, ProductHpp, Cabang, createDefaultWebStoreConfig, createDefaultPaymentMethods, AutoPromoSignal } from '../types';
 import {
   Globe,
   Save,
@@ -26,6 +26,10 @@ import {
   Building2,
   Copy,
   Cpu,
+  TrendingUp,
+  Sparkles,
+  Lightbulb,
+  Zap,
 } from 'lucide-react';import { saveWebStoreConfig,
   getWebStoreConfig,
   getAllWebStoreConfigs,
@@ -373,13 +377,71 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
     input.click();
   };
 
+  // ─── AI MARKETING — SKOR & INSIGHT ───
+  const marketingScore = useMemo(() => {
+    let score = 0;
+    // Produk dengan gambar = +20
+    const withImages = config.products.filter(p => p.displayImage).length;
+    score += Math.min(20, (withImages / Math.max(1, config.products.length)) * 20);
+    // Produk dengan deskripsi = +15
+    const withDesc = config.products.filter(p => p.description.trim().length > 10).length;
+    score += Math.min(15, (withDesc / Math.max(1, config.products.length)) * 15);
+    // Kategori terisi = +10
+    score += Math.min(10, (config.categories?.length || 0) * 2);
+    // Promo aktif = +15
+    score += Math.min(15, (config.promos?.filter(p => p.active).length || 0) * 5);
+    // Payment methods = +10
+    score += Math.min(10, (config.paymentMethods?.filter(p => p.active).length || 0) * 3);
+    // Logo terupload = +10
+    if (config.logo) score += 10;
+    // Hero terisi = +10
+    if (config.heroTitle && config.heroTitle.length > 5) score += 10;
+    // Slogan terisi = +5
+    if (config.slogan) score += 5;
+    // Kontak terisi = +5
+    if (config.contactWhatsApp) score += 5;
+    return Math.min(100, score);
+  }, [config]);
+
+  const aiInsights = useMemo(() => {
+    const insights: { icon: string; text: string; action?: string; severity: 'info' | 'warning' | 'success' }[] = [];
+    
+    // 1. Produk tanpa gambar
+    const noImage = config.products.filter(p => !p.displayImage && p.active);
+    if (noImage.length > 0) {
+      insights.push({ icon: '📸', text: `${noImage.length} produk aktif belum punya gambar. Web Store tampil kurang menarik.`, action: 'Upload Gambar', severity: 'warning' });
+    }
+    // 2. Produk tanpa deskripsi
+    const noDesc = config.products.filter(p => p.description.trim().length < 10 && p.active);
+    if (noDesc.length > 0) {
+      insights.push({ icon: '📝', text: `${noDesc.length} produk belum punya deskripsi. Tambahkan minimal 10 karakter.`, action: 'Tambah Deskripsi', severity: 'info' });
+    }
+    // 3. Skor marketing rendah
+    if (marketingScore < 50) {
+      insights.push({ icon: '📊', text: `Skor Marketing ${marketingScore}/100 — masih banyak yang bisa dioptimalkan.`, severity: 'warning' });
+    } else if (marketingScore >= 80) {
+      insights.push({ icon: '🏆', text: `Skor Marketing ${marketingScore}/100 — Web Store Anda siap bersaing!`, severity: 'success' });
+    }
+    // 4. Auto-promo signals dari FEFO
+    try {
+      const signals = safeGetLocalStorage<AutoPromoSignal[]>('fefo_auto_promo_signals', []);
+      const pendingSignals = signals.filter(s => s.status === 'pending');
+      if (pendingSignals.length > 0) {
+        insights.push({ icon: '🏷️', text: `${pendingSignals.length} sinyal promo dari FEFO menunggu aktivasi. Batch hampir expired!`, action: 'Aktifkan Promo', severity: 'warning' });
+      }
+    } catch (e) { /* silent */ }
+    
+    return insights;
+  }, [config, marketingScore]);
+
   // ─── UI HELPERS ───
-  const sectionBtn = (key: string, icon: React.ReactNode, label: string) => (
+  const sidebarBtn = (key: string, icon: React.ReactNode, label: string) => (
     <button onClick={() => setActiveSection(key)}
-      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-        activeSection === key ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer text-left ${
+        activeSection === key ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
       }`}>
-      {icon}{label}
+      <span className={`w-5 h-5 shrink-0 flex items-center justify-center ${activeSection === key ? 'text-white' : 'text-emerald-500'}`}>{icon}</span>
+      <span>{label}</span>
     </button>
   );
 
@@ -388,79 +450,107 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
   const cardClass = "bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4";
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-24">
-      {/* HEADER */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-xl font-black text-gray-900 flex items-center gap-2">
-            <Globe className="w-6 h-6 text-emerald-600" />
-            Web Store Manager
-          </h2>
-          <p className="text-xs text-gray-500 mt-1">
-            Atur web store per cabang — semua konten, produk, promo, tema, & pembayaran
-          </p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <button onClick={handleExport} className="px-3 py-2 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer flex items-center gap-1.5">
-            <Download className="w-3.5 h-3.5" /> Export
-          </button>
-          <button onClick={handleImport} className="px-3 py-2 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer flex items-center gap-1.5">
-            <Upload className="w-3.5 h-3.5" /> Import
-          </button>
-          <button onClick={handleSaveToFirestore} disabled={isSavingToFirestore}
-            className="px-3 py-2 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm">
-            <Save className="w-3.5 h-3.5" />
-            {isSavingToFirestore ? 'Menyimpan...' : '💾 Simpan ke Cloud'}
-          </button>
-          {calculatedProducts && (
-            <button onClick={handleSyncProducts} disabled={isSyncing}
-              className="px-3 py-2 text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm">
-              <Cpu className="w-3.5 h-3.5" />
-              {isSyncing ? 'Sync...' : '🔄 Sync Produk'}
+    <div className="max-w-6xl mx-auto pb-24">
+      {/* ─── DASHBOARD STATUS HEADER ─── */}
+      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 mb-6">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center text-white shadow-md">
+              <Globe className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-gray-900">🌐 Web Store Manager</h2>
+              <p className="text-xs text-gray-500">Atur web store per cabang — konten, produk, promo, tema, & pembayaran</p>
+            </div>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={handleSaveToFirestore} disabled={isSavingToFirestore}
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-sm hover:scale-105">
+              <Zap className="w-4 h-4" />
+              {isSavingToFirestore ? 'Menyimpan...' : '🚀 PUBLISH PERUBAHAN'}
             </button>
-          )}
-          <button onClick={() => setShowPreview(true)}
-            className="px-3 py-2 text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm">
-            <Eye className="w-3.5 h-3.5" /> Preview
-          </button>
-          <a href={config.branchSubdomain && config.branchSubdomain !== 'pusat'
-            ? `https://${config.branchSubdomain}.near-bakery-store.web.app`
-            : 'https://near-bakery-store.web.app'}
-            target="_blank" rel="noreferrer"
-            className="px-3 py-2 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm">
-            <ExternalLink className="w-3.5 h-3.5" /> 🌐 Lihat Toko Sekarang
-          </a>
+            <button onClick={() => setShowPreview(true)}
+              className="px-3 py-2 text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-xl transition-all cursor-pointer flex items-center gap-1">
+              <Eye className="w-3.5 h-3.5" /> Preview
+            </button>
+            <a href={config.branchSubdomain && config.branchSubdomain !== 'pusat'
+              ? `https://${config.branchSubdomain}.near-bakery-store.web.app`
+              : 'https://near-bakery-store.web.app'}
+              target="_blank" rel="noreferrer"
+              className="px-3 py-2 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer flex items-center gap-1">
+              <ExternalLink className="w-3.5 h-3.5" /> 🌐 Lihat Toko
+            </a>
+          </div>
+        </div>
+        
+        {/* Status Metrics */}
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className={`p-3 rounded-xl border flex items-center gap-2 ${isFirestoreConnected ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+            <span className={`w-2.5 h-2.5 rounded-full ${isFirestoreConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+            <div>
+              <span className="text-[10px] font-bold block">{isFirestoreConnected ? '🟢 Online' : '🔴 Local Only'}</span>
+              <span className="text-[8px] text-gray-400">Status Web</span>
+            </div>
+          </div>
+          <div className="p-3 rounded-xl border bg-blue-50 border-blue-200 flex items-center gap-2">
+            <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
+            <div>
+              <span className="text-[10px] font-bold block">{lastSynced || 'Belum sync'}</span>
+              <span className="text-[8px] text-gray-400">Sync Terakhir</span>
+            </div>
+          </div>
+          <div className={`p-3 rounded-xl border flex items-center gap-2 ${marketingScore >= 80 ? 'bg-emerald-50 border-emerald-200' : marketingScore >= 50 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
+            <TrendingUp className={`w-3.5 h-3.5 ${marketingScore >= 80 ? 'text-emerald-600' : marketingScore >= 50 ? 'text-amber-600' : 'text-red-600'}`} />
+            <div>
+              <span className="text-[10px] font-bold block">{marketingScore}/100</span>
+              <span className="text-[8px] text-gray-400">Skor Marketing</span>
+            </div>
+          </div>
+          <div className="p-3 rounded-xl border bg-purple-50 border-purple-200 flex items-center gap-2">
+            <ShoppingBag className="w-3.5 h-3.5 text-purple-600" />
+            <div>
+              <span className="text-[10px] font-bold block">{config.products.filter(p => p.active).length}/{config.products.length}</span>
+              <span className="text-[8px] text-gray-400">Produk Aktif</span>
+            </div>
+          </div>
+          <div className="p-3 rounded-xl border bg-slate-50 border-slate-200 flex items-center gap-2">
+            <Building2 className="w-3.5 h-3.5 text-slate-600" />
+            <div>
+              <span className="text-[10px] font-bold block">{config.cabangId || 'pusat'}</span>
+              <span className="text-[8px] text-gray-400">Cabang</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Status bar */}
-      <div className="flex items-center gap-4 text-[10px] text-gray-500">
-        <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${isFirestoreConnected ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${isFirestoreConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-          {isFirestoreConnected ? 'Firestore Connected' : 'Local Only'}
-        </span>
-        {lastSynced && <span>Sync terakhir: {lastSynced}</span>}
-        <span className="text-gray-300">|</span>
-        <span>Cabang: <strong>{config.cabangId || 'pusat'}</strong></span>
-        <span className="text-gray-300">|</span>
-        <span>Subdomain: <strong>{config.branchSubdomain || 'pusat'}</strong></span>
-      </div>
+      {/* ─── MAIN LAYOUT: SIDEBAR + CONTENT ─── */}
+      <div className="flex gap-5 min-h-[600px]">
+        {/* SIDEBAR NAVIGASI */}
+        <aside className="w-56 shrink-0 bg-white rounded-2xl border border-gray-100 shadow-xs p-3 space-y-1 overflow-y-auto max-h-[750px]">
+          <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-3 mb-2 mt-1">🎨 Identitas</div>
+          {sidebarBtn('identity', <ShoppingBag className="w-4 h-4" />, 'Umum & Identitas')}
+          {sidebarBtn('hero', <Image className="w-4 h-4" />, 'Hero Banner')}
+          {sidebarBtn('theme', <Palette className="w-4 h-4" />, 'Desain & Tema')}
+          {sidebarBtn('circles', <Palette className="w-4 h-4" />, 'Badge & Circle')}
+          
+          <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-3 mb-2 mt-4">📦 Konten</div>
+          {sidebarBtn('categories', <FileJson className="w-4 h-4" />, 'Kategori')}
+          {sidebarBtn('products', <ShoppingBag className="w-4 h-4" />, 'Katalog Produk')}
+          {sidebarBtn('promos', <Megaphone className="w-4 h-4" />, 'Promo & Banner')}
+          {sidebarBtn('texts', <FileJson className="w-4 h-4" />, 'Teks & Label')}
+          {sidebarBtn('footer', <Globe className="w-4 h-4" />, 'Footer')}
+          
+          <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-3 mb-2 mt-4">💳 Bisnis</div>
+          {sidebarBtn('payment', <CreditCard className="w-4 h-4" />, 'Pembayaran')}
+          {sidebarBtn('branch', <Building2 className="w-4 h-4" />, 'Cabang')}
+          {sidebarBtn('webdata', <RefreshCw className="w-4 h-4" />, 'Data Web Store')}
+          
+          <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-3 mb-2 mt-4">🤖 AI</div>
+          {sidebarBtn('marketing', <Sparkles className="w-4 h-4" />, 'AI Marketing Center')}
+        </aside>
 
-      {/* NAVIGATION SECTIONS */}
-      <div className="flex flex-wrap gap-2">
-        {sectionBtn('identity', <ShoppingBag className="w-4 h-4" />, '🏪 Identitas')}
-        {sectionBtn('hero', <Image className="w-4 h-4" />, '🖼️ Hero')}
-        {sectionBtn('categories', <FileJson className="w-4 h-4" />, '📂 Kategori')}
-        {sectionBtn('circles', <Palette className="w-4 h-4" />, '🔄 Badge & Circle')}
-        {sectionBtn('products', <ShoppingBag className="w-4 h-4" />, '📦 Produk')}
-        {sectionBtn('theme', <Palette className="w-4 h-4" />, '🎨 Tema')}
-        {sectionBtn('texts', <FileJson className="w-4 h-4" />, '📝 Teks')}
-        {sectionBtn('promos', <Megaphone className="w-4 h-4" />, '📢 Promo')}
-        {sectionBtn('payment', <CreditCard className="w-4 h-4" />, '💳 Pembayaran')}
-        {sectionBtn('branch', <Building2 className="w-4 h-4" />, '🏛️ Cabang')}
-        {sectionBtn('footer', <Globe className="w-4 h-4" />, '📋 Footer')}
-        {sectionBtn('webdata', <RefreshCw className="w-4 h-4" />, '📡 Web Store Data')}
-      </div>
+        {/* MAIN CONTENT */}
+        <main className="flex-1 min-w-0 space-y-6">
 
       {/* ─── SECTION: IDENTITY & NAVBAR ─── */}
       {activeSection === 'identity' && (
@@ -1752,6 +1842,9 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
           </div>
         </div>
       )}
+        </main>
+      </div>
+
 
       {/* FLOATING SAVE BUTTON */}
       <div className="fixed bottom-6 right-6 z-40 flex gap-2">

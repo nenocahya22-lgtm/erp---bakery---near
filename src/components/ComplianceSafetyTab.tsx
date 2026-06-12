@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Printer, Search, RefreshCw, AlertTriangle, Layers, ArrowRight, Package, Trash2, X, CheckCircle2 } from 'lucide-react';
-import { ProductHpp } from '../types';
+import { ShieldCheck, Printer, Search, RefreshCw, AlertTriangle, Layers, ArrowRight, Package, Trash2, X, CheckCircle2, Thermometer, Droplets, Cpu } from 'lucide-react';
+import { ProductHpp, IoTDevice } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface ComplianceSafetyTabProps {
@@ -17,7 +17,7 @@ interface BatchItem {
   qty: number;
   satuan: string;
   location: string; // Cabang / Pusat
-  status: 'aman' | 'expired' | 'hampir_expired';
+  status: 'aman' | 'expired' | 'hampir_expired' | 'recall_temp';
 }
 
 export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangList = [] }: ComplianceSafetyTabProps) {
@@ -181,11 +181,70 @@ export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangL
     setTimeout(() => setLocalToast(null), 3000);
   };
 
+  // ─── IoT TEMPERATURE MONITOR — Baca dari global IoT simulation di App.tsx ───
+  const [iotDevices, setIotDevices] = useState<IoTDevice[]>([]);
+  const [tempViolations, setTempViolations] = useState<IoTDevice[]>([]);
+  const [recallTempLog, setRecallTempLog] = useState<{ id: string; deviceName: string; temp: number; threshold: number; time: string; resolved: boolean }[]>(() =>
+    safeGetLocalStorage<{ id: string; deviceName: string; temp: number; threshold: number; time: string; resolved: boolean }[]>('compliance_recall_temp_log', [])
+  );
+
+  useEffect(() => {
+    localStorage.setItem('compliance_recall_temp_log', JSON.stringify(recallTempLog));
+  }, [recallTempLog]);
+
+  // Poll IoT data setiap 5 detik
+  useEffect(() => {
+    const pollIoT = () => {
+      const saved = safeGetLocalStorage<IoTDevice[]>('iot_device_data', []);
+      if (saved.length > 0) {
+        setIotDevices(saved);
+        // Cari chiller/freezer yang overheat
+        const violations = saved.filter(d => 
+          d.type === 'freezer' && 
+          d.status === 'warning'
+        );
+        setTempViolations(violations);
+        
+        // Catat violation baru (hanya jika belum tercatat dalam 5 menit terakhir)
+        violations.forEach(v => {
+          const existing = recallTempLog.find(
+            l => l.deviceName === v.name && !l.resolved &&
+            (Date.now() - new Date(l.time).getTime()) < 5 * 60 * 1000
+          );
+          if (!existing) {
+            setRecallTempLog(prev => [{
+              id: `temp-incident-${Date.now()}`,
+              deviceName: v.name,
+              temp: v.value,
+              threshold: v.maxThreshold || 8,
+              time: new Date().toISOString(),
+              resolved: false,
+            }, ...prev].slice(0, 50));
+            
+            // 🔄 AUTO-FLAG batch di lokasi chiller bermasalah (otomatis, tanpa klik)
+            const chillerLocations = [...new Set(violations.map(v => v.location))];
+            setBatchItems(prev => prev.map(b => 
+              chillerLocations.some(l => b.location.includes(l)) && b.status === 'aman'
+                ? { ...b, status: 'recall_temp' as const }
+                : b
+            ));
+          }
+        });
+      }
+    };
+    pollIoT();
+    const interval = setInterval(pollIoT, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const hasActiveViolation = tempViolations.length > 0;
+
   const expiredCount = batchItems.filter(b => getDaysLeft(b.expiredDate) <= 0).length;
   const almostExpiredCount = batchItems.filter(b => {
     const days = getDaysLeft(b.expiredDate);
     return days > 0 && days <= 7;
   }).length;
+  const recallTempCount = batchItems.filter(b => b.status === 'recall_temp').length;
   const totalWasteLoss = autoWasteLog.reduce((sum, w) => sum + (w.qty * 1000), 0); // Estimate loss value
 
   return (
@@ -206,8 +265,8 @@ export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangL
         </p>
       </div>
 
-      {/* STAT CARDS */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* STAT CARDS — with IoT Temperature Recall */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-xs">
           <span className="text-[9px] uppercase font-bold text-gray-500 block">Total Batch</span>
           <span className="text-xl font-black text-gray-800 font-mono mt-1 block">{batchItems.length}</span>
@@ -217,14 +276,133 @@ export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangL
           <span className="text-xl font-black text-red-700 font-mono mt-1 block animate-pulse">{expiredCount}</span>
         </div>
         <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
-          <span className="text-[9px] uppercase font-bold text-amber-700 block">🟡 Hampir Expired</span>
+          <span className="text-[9px] uppercase font-bold text-amber-700 block">🟡 Hampir</span>
           <span className="text-xl font-black text-amber-700 font-mono mt-1 block">{almostExpiredCount}</span>
         </div>
-        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-          <span className="text-[9px] uppercase font-bold text-blue-700 block">Waste Log</span>
-          <span className="text-xl font-black text-blue-800 font-mono mt-1 block">{autoWasteLog.length}</span>
+        <div className={hasActiveViolation ? 'bg-rose-600 p-4 rounded-xl border border-rose-700 animate-pulse' : 'bg-white p-4 rounded-xl border border-gray-100 shadow-xs'}>
+          <span className={`text-[9px] uppercase font-bold block ${hasActiveViolation ? 'text-white' : 'text-gray-500'}`}>
+            <Thermometer className="w-3 h-3 inline mr-0.5" />{hasActiveViolation ? '⚠️ SUHU!' : 'Chiller'}
+          </span>
+          <span className={`text-xl font-black font-mono mt-1 block ${hasActiveViolation ? 'text-white' : 'text-gray-800'}`}>
+            {iotDevices.filter(d => d.type === 'freezer').length > 0
+              ? `${Math.min(...iotDevices.filter(d => d.type === 'freezer').map(d => d.value))}°`
+              : '—'}
+          </span>
+        </div>
+        <div className={`p-4 rounded-xl border ${recallTempCount > 0 ? 'bg-rose-50 border-rose-200' : 'bg-blue-50 border-blue-100'}`}>
+          <span className={`text-[9px] uppercase font-bold block ${recallTempCount > 0 ? 'text-rose-700' : 'text-blue-700'}`}>
+            {recallTempCount > 0 ? '🔴 Recall Suhu' : 'Waste Log'}
+          </span>
+          <span className={`text-xl font-black font-mono mt-1 block ${recallTempCount > 0 ? 'text-rose-700' : 'text-blue-800'}`}>
+            {recallTempCount > 0 ? recallTempCount : autoWasteLog.length}
+          </span>
         </div>
       </div>
+
+      {/* ─── IoT TEMPERATURE MONITOR — Integrasi SmartKitchen → ComplianceSafety ─── */}
+      {iotDevices.length > 0 && (
+        <div className={`rounded-2xl border overflow-hidden transition-all ${
+          hasActiveViolation ? 'bg-rose-50 border-rose-300 shadow-lg shadow-rose-200/50' : 'bg-white border-gray-100 shadow-xs'
+        }`}>
+          <div className="p-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-xl ${hasActiveViolation ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                <Thermometer className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  🧊 IoT Temperature Monitor
+                  {hasActiveViolation && <span className="px-2 py-0.5 bg-rose-600 text-white text-[9px] rounded-full font-bold animate-pulse">ALERT</span>}
+                </h3>
+                <p className="text-[10px] text-gray-500">
+                  {hasActiveViolation 
+                    ? '🚨 Suhu chiller melebihi batas aman! Batch di lokasi terdampak perlu di-review.'
+                    : 'Suhu chiller dalam batas aman. Monitoring otomatis dari sensor IoT.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {iotDevices.filter(d => d.type === 'freezer').map(d => (
+                <div key={d.id} className={`px-2.5 py-1.5 rounded-lg border text-center min-w-[70px] ${
+                  d.status === 'warning' ? 'bg-rose-100 border-rose-200' : 'bg-gray-50 border-gray-200'
+                }`}>
+                  <span className="text-[7px] uppercase font-bold text-gray-500 block">{d.name.split('(')[0].trim()}</span>
+                  <span className={`text-sm font-black font-mono ${d.status === 'warning' ? 'text-rose-700' : d.value < 0 ? 'text-blue-700' : 'text-emerald-700'}`}>
+                    {d.value}°
+                  </span>
+                  <span className="text-[7px] text-gray-400 block">Max: {d.maxThreshold}°</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {hasActiveViolation && (
+            <div className="px-4 pb-4 space-y-2">
+              <div className="bg-rose-100 border border-rose-200 rounded-xl p-3 text-xs">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-rose-800">🚨 Insiden Suhu Terdeteksi!</p>
+                    <p className="text-rose-700 mt-1">
+                      {tempViolations.map(v => (
+                        <span key={v.id} className="block">
+                          <strong>{v.name}</strong>: {v.value}{v.unit} (batas aman: {'>'}{v.maxThreshold}{v.unit}) — {v.location}
+                        </span>
+                      ))}
+                    </p>
+                    <p className="text-rose-600 mt-1 text-[10px]">
+                      Batch di lokasi ini berpotensi terkontaminasi. Klik tombol di bawah untuk menandai batch untuk review recall.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => {
+                  // Flag semua batch di lokasi chiller sebagai recall_temp
+                  const chillerLocations = [...new Set(tempViolations.map(v => v.location))];
+                  setBatchItems(prev => prev.map(b => 
+                    chillerLocations.some(l => b.location.includes(l)) && b.status !== 'expired' && b.status !== 'recall_temp'
+                      ? { ...b, status: 'recall_temp' as const }
+                      : b
+                  ));
+                  showLocalToast(`✅ Batch di lokasi chiller bermasalah ditandai untuk review recall!`, 'success');
+                }}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" /> Tandai Batch untuk Review Recall
+                </button>
+                <button onClick={() => {
+                  // Resolve all active temp violations
+                  setRecallTempLog(prev => prev.map(l => !l.resolved ? { ...l, resolved: true } : l));
+                  showLocalToast('✅ Insiden suhu ditandai sebagai selesai. Batch tetap perlu di-review manual.', 'info');
+                }}
+                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition cursor-pointer">
+                  Tandai Selesai
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Temperature Incident Log */}
+          {recallTempLog.filter(l => !l.resolved).length > 0 && (
+            <div className="border-t border-rose-200 p-3 bg-rose-50/50">
+              <h4 className="text-[10px] uppercase font-bold text-rose-700 mb-2">📋 Log Insiden Suhu (Belum Selesai)</h4>
+              <div className="space-y-1.5 max-h-[120px] overflow-y-auto">
+                {recallTempLog.filter(l => !l.resolved).map(entry => (
+                  <div key={entry.id} className="flex items-center justify-between bg-white p-2 rounded-lg border border-rose-100 text-[10px]">
+                    <div className="flex items-center gap-2">
+                      <Thermometer className="w-3 h-3 text-rose-600" />
+                      <span className="font-semibold text-gray-800">{entry.deviceName}</span>
+                      <span className="font-mono font-bold text-rose-700">{entry.temp}°C</span>
+                      <span className="text-gray-400">{`(>${entry.threshold}°C)`}</span>
+                    </div>
+                    <span className="text-gray-400">{new Date(entry.time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ─── BATCH TRACKING ─── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
@@ -339,7 +517,11 @@ export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangL
                         <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded-full">{item.location}</span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {daysLeft <= 0 ? (
+                        {item.status === 'recall_temp' ? (
+                          <span className="text-[10px] bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 justify-center animate-pulse">
+                            <Thermometer className="w-2.5 h-2.5" /> Recall Suhu
+                          </span>
+                        ) : daysLeft <= 0 ? (
                           <span className="text-[10px] bg-red-100 text-red-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 justify-center">
                             <AlertTriangle className="w-2.5 h-2.5" /> Expired
                           </span>
@@ -403,54 +585,86 @@ export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangL
         <h3 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
           <AlertTriangle className="w-4 h-4 text-red-600" /> Simulasi Recall — Penarikan Produk
         </h3>
-        <p className="text-xs text-gray-500">Jika ada bahan terkontaminasi, sistem akan melacak batch yang terdampak dan menandainya untuk recall.</p>
+        <p className="text-xs text-gray-500">Jika ada bahan terkontaminasi atau suhu chiller melebihi batas, sistem akan menandai batch untuk recall.</p>
 
-        <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-xs space-y-2">
-          <p className="font-bold text-red-800">🚨 Skema Recall:</p>
-          <ol className="list-decimal ml-4 space-y-1 text-red-700">
-            <li><strong>Deteksi:</strong> Bahan terkontaminasi terdeteksi (misal: batch tepung terigu BATCH-001)</li>
-            <li><strong>Tracking:</strong> Sistem lacak batch yang sama di semua cabang & gudang</li>
-            <li><strong>Recall:</strong> Batch yang terdampak ditarik dan masuk ke Waste Log</li>
-            <li><strong>Dampak:</strong> Produk yang menggunakan bahan tersebut diblokir dari penjualan</li>
-            <li><strong>Laporan:</strong> Laporan recall otomatis untuk kepatuhan BPOM/regulasi</li>
-          </ol>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Skema Recall */}
+          <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-xs space-y-2">
+            <p className="font-bold text-red-800">🚨 Expired Recall:</p>
+            <ol className="list-decimal ml-4 space-y-1 text-red-700">
+              <li><strong>Deteksi:</strong> Bahan expired terdeteksi otomatis</li>
+              <li><strong>Tracking:</strong> Sistem lacak batch di semua cabang</li>
+              <li><strong>Recall:</strong> Batch ditarik dan masuk ke Waste Log</li>
+              <li><strong>Laporan:</strong> Laporan recall untuk kepatuhan BPOM</li>
+            </ol>
+          </div>
+          {/* Temperature Recall */}
+          <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 text-xs space-y-2">
+            <p className="font-bold text-rose-800 flex items-center gap-1.5">
+              <Thermometer className="w-4 h-4" /> 🌡️ Temperature Recall:
+            </p>
+            <ol className="list-decimal ml-4 space-y-1 text-rose-700">
+              <li><strong>Deteksi:</strong> Sensor IoT detect chiller overheat</li>
+              <li><strong>Flag:</strong> Batch di lokasi ditandai "Recall Suhu"</li>
+              <li><strong>Review:</strong> Operator review batch terdampak</li>
+              <li><strong>Waste:</strong> Batch terkontaminasi masuk Waste Log</li>
+            </ol>
+          </div>
         </div>
 
-        {batchItems.length > 0 && (
-          <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {recallTempCount > 0 && (
             <button onClick={() => {
-              const expired = batchItems.filter(b => getDaysLeft(b.expiredDate) <= 0);
-              if (expired.length === 0) {
-                alert('✅ Tidak ada batch expired yang perlu di-recall.');
-                return;
-              }
-              if (window.confirm(`Recall ${expired.length} batch expired?\n\nSemua batch expired akan ditandai untuk recall dan masuk ke Waste Log.`)) {
-                const newWasteEntries = expired.map(item => ({
-                  batchId: item.id,
-                  bahanNama: item.bahanNama,
-                  qty: item.qty,
-                  satuan: item.satuan,
-                  date: new Date().toISOString(),
-                }));
-                setAutoWasteLog(prev => [...newWasteEntries, ...prev].slice(0, 100));
-                setBatchItems(prev => prev.filter(b => getDaysLeft(b.expiredDate) > 0));
-                showLocalToast(`Batch expired berhasil di-recall!`, 'success');
-              }
+              const flagged = batchItems.filter(b => b.status === 'recall_temp');
+              if (flagged.length === 0) { alert('✅ Tidak ada batch recall suhu.'); return; }
+              if (!window.confirm(`Recall ${flagged.length} batch yang ditandai Recall Suhu?\n\nBatch akan dihapus dan masuk ke Auto Waste Log.`)) return;
+              const newWasteEntries = flagged.map(item => ({
+                batchId: item.id,
+                bahanNama: item.bahanNama,
+                qty: item.qty,
+                satuan: item.satuan,
+                date: new Date().toISOString(),
+              }));
+              setAutoWasteLog(prev => [...newWasteEntries, ...prev].slice(0, 100));
+              setBatchItems(prev => prev.filter(b => b.status !== 'recall_temp'));
+              showLocalToast(`${flagged.length} batch recall suhu diproses!`, 'success');
             }}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition cursor-pointer">
-              <AlertTriangle className="w-3.5 h-3.5 inline mr-1" /> Recall Batch Expired
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5">
+              <Thermometer className="w-3.5 h-3.5" /> Recall {recallTempCount} Batch Suhu
             </button>
-            <button onClick={() => {
-              if (window.confirm('Hapus semua Auto Waste Log?')) {
-                setAutoWasteLog([]);
-                showLocalToast('Waste log dihapus.', 'info');
-              }
-            }}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition cursor-pointer">
-              Hapus Waste Log
-            </button>
-          </div>
-        )}
+          )}
+          <button onClick={() => {
+            const expired = batchItems.filter(b => getDaysLeft(b.expiredDate) <= 0);
+            if (expired.length === 0) {
+              alert('✅ Tidak ada batch expired yang perlu di-recall.');
+              return;
+            }
+            if (window.confirm(`Recall ${expired.length} batch expired?\n\nSemua batch expired akan ditandai untuk recall dan masuk ke Waste Log.`)) {
+              const newWasteEntries = expired.map(item => ({
+                batchId: item.id,
+                bahanNama: item.bahanNama,
+                qty: item.qty,
+                satuan: item.satuan,
+                date: new Date().toISOString(),
+              }));
+              setAutoWasteLog(prev => [...newWasteEntries, ...prev].slice(0, 100));
+              setBatchItems(prev => prev.filter(b => getDaysLeft(b.expiredDate) > 0));
+              showLocalToast(`Batch expired berhasil di-recall!`, 'success');
+            }
+          }}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition cursor-pointer">
+            <AlertTriangle className="w-3.5 h-3.5 inline mr-1" /> Recall Batch Expired
+          </button>
+          <button onClick={() => {
+            if (window.confirm('Hapus semua Auto Waste Log?')) {
+              setAutoWasteLog([]);
+              showLocalToast('Waste log dihapus.', 'info');
+            }
+          }}
+            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition cursor-pointer">
+            Hapus Waste Log
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -1,18 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Gauge, Thermometer, Droplets, Cpu, Wifi, WifiOff, ShieldCheck, RefreshCw, AlertTriangle, CheckCircle2, Plus, Trash2, Users, Calendar } from 'lucide-react';
-
-interface IoTDevice {
-  id: string;
-  name: string;
-  type: 'oven' | 'freezer' | 'scale' | 'mixer' | 'humidity' | 'timer';
-  value: number;
-  unit: string;
-  status: 'online' | 'offline' | 'warning';
-  lastUpdate: string;
-  location: string;
-  minThreshold?: number;
-  maxThreshold?: number;
-}
+import { IoTDevice } from '../types';
 
 interface WorkOrder {
   assetName: string;

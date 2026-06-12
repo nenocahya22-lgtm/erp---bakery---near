@@ -226,30 +226,41 @@ export async function syncProductsToFirestore(
   }
 
   // ─── SYNC KATEGORI ke collection terpisah agar web store bisa baca ───
-  // Selalu sync kategori dari wsConfig (webstore_config) ke collection 'categories'
-  // Fallback ke kategori default jika wsConfig tidak tersedia
+  // Firestore sebagai Single Source of Truth: pull kategori existing dulu dari Firestore,
+  // lalu merge dengan kategori dari ERP agar tidak ada kategori Web Store yang hilang.
   let catList: string[] = [];
   let catIcons: Record<string, string> = {};
   
-  if (wsConfig?.categories && wsConfig.categories.length > 0) {
-    catList = wsConfig.categories;
-    catIcons = wsConfig.categoryIcons || {};
-  } else {
-    // Gunakan kategori dari product yang di-sync
-    const uniqueCategories = [...new Set(productHpp.map(p => p.kategori || 'Lainnya').filter(Boolean))];
-    if (uniqueCategories.length > 0) {
-      catList = uniqueCategories;
-      catIcons = Object.fromEntries(uniqueCategories.map(c => [c, 'package']));
-    } else {
-      catList = ['Roti & Sourdough', 'Viennoiserie & Croissant', 'Kue & Tart', 'Kue Kering & Cookies', 'Minuman Kopi & Teh'];
-      catIcons = {
-        'Roti & Sourdough': 'wheat',
-        'Viennoiserie & Croissant': 'croissant',
-        'Kue & Tart': 'cake',
-        'Kue Kering & Cookies': 'cookie',
-        'Minuman Kopi & Teh': 'coffee'
-      };
+  // 🔄 PULL kategori dari Firestore terlebih dahulu
+  try {
+    const existingCats = await getFirestoreCategories(cabangId);
+    if (existingCats && existingCats.categories.length > 0) {
+      catList = existingCats.categories;
+      catIcons = existingCats.categoryIcons || {};
     }
+  } catch (e) { /* silent */ }
+  
+  // 🔄 MERGE dengan kategori dari ERP (tambah yang belum ada)
+  const erpCategories = [...new Set(productHpp.map(p => p.kategori || 'Lainnya').filter(Boolean))];
+  const mergedCategories = [...catList];
+  for (const cat of erpCategories) {
+    if (!mergedCategories.includes(cat)) {
+      mergedCategories.push(cat);
+      if (!catIcons[cat]) catIcons[cat] = 'package';
+    }
+  }
+  catList = mergedCategories;
+  
+  // Fallback ke default jika masih kosong
+  if (catList.length === 0) {
+    catList = ['Roti & Sourdough', 'Viennoiserie & Croissant', 'Kue & Tart', 'Kue Kering & Cookies', 'Minuman Kopi & Teh'];
+    catIcons = {
+      'Roti & Sourdough': 'wheat',
+      'Viennoiserie & Croissant': 'croissant',
+      'Kue & Tart': 'cake',
+      'Kue Kering & Cookies': 'cookie',
+      'Minuman Kopi & Teh': 'coffee'
+    };
   }
   
   try {

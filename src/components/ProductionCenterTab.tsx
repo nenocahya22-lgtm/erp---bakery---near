@@ -12,10 +12,12 @@ interface ProductionCenterTabProps {
   detailResep: DetailResep[];
   calculatedProducts: CalculationResult[];
   bahanBaku: BahanBaku[];
+  onProductionComplete?: (productName: string, batchQty: number) => void;
 }
 
 export default function ProductionCenterTab({
-  productHpp, detailResep, calculatedProducts, bahanBaku
+  productHpp, detailResep, calculatedProducts, bahanBaku,
+  onProductionComplete
 }: ProductionCenterTabProps) {
   const [activeSection, setActiveSection] = useState<'calendar' | 'baking_control' | 'planner' | 'workorder' | 'sop'>('calendar');
 
@@ -170,6 +172,8 @@ export default function ProductionCenterTab({
     const updated = [log, ...bakingLogs].slice(0, 100);
     setBakingLogs(updated);
     localStorage.setItem('production_baking_logs', JSON.stringify(updated));
+    // 🔧 Potong stok bahan baku sesuai resep produksi
+    onProductionComplete?.(blProduct, blBatch);
     setShowBakingLogModal(false);
     setBlProduct('');
     setBlBatch(1);

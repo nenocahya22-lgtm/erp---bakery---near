@@ -1,5 +1,89 @@
 import { BahanBaku, ProductHpp, DetailResep } from '../types';
 
+// ─── RETRY QUEUE — Antrian sinkronisasi gagal dengan exponential backoff ───
+interface QueuedSync {
+  id: string;
+  type: 'save_project' | 'save_revenue';
+  token: string;
+  spreadsheetId: string;
+  data?: { bahanBaku: BahanBaku[]; productHpp: ProductHpp[]; detailResep: DetailResep[] };
+  revenueData?: { id: string; time: string; product: string; qty: number; amount: number; source: string; date: string }[];
+  retryCount: number;
+  nextRetryAt: number; // timestamp
+}
+
+let syncQueue: QueuedSync[] = [];
+let isProcessingQueue = false;
+
+const MAX_RETRIES = 5;
+const BASE_DELAY_MS = 30_000; // 30 detik
+
+function getRetryDelay(attempt: number): number {
+  // Exponential backoff: 30s, 60s, 120s, 240s, 480s
+  return BASE_DELAY_MS * Math.pow(2, attempt - 1);
+}
+
+/** Tambah sync gagal ke antrian retry */
+export function enqueueFailedSync(entry: Omit<QueuedSync, 'id' | 'retryCount' | 'nextRetryAt'>): void {
+  const existing = syncQueue.find(s => s.type === entry.type && s.spreadsheetId === entry.spreadsheetId);
+  if (existing) {
+    // Update existing entry dengan data terbaru + reset retry
+    existing.data = entry.data;
+    existing.revenueData = entry.revenueData;
+    existing.retryCount = 0;
+    existing.nextRetryAt = Date.now() + getRetryDelay(1);
+    return;
+  }
+  syncQueue.push({
+    ...entry,
+    id: `sync-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+    retryCount: 0,
+    nextRetryAt: Date.now() + getRetryDelay(1),
+  });
+  processQueue();
+}
+
+/** Proses antrian — panggil otomatis setiap kali ada entry baru */
+async function processQueue(): Promise<void> {
+  if (isProcessingQueue) return;
+  isProcessingQueue = true;
+
+  while (syncQueue.length > 0) {
+    const now = Date.now();
+    const entry = syncQueue[0];
+
+    if (entry.nextRetryAt > now) {
+      // Belum waktunya retry — tunggu
+      await new Promise(r => setTimeout(r, entry.nextRetryAt - now));
+    }
+
+    try {
+      if (entry.type === 'save_project' && entry.data) {
+        await saveProjectDataToSheets(entry.token, entry.spreadsheetId, entry.data);
+      } else if (entry.type === 'save_revenue' && entry.revenueData) {
+        await saveRevenueToSheets(entry.token, entry.spreadsheetId, entry.revenueData);
+      }
+      // Sukses — hapus dari antrian
+      syncQueue.shift();
+      console.log(`✅ Retry sukses: ${entry.type} ke ${entry.spreadsheetId}`);
+    } catch (err) {
+      entry.retryCount++;
+      if (entry.retryCount >= MAX_RETRIES) {
+        console.error(`❌ Retry habis (${MAX_RETRIES}x) untuk ${entry.type}:`, err);
+        syncQueue.shift(); // Buang setelah max retry
+      } else {
+        entry.nextRetryAt = Date.now() + getRetryDelay(entry.retryCount);
+        console.warn(`⏳ Retry ${entry.retryCount}/${MAX_RETRIES} untuk ${entry.type} dalam ${getRetryDelay(entry.retryCount)/1000}s`);
+        // Pindah ke belakang antrian
+        syncQueue.shift();
+        syncQueue.push(entry);
+      }
+    }
+  }
+
+  isProcessingQueue = false;
+}
+
 export function extractSpreadsheetId(url: string): string | null {
   if (!url) return null;
   const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
@@ -82,6 +166,60 @@ export async function updateSheetValues(
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err.error?.message || `Failed to update sheet values: ${response.status}`);
+  }
+}
+
+/**
+ * Batch clear multiple sheet ranges in ONE API call (mengurangi race condition).
+ * Lebih aman daripada clearSheetValues sequential yang punya window data loss.
+ */
+export async function batchClearSheetValues(
+  accessToken: string,
+  spreadsheetId: string,
+  ranges: string[]
+): Promise<void> {
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchClear`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ranges }),
+    }
+  );
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Failed to batch clear sheets: ${response.status}`);
+  }
+}
+
+/**
+ * Batch update multiple sheet ranges in ONE API call (mengurangi race condition).
+ */
+export async function batchUpdateSheetValues(
+  accessToken: string,
+  spreadsheetId: string,
+  data: { range: string; values: any[][] }[]
+): Promise<void> {
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        valueInputOption: 'USER_ENTERED',
+        data,
+      }),
+    }
+  );
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Failed to batch update sheet values: ${response.status}`);
   }
 }
 
@@ -249,13 +387,13 @@ export async function saveProjectDataToSheets(
     resepRows.push([r.namaProduk, r.namaBahan, r.takaran]);
   });
 
-  await clearSheetValues(accessToken, spreadsheetId, 'Bahan Baku');
-  await clearSheetValues(accessToken, spreadsheetId, 'HPP Produk');
-  await clearSheetValues(accessToken, spreadsheetId, 'Resep Detail');
-
-  await updateSheetValues(accessToken, spreadsheetId, 'Bahan Baku!A1', bbRows);
-  await updateSheetValues(accessToken, spreadsheetId, 'HPP Produk!A1', hppRows);
-  await updateSheetValues(accessToken, spreadsheetId, 'Resep Detail!A1', resepRows);
+  // 🔧 Batch clear + batch update — 2 API call (dari 6), kurangi window race condition & data loss
+  await batchClearSheetValues(accessToken, spreadsheetId, ['Bahan Baku', 'HPP Produk', 'Resep Detail']);
+  await batchUpdateSheetValues(accessToken, spreadsheetId, [
+    { range: 'Bahan Baku!A1', values: bbRows },
+    { range: 'HPP Produk!A1', values: hppRows },
+    { range: 'Resep Detail!A1', values: resepRows },
+  ]);
 }
 
 export async function saveRevenueToSheets(
@@ -305,8 +443,10 @@ export async function saveRevenueToSheets(
     rows.push([tx.date, tx.time, tx.id, tx.product, tx.qty, tx.amount, tx.source]);
   });
 
-  await clearSheetValues(accessToken, spreadsheetId, 'Revenue Tracker');
-  await updateSheetValues(accessToken, spreadsheetId, 'Revenue Tracker!A1', rows);
+  await batchClearSheetValues(accessToken, spreadsheetId, ['Revenue Tracker']);
+  await batchUpdateSheetValues(accessToken, spreadsheetId, [
+    { range: 'Revenue Tracker!A1', values: rows },
+  ]);
 }
 
 export async function loadRevenueFromSheets(

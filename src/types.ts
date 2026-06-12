@@ -337,6 +337,68 @@ export const createDefaultPaymentMethods = (): PaymentMethod[] => [
   },
 ];
 
+// ─── IoT DEVICES — Sensor dapur pintar ───
+export interface IoTDevice {
+  id: string;
+  name: string;
+  type: 'oven' | 'freezer' | 'scale' | 'mixer' | 'humidity' | 'timer';
+  value: number;
+  unit: string;
+  status: 'online' | 'offline' | 'warning';
+  lastUpdate: string;
+  location: string;
+  minThreshold?: number;
+  maxThreshold?: number;
+}
+
+// ─── SMART DISTRIBUTION / SALES VELOCITY ───
+export interface ADSData {
+  productName: string;
+  cabangId: string;
+  cabangNama: string;
+  dailySales: number; // Average Daily Sales (in units)
+  daysOfData: number;
+  lastTransaction: string; // date
+}
+
+export interface DistributionRecommendation {
+  batchId: string;
+  batchNo: string;
+  bahanNama: string;
+  expiryDate: string;
+  sisaHari: number;
+  leadTime: number; // hari
+  sisaHariEfektif: number;
+  adsPerCabang: { cabangId: string; cabangNama: string; ads: number; rekomendasiQty: number; skorPrioritas: number }[];
+  rekomendasiCabangId: string;
+  rekomendasiCabangNama: string;
+  wasteRisk: 'rendah' | 'sedang' | 'tinggi';
+}
+
+export interface StockSwapSuggestion {
+  bahanNama: string;
+  dariCabangId: string;
+  dariCabangNama: string;
+  keCabangId: string;
+  keCabangNama: string;
+  qty: number;
+  satuan: string;
+  alasan: string;
+  potensiSavedValue: number; // Estimated money saved by preventing waste
+}
+
+export interface AutoPromoSignal {
+  id: string;
+  productName: string;
+  cabangId: string;
+  cabangNama: string;
+  reason: string;
+  suggestedDiscount: number; // 0-100
+  batchExpiry: string;
+  createdAt: string;
+  status: 'pending' | 'activated' | 'dismissed';
+}
+
 export const createDefaultWebStoreConfig = (products: { namaProduk: string; kategori?: string }[], cabangId?: string): WebStoreConfig => ({
   storeName: 'NEAR BAKERY & CO.',
   navbarBrandText: 'NEAR BAKERY & CO.',

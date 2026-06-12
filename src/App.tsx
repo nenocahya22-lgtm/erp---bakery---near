@@ -4,19 +4,18 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { googleSignIn } from './lib/firebase';
-import {
-  extractSpreadsheetId,
+import { googleSignIn } from './lib/firebase';import { extractSpreadsheetId,
   loadProjectDataFromSheets,
   createAndInitializeTemplates,
   saveProjectDataToSheets,
   saveRevenueToSheets,
   loadRevenueFromSheets,
+  enqueueFailedSync,
 } from './lib/sheets';
 import { calculateAllProducts } from './lib/calculations';
 import { safeGetLocalStorage } from './lib/safe-json';
-import { listenNewOrders, listenNotifications, syncProductsToFirestore, listenNewChats, listenOrderStatusChanges } from './lib/firestore-bridge';
-import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, WasteLog, Cabang, SuratOrder, BranchStock, BranchTransaction, ProductTopping } from './types';
+import { listenNewOrders, listenNotifications, syncProductsToFirestore, listenNewChats, listenOrderStatusChanges, getFirestoreCategories } from './lib/firestore-bridge';
+import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, WasteLog, Cabang, SuratOrder, BranchStock, BranchTransaction, ProductTopping, IoTDevice } from './types';
 
 import OwnerLogin from './components/OwnerLogin';
 import DashboardTab from './components/DashboardTab';
@@ -165,13 +164,28 @@ export default function App() {
     safeGetLocalStorage<ProductTopping[]>('toppings_data', [])
   );
 
+  // ─── DEBOUNCED LOCALSTORAGE SAVE (500ms) — mencegah jank dari JSON.stringify sinkron ───
+  // Semua state array besar (>100 item) di-debounce agar tidak lag saat mengetik di form
+  // Menggunakan setTimeout + clearTimeout pattern untuk batch perubahan cepat jadi 1 write
   useEffect(() => {
-    localStorage.setItem('toppings_data', JSON.stringify(toppings));
+    const timer = setTimeout(() => localStorage.setItem('toppings_data', JSON.stringify(toppings)), 500);
+    return () => clearTimeout(timer);
   }, [toppings]);
 
-  useEffect(() => { localStorage.setItem('bahan_baku_data', JSON.stringify(bahanBaku)); }, [bahanBaku]);
-  useEffect(() => { localStorage.setItem('product_hpp_data', JSON.stringify(productHpp)); }, [productHpp]);
-  useEffect(() => { localStorage.setItem('detail_resep_data', JSON.stringify(detailResep)); }, [detailResep]);
+  useEffect(() => {
+    const timer = setTimeout(() => localStorage.setItem('bahan_baku_data', JSON.stringify(bahanBaku)), 500);
+    return () => clearTimeout(timer);
+  }, [bahanBaku]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => localStorage.setItem('product_hpp_data', JSON.stringify(productHpp)), 500);
+    return () => clearTimeout(timer);
+  }, [productHpp]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => localStorage.setItem('detail_resep_data', JSON.stringify(detailResep)), 500);
+    return () => clearTimeout(timer);
+  }, [detailResep]);
 
   const handleAddTopping = (t: ProductTopping) => {
     setToppings(prev => [...prev, t]);
@@ -192,7 +206,10 @@ export default function App() {
     safeGetLocalStorage<{ id: string; nama: string } | null>('branch_authenticated', null)
   );
 
-  useEffect(() => { localStorage.setItem('cabang_list_data', JSON.stringify(cabangList)); }, [cabangList]);
+  useEffect(() => {
+    const timer = setTimeout(() => localStorage.setItem('cabang_list_data', JSON.stringify(cabangList)), 500);
+    return () => clearTimeout(timer);
+  }, [cabangList]);
   // ─── BRANCH STOCK & TRANSACTION TRACKING ───
   const [cabangStok, setCabangStok] = useState<BranchStock[]>(() =>
     safeGetLocalStorage<BranchStock[]>('cabang_stok_data', [])
@@ -201,9 +218,18 @@ export default function App() {
     safeGetLocalStorage<BranchTransaction[]>('branch_transactions_data', [])
   );
 
-  useEffect(() => { localStorage.setItem('surat_orders_data', JSON.stringify(suratOrders)); }, [suratOrders]);
-  useEffect(() => { localStorage.setItem('cabang_stok_data', JSON.stringify(cabangStok)); }, [cabangStok]);
-  useEffect(() => { localStorage.setItem('branch_transactions_data', JSON.stringify(branchTransactions)); }, [branchTransactions]);
+  useEffect(() => {
+    const timer = setTimeout(() => localStorage.setItem('surat_orders_data', JSON.stringify(suratOrders)), 500);
+    return () => clearTimeout(timer);
+  }, [suratOrders]);
+  useEffect(() => {
+    const timer = setTimeout(() => localStorage.setItem('cabang_stok_data', JSON.stringify(cabangStok)), 500);
+    return () => clearTimeout(timer);
+  }, [cabangStok]);
+  useEffect(() => {
+    const timer = setTimeout(() => localStorage.setItem('branch_transactions_data', JSON.stringify(branchTransactions)), 500);
+    return () => clearTimeout(timer);
+  }, [branchTransactions]);
 
   // Helper: update branch stock teoritis
   const updateBranchStock = (cabangId: string, bahanNama: string, qtyChange: number, satuan: string) => {
@@ -279,17 +305,20 @@ export default function App() {
     safeGetLocalStorage<WriteOffLog[]>('writeoff_logs_data', [])
   );
 
-  // State sync effects
+  // State sync effects — debounced 500ms
   useEffect(() => {
-    localStorage.setItem('rd_experiments_data', JSON.stringify(rdExperiments));
+    const timer = setTimeout(() => localStorage.setItem('rd_experiments_data', JSON.stringify(rdExperiments)), 500);
+    return () => clearTimeout(timer);
   }, [rdExperiments]);
 
   useEffect(() => {
-    localStorage.setItem('waste_logs_data', JSON.stringify(wasteLogs));
+    const timer = setTimeout(() => localStorage.setItem('waste_logs_data', JSON.stringify(wasteLogs)), 500);
+    return () => clearTimeout(timer);
   }, [wasteLogs]);
 
   useEffect(() => {
-    localStorage.setItem('writeoff_logs_data', JSON.stringify(writeOffLogs));
+    const timer = setTimeout(() => localStorage.setItem('writeoff_logs_data', JSON.stringify(writeOffLogs)), 500);
+    return () => clearTimeout(timer);
   }, [writeOffLogs]);
 
   // Handlers for state updates
@@ -442,7 +471,30 @@ export default function App() {
             showToast('Auto-save berhasil disinkronisasikan ke Google Sheets!', 'success');
           })
           .catch((err) => {
-            console.error('Silent auto-save failed:', err);
+            console.error('Silent auto-save failed, masuk retry queue:', err);
+            if (currentToken && currentId) {
+              enqueueFailedSync({
+                type: 'save_project',
+                token: currentToken,
+                spreadsheetId: currentId,
+                data: { bahanBaku: currentBahan, productHpp: currentHpp, detailResep: currentResep },
+              });
+              // Also queue revenue if available
+              try {
+                const revenueData = localStorage.getItem('revenue_tracker_data');
+                if (revenueData) {
+                  const parsed = JSON.parse(revenueData);
+                  if (parsed.transactions?.length > 0) {
+                    enqueueFailedSync({
+                      type: 'save_revenue',
+                      token: currentToken,
+                      spreadsheetId: currentId,
+                      revenueData: parsed.transactions,
+                    });
+                  }
+                }
+              } catch (e) { /* silent */ }
+            }
           });
       }
     }, 5 * 60 * 1000); // 5 minutes
@@ -839,6 +891,40 @@ export default function App() {
     showToast(`Transaksi Sukses! Menjual ${soldQty} pcs "${productName}" (${revStr}). Bahan baku otomatis dipotong.`, 'success');
   };
 
+  // ─── PRODUCTION CENTER — Potong stok bahan baku saat baking log disimpan ───
+  const handleProductionComplete = (productName: string, batchQty: number) => {
+    const ingredientsForProduct = detailResep.filter(
+      (r) => r.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
+    );
+    if (ingredientsForProduct.length === 0) {
+      showToast(`⚠️ Produk "${productName}" belum punya resep, stok tidak dipotong.`, 'info');
+      return;
+    }
+    const productInfo = productHpp.find(
+      (p) => p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
+    );
+    const yieldPortions = productInfo?.porsiJual || 1;
+
+    setBahanBaku((prev) =>
+      prev.map((b) => {
+        const ingredientUsed = ingredientsForProduct.find(
+          (ing) => ing.namaBahan.toLowerCase().trim() === b.nama.toLowerCase().trim()
+        );
+        if (ingredientUsed) {
+          const consumedAmount = (ingredientUsed.takaran / yieldPortions) * batchQty;
+          const currentUnitStock = b.isiKemasan - consumedAmount;
+          if (currentUnitStock < 50 && b.isiKemasan >= 50) {
+            showToast(`⚠️ Stok ${b.nama} menipis (sisa ~${Math.round(currentUnitStock)} ${b.satuan}) — segera order!`, 'info');
+          }
+          return { ...b, isiKemasan: Math.max(0, Number(currentUnitStock.toFixed(2))) };
+        }
+        return b;
+      })
+    );
+    setHasUnsavedChanges(true);
+    showToast(`🏭 Produksi ${batchQty}x "${productName}" dicatat! Stok bahan baku otomatis dipotong.`, 'success');
+  };
+
   // ─── MULTI-CABANG HANDLERS ───
   const handleAddCabang = (c: Cabang) => {
     const dup = cabangList.some(cb => cb.username === c.username);
@@ -1055,9 +1141,10 @@ export default function App() {
       const currentHpp = productHppRef.current;
       const currentCalc = calculatedProductsRef.current;
 
-      // Deduct bahan baku stok berdasarkan resep (pakai functional update untuk race condition safety)
+      // Deduct bahan baku stok berdasarkan resep (pakai functional update + .map() — tanpa JSON.parse deep clone)
       setBahanBaku((prevBahan) => {
-        const newBahanBaku = JSON.parse(JSON.stringify(prevBahan)) as typeof prevBahan;
+        // Build lookup: bahan → total consumed dari semua items dalam order
+        const deductionMap = new Map<string, { consumed: number; nama: string; satuan: string }>();
         order.items.forEach((item) => {
           const ingredientsForProduct = currentResep.filter(
             (r) => r.namaProduk.toLowerCase().trim() === item.name.toLowerCase().trim()
@@ -1066,21 +1153,30 @@ export default function App() {
             (p) => p.namaProduk.toLowerCase().trim() === item.name.toLowerCase().trim()
           );
           const yieldPortions = productInfo?.porsiJual || 1;
-
           ingredientsForProduct.forEach((ing) => {
-            const idx = newBahanBaku.findIndex((b) => b.nama.toLowerCase().trim() === ing.namaBahan.toLowerCase().trim());
-            if (idx !== -1) {
-              const consumedAmount = (ing.takaran / yieldPortions) * item.quantity;
-              const oldStock = newBahanBaku[idx].isiKemasan;
-              const newStock = oldStock - consumedAmount;
-              newBahanBaku[idx] = { ...newBahanBaku[idx], isiKemasan: Math.max(0, Number(newStock.toFixed(2))) };
-              if (newStock < 50 && oldStock >= 50) {
-                showToast(`⚠️ Stok ${newBahanBaku[idx].nama} menipis (sisa ${Math.round(newStock)} ${newBahanBaku[idx].satuan}) — segera order!`, 'info');
-              }
-            }
+            const consumedAmount = (ing.takaran / yieldPortions) * item.quantity;
+            const key = ing.namaBahan.toLowerCase().trim();
+            const existing = deductionMap.get(key);
+            deductionMap.set(key, {
+              consumed: (existing?.consumed || 0) + consumedAmount,
+              nama: ing.namaBahan,
+              satuan: existing?.satuan || 'gr',
+            });
           });
         });
-        return newBahanBaku;
+        // Selective map — hanya create objek baru untuk item yang berubah
+        return prevBahan.map((b) => {
+          const ded = deductionMap.get(b.nama.toLowerCase().trim());
+          if (ded) {
+            const oldStock = b.isiKemasan;
+            const newStock = oldStock - ded.consumed;
+            if (newStock < 50 && oldStock >= 50) {
+              showToast(`⚠️ Stok ${b.nama} menipis (sisa ${Math.round(newStock)} ${b.satuan}) — segera order!`, 'info');
+            }
+            return { ...b, isiKemasan: Math.max(0, Number(newStock.toFixed(2))) };
+          }
+          return b;
+        });
       });
 
       // Update status order di pos_orders_data (baca fresh)
@@ -1135,6 +1231,75 @@ export default function App() {
       unsubChats();
     };
   }, [bahanBaku, productHpp, detailResep, calculatedProducts]);
+
+  // ─── FIRESTORE CATEGORY PULL — Ambil kategori dari Firestore sebagai source of truth ───
+  // Saat startup, ERP menarik daftar kategori dari Firestore (web store / WebStoreManager)
+  // dan menyimpannya ke localStorage agar WebStoreManagerTab bisa mengaksesnya.
+  useEffect(() => {
+    getFirestoreCategories('pusat').then(catData => {
+      if (catData && catData.categories.length > 0) {
+        localStorage.setItem('firestore_categories', JSON.stringify(catData.categories));
+        localStorage.setItem('firestore_category_icons', JSON.stringify(catData.categoryIcons));
+      }
+    }).catch(() => {/* silent — offline mode */});
+  }, []);
+
+  // ─── GLOBAL IoT SIMULATION — Berjalan terus (tidak hanya saat tab Smart IoT aktif) ───
+  // Data suhu chiller/freezer disimulasikan dan disimpan ke localStorage agar ComplianceSafetyTab
+  // bisa membaca dan memicu recall otomatis jika suhu melebihi batas aman.
+  const [iotDevices, setIotDevices] = useState<IoTDevice[]>([]);
+  
+  useEffect(() => {
+    // Inisialisasi baseline sensor (read from localStorage if exists)
+    const saved = safeGetLocalStorage<IoTDevice[]>('iot_device_data', []);
+    if (saved.length > 0) {
+      setIotDevices(saved);
+      return;
+    }
+    const initialDevices: IoTDevice[] = [
+      { id: 'chiller-1', name: 'Chiller Utama (Adonan)', type: 'freezer', value: 4, unit: '°C', status: 'online', lastUpdate: new Date().toISOString(), location: 'Dapur Pusat', minThreshold: 0, maxThreshold: 8 } as IoTDevice,
+      { id: 'chiller-2', name: 'Chiller Pastry & Krim', type: 'freezer', value: 3, unit: '°C', status: 'online', lastUpdate: new Date().toISOString(), location: 'Dapur Pusat', minThreshold: 0, maxThreshold: 8 } as IoTDevice,
+      { id: 'freezer-1', name: 'Freezer Bahan Baku', type: 'freezer', value: -18, unit: '°C', status: 'online', lastUpdate: new Date().toISOString(), location: 'Gudang', minThreshold: -25, maxThreshold: -10 } as IoTDevice,
+      { id: 'oven-1', name: 'Oven Deck', type: 'oven', value: 180, unit: '°C', status: 'online', lastUpdate: new Date().toISOString(), location: 'Dapur Produksi', minThreshold: 140, maxThreshold: 240 } as IoTDevice,
+      { id: 'humidity-1', name: 'Hygrometer Ruang Proofing', type: 'humidity', value: 75, unit: '%', status: 'online', lastUpdate: new Date().toISOString(), location: 'Ruang Proofing', minThreshold: 40, maxThreshold: 85 } as IoTDevice,
+    ];
+    setIotDevices(initialDevices);
+    localStorage.setItem('iot_device_data', JSON.stringify(initialDevices));
+  }, []);
+
+  useEffect(() => {
+    if (iotDevices.length === 0) return;
+    const interval = setInterval(() => {
+      setIotDevices(prev => prev.map(d => {
+        let newValue = d.value;
+        const fluctuation = (Math.random() - 0.5) * 4;
+        if (d.type === 'freezer') {
+          // Chiller: 0-10°C, Freezer: -25 to -10°C
+          newValue = Math.round((d.value + fluctuation) * 10) / 10;
+          newValue = d.value > 0 ? Math.max(0, Math.min(12, newValue)) : Math.max(-25, Math.min(-8, newValue));
+        } else if (d.type === 'oven') {
+          newValue = Math.round(Math.max(140, Math.min(240, d.value + fluctuation)));
+        } else if (d.type === 'humidity') {
+          newValue = Math.round(Math.max(40, Math.min(95, d.value + fluctuation)));
+        }
+        let status: 'online' | 'offline' | 'warning' = 'online';
+        if (d.status !== 'offline') {
+          if (d.minThreshold !== undefined && newValue < d.minThreshold) status = 'warning';
+          else if (d.maxThreshold !== undefined && newValue > d.maxThreshold) status = 'warning';
+          else status = 'online';
+        }
+        return { ...d, value: newValue, status, lastUpdate: new Date().toISOString() };
+      }));
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [iotDevices.length > 0]);
+
+  // Sync IoT data ke localStorage untuk ComplianceSafetyTab
+  useEffect(() => {
+    if (iotDevices.length > 0) {
+      localStorage.setItem('iot_device_data', JSON.stringify(iotDevices));
+    }
+  }, [iotDevices]);
 
   // Show welcome notifications on first login
   useEffect(() => {
@@ -1461,10 +1626,11 @@ export default function App() {
                 detailResep={detailResep}
                 calculatedProducts={calculatedProducts}
                 bahanBaku={bahanBaku}
+                onProductionComplete={handleProductionComplete}
               />
             )}
             {activeTab === 'erp_fefo_expiry' && (
-              <FefoExpiryTab bahanBaku={bahanBaku} productHpp={productHpp} onAddWasteLog={handleAddWasteLog} cabangList={cabangList} suratOrders={suratOrders} />
+              <FefoExpiryTab bahanBaku={bahanBaku} productHpp={productHpp} detailResep={detailResep} onAddWasteLog={handleAddWasteLog} cabangList={cabangList} suratOrders={suratOrders} cabangStok={cabangStok} />
             )}
             {activeTab === 'erp_pos' && (
               <PosKasirTab

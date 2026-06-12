@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BahanBaku, BranchStock, Cabang, SuratOrder } from '../types';
-import { Package, Search, ClipboardList, Building2, ShoppingCart, Truck, CheckCircle2, ClipboardCheck } from 'lucide-react';
+import { Package, Search, ClipboardList, Building2, ShoppingCart, Truck, CheckCircle2, ClipboardCheck, AlertTriangle } from 'lucide-react';
+import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface MaterialsTabProps {
   bahanBaku: BahanBaku[];
@@ -12,6 +13,15 @@ interface MaterialsTabProps {
 
 export default function MaterialsTab({ bahanBaku, cabangList, cabangStok, suratOrders = [], onUpdateSuratOrder }: MaterialsTabProps) {
   const [search, setSearch] = useState('');
+  
+  // ─── BATAS AMAN — Sync dari FEFO safety stock ───
+  const [batasAman, setBatasAman] = useState<Record<string, number>>(() =>
+    safeGetLocalStorage<Record<string, number>>('fefo_safety_stock_data', {})
+  );
+  
+  useEffect(() => {
+    localStorage.setItem('fefo_safety_stock_data', JSON.stringify(batasAman));
+  }, [batasAman]);
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
@@ -62,6 +72,8 @@ export default function MaterialsTab({ bahanBaku, cabangList, cabangStok, suratO
                   <th className="px-4 py-3 text-right">Harga Beli</th>
                   <th className="px-4 py-3 text-right">Harga Satuan</th>
                   <th className="px-4 py-3 text-right">Stok Pusat</th>
+                  <th className="px-4 py-3 text-center">Batas Aman</th>
+                  <th className="px-4 py-3 text-center">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -75,14 +87,39 @@ export default function MaterialsTab({ bahanBaku, cabangList, cabangStok, suratO
                     <td className="px-4 py-3 text-right font-mono">{formatCurrency(b.hargaBeli)}</td>
                     <td className="px-4 py-3 text-right font-mono text-gray-500">{formatCurrency(b.hargaSatuan)}/{b.satuan}</td>
                     <td className="px-4 py-3 text-right font-mono font-bold">{b.isiKemasan} {b.satuan}</td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <input type="number" min="0"
+                          value={batasAman[b.nama] || 500}
+                          onChange={e => setBatasAman({ ...batasAman, [b.nama]: parseInt(e.target.value) || 0 })}
+                          className="w-16 border border-gray-200 rounded-lg p-1 text-center font-mono text-[10px]" />
+                        <span className="text-[9px] text-gray-400">{b.satuan}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {b.isiKemasan < (batasAman[b.nama] || 500) ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 font-bold text-[9px] rounded-full">
+                          <AlertTriangle className="w-2.5 h-2.5" /> Kritis
+                        </span>
+                      ) : b.isiKemasan < (batasAman[b.nama] || 500) * 1.5 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 font-bold text-[9px] rounded-full">
+                          Menipis
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 font-bold text-[9px] rounded-full">Aman</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
-        <div className="p-3 bg-blue-50 border-t border-blue-100 text-[10px] text-blue-800">
-          <strong>💡 Navigasi:</strong> Untuk mengelola bahan baku (tambah/edit/hapus), buka <strong>🏛️ Data Pusat → Bahan</strong>. Untuk stok opname cabang, buka <strong>Data Pusat → Stok Opname</strong>.
+        )        }
+        <div className="p-3 bg-blue-50 border-t border-blue-100 text-[10px] text-blue-800 flex items-center gap-2">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          <span>
+            <strong>💡 Batas Aman:</strong> Angka "Batas Aman" sinkron otomatis dengan modul <strong>FEFO & Expiry</strong>. Stok <span className="text-red-600 font-bold">merah</span> = kritis, <span className="text-amber-600 font-bold">kuning</span> = menipis, <span className="text-emerald-600 font-bold">hijau</span> = aman. Data terpusat — cukup atur di satu tempat.
+          </span>
         </div>
       </div>
 
