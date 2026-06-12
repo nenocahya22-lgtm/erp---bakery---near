@@ -201,11 +201,25 @@ export async function syncProductsToFirestore(
       }
     }
 
+    // ─── VARIAN — mapping dari productHpp ke web store ───
+    const productWithVariants = productHpp.find(
+      (p) => p.namaProduk.toLowerCase().trim() === calc.namaProduk.toLowerCase().trim()
+    );
+    const webVariants = productWithVariants?.variants
+      ?.filter(v => v.active !== false && v.hargaJual > 0)
+      .map(v => ({
+        id: v.id,
+        name: v.name,
+        price: v.hargaJual,
+        originalPrice: v.hargaJual,
+      })) || undefined;
+
     batch.set(doc(db, 'products', productId), {
       id: productId,
       name: calc.namaProduk,
       description,
       price: Math.round(calc.hargaJualPerPorsi),
+      variants: webVariants,
       discountPercent: discountPercent > 0 ? discountPercent : undefined,
       originalPrice: discountPercent > 0 ? Math.round(calc.hargaJualPerPorsi) : undefined,
       stock: Math.max(0, minStock),

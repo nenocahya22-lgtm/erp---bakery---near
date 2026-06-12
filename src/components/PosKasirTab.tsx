@@ -41,6 +41,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
   const [showRekap, setShowRekap] = useState(false);
   const [newCustName, setNewCustName] = useState('');
   const [selectedProduct, setSelectedProduct] = useState('');
+  const [selectedVariant, setSelectedVariant] = useState<{ id: string; name: string; hargaJual: number } | null>(null);
   const [orderQty, setOrderQty] = useState(1);
   const [orderSource, setOrderSource] = useState<RetailOrder['source']>('Walk-In POS');
   const [orderNotes, setOrderNotes] = useState('');
@@ -128,18 +129,21 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
     }
 
     const prodInfo = calculatedProducts.find(p => p.namaProduk === selectedProduct);
-    const price = prodInfo ? prodInfo.hargaJualPerPorsi : 19000;
+    // Harga varian jika dipilih, fallback ke harga dasar
+    const variantPrice = selectedVariant?.hargaJual || 0;
+    const price = variantPrice > 0 ? variantPrice : (prodInfo ? prodInfo.hargaJualPerPorsi : 19000);
     const totalRevenue = price * orderQty;
     const txId = `TX-${Date.now().toString().slice(-6)}`;
 
     const addOnsTotal = orderAddOns.reduce((s, a) => s + a.harga, 0);
     const grandTotal = totalRevenue + addOnsTotal;
 
+    const variantLabel = selectedVariant ? ` (${selectedVariant.name})` : '';
     const newOrder: RetailOrder = {
       ordId: txId,
       source: orderSource,
       customerName: newCustName.trim() || 'Pelanggan POS',
-      items: `${orderQty} pcs ${selectedProduct}`,
+      items: `${orderQty} pcs ${selectedProduct}${variantLabel}`,
       totalSum: grandTotal,
       status: 'Queued',
       timeAgo: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
@@ -153,9 +157,16 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
 
     setNewCustName('');
     setSelectedProduct('');
+    setSelectedVariant(null);
     setOrderQty(1);
     setOrderNotes('');
     setOrderAddOns([]);
+  };
+
+  // Reset selectedVariant saat ganti produk
+  const handleSelectProduct = (productName: string) => {
+    setSelectedProduct(productName);
+    setSelectedVariant(null);
   };
 
   const handleUpdateOrderStatus = (ordId: string, newStatus: RetailOrder['status']) => {
@@ -463,16 +474,52 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
 
             {/* SELECTED PRODUCT — compact card */}
             {selectedProduct ? (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-gray-500 block uppercase font-bold">Produk</span>
-                  <span className="font-bold text-gray-900 text-sm">{selectedProduct}</span>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-gray-500 block uppercase font-bold">Produk</span>
+                    <span className="font-bold text-gray-900 text-sm">{selectedProduct}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-black text-emerald-800 font-mono text-sm">
+                      {selectedVariant 
+                        ? formatCurrency(selectedVariant.hargaJual)
+                        : formatCurrency(calculatedProducts.find(p => p.namaProduk === selectedProduct)?.hargaJualPerPorsi || 0)}
+                    </span>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span className="font-black text-emerald-800 font-mono text-sm">
-                    {formatCurrency(calculatedProducts.find(p => p.namaProduk === selectedProduct)?.hargaJualPerPorsi || 0)}
-                  </span>
-                </div>
+                {/* ─── VARIAN PICKER ─── */}
+                {(() => {
+                  const cp = calculatedProducts.find(p => p.namaProduk === selectedProduct);
+                  if (cp?.variants && cp.variants.length > 0) {
+                    const activeVariants = cp.variants.filter(v => v.hargaJual > 0);
+                    if (activeVariants.length > 0) {
+                      return (
+                        <div className="mt-2 pt-2 border-t border-emerald-200">
+                          <span className="text-[9px] text-gray-500 block uppercase font-bold mb-1.5">Pilih Varian</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {activeVariants.map(v => (
+                              <button
+                                key={v.id}
+                                type="button"
+                                onClick={() => setSelectedVariant({ id: v.id, name: v.name, hargaJual: v.hargaJual })}
+                                className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                                  selectedVariant?.id === v.id
+                                    ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                                    : 'bg-white text-gray-700 border-gray-200 hover:bg-purple-50 hover:border-purple-300'
+                                }`}
+                              >
+                                {v.name}
+                                <span className="ml-1 font-mono">{formatCurrency(v.hargaJual)}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+                  }
+                  return null;
+                })()}
               </div>
             ) : (
               <div className="bg-gray-50 border border-dashed border-gray-200 rounded-xl p-4 text-center text-xs text-gray-400">
@@ -490,8 +537,15 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
               <div className="flex-1 text-right bg-emerald-50 p-2 rounded-xl border border-emerald-100">
                 <span className="text-[10px] text-gray-400 block uppercase font-bold">Total</span>
                 <span className="text-base font-black text-emerald-800 font-mono">
-                  {formatCurrency(((calculatedProducts.find(p => p.namaProduk === selectedProduct)?.hargaJualPerPorsi || 19000) * orderQty) + orderAddOns.reduce((s, a) => s + a.harga, 0))}
+                  {formatCurrency(((() => {
+                    const variantPrice = selectedVariant?.hargaJual || 0;
+                    const basePrice = calculatedProducts.find(p => p.namaProduk === selectedProduct)?.hargaJualPerPorsi || 19000;
+                    return (variantPrice > 0 ? variantPrice : basePrice) * orderQty;
+                  })()) + orderAddOns.reduce((s, a) => s + a.harga, 0))}
                 </span>
+                {selectedVariant && (
+                  <span className="text-[8px] text-purple-600 block font-normal">📐 {selectedVariant.name}</span>
+                )}
                 {orderAddOns.length > 0 && (
                   <span className="text-[8px] text-amber-600 block font-normal">(+{formatCurrency(orderAddOns.reduce((s, a) => s + a.harga, 0))} add-on)</span>
                 )}
@@ -520,7 +574,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
                 const isSelected = selectedProduct === p.namaProduk;
                 return (
                   <button key={p.namaProduk} type="button"
-                    onClick={() => { setSelectedProduct(p.namaProduk); }}
+                    onClick={() => { handleSelectProduct(p.namaProduk); }}
                     className={`p-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
                       isSelected
                         ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20 shadow-md'

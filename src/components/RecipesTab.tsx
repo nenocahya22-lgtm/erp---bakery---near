@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BahanBaku, ProductHpp, DetailResep, SATUAN_OPTIONS } from '../types';
+import { BahanBaku, ProductHpp, DetailResep, ProductVariant, SATUAN_OPTIONS } from '../types';
 import {
   Plus,
   Trash2,
@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { getSavedRecipeImage, saveRecipeImage, deleteRecipeImage, getFoodImageForPrompt, buildAutoPrompt } from '../lib/image-generator';
 import { safeGetLocalStorage } from '../lib/safe-json';
+import { getSharedCategories, setSharedCategories, addSharedCategory, removeSharedCategory, renameSharedCategory } from '../lib/category-store';
 
 interface RecipesTabProps {
   bahanBaku: BahanBaku[];
@@ -26,6 +27,9 @@ interface RecipesTabProps {
   onUpdateProductIngredients: (productName: string, updatedDetails: DetailResep[], porsiJual: number) => void;
   onDeleteProduct: (productName: string) => void;
   onUpdateProductDetails?: (oldName: string, updated: ProductHpp) => void;
+  onAddVariant?: (productName: string, variant: ProductVariant) => void;
+  onUpdateVariant?: (productName: string, variantId: string, updates: Partial<ProductVariant>) => void;
+  onDeleteVariant?: (productName: string, variantId: string) => void;
 }
 
 export default function RecipesTab({
@@ -36,6 +40,9 @@ export default function RecipesTab({
   onUpdateProductIngredients,
   onDeleteProduct,
   onUpdateProductDetails,
+  onAddVariant,
+  onUpdateVariant,
+  onDeleteVariant,
 }: RecipesTabProps) {
   const [selectedProductName, setSelectedProductName] = useState<string>(
     productHpp.length > 0 ? productHpp[0].namaProduk : ''
@@ -43,21 +50,33 @@ export default function RecipesTab({
 
   // Categories Filter State — Dynamic with add/edit/delete
   const [categoriesList, setCategoriesList] = useState<string[]>(() => {
+    // Gunakan shared categories dari category-store agar konsisten dengan Web Store
+    const shared = getSharedCategories();
+    if (shared.categories.length > 0) {
+      return ['Semua', ...shared.categories];
+    }
+    // Fallback: coba dari localStorage lama
     const saved = safeGetLocalStorage<string[]>('recipe_categories_data', null);
     if (saved) {
       return ['Semua', ...saved];
     }
-    return ['Semua', 'Roti', 'Cake', 'Cookies', 'Coffee', 'Lainnya'];
+    return ['Semua', 'Roti & Sourdough', 'Viennoiserie & Croissant', 'Kue & Tart', 'Kue Kering & Cookies', 'Minuman Kopi & Teh'];
   });
   const [selectedCategory, setSelectedCategory] = useState<string>('Semua');
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [editingCategory, setEditingCategory] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
 
-  // Save categories to localStorage
+  // Save categories ke localStorage & shared store
   useEffect(() => {
     const catsForStorage = categoriesList.filter(c => c !== 'Semua');
     localStorage.setItem('recipe_categories_data', JSON.stringify(catsForStorage));
+    // Sync ke shared store agar Web Store juga update
+    const existing = getSharedCategories();
+    setSharedCategories({
+      categories: catsForStorage,
+      categoryIcons: existing.categoryIcons,
+    });
   }, [categoriesList]);
 
   const handleAddCategory = () => {
@@ -67,6 +86,8 @@ export default function RecipesTab({
       alert(`Kategori "${name}" sudah ada!`);
       return;
     }
+    // Juga daftarkan ke shared store agar Web Store dapat ikon otomatis
+    addSharedCategory(name, 'package');
     setCategoriesList(prev => {
       const withoutSemua = prev.filter(c => c !== 'Semua');
       return ['Semua', ...withoutSemua, name].sort((a, b) => {
@@ -89,6 +110,8 @@ export default function RecipesTab({
     // Hapus semua produk dalam kategori ini
     productsInCat.forEach(p => onDeleteProduct(p.namaProduk));
     
+    // Hapus juga dari shared store agar Web Store ikut update
+    removeSharedCategory(cat);
     setCategoriesList(prev => prev.filter(c => c !== cat));
     if (selectedCategory === cat) setSelectedCategory('Semua');
   };
@@ -100,6 +123,8 @@ export default function RecipesTab({
       alert(`Kategori "${newName}" sudah ada!`);
       return;
     }
+    // Rename juga di shared store agar Web Store ikut update
+    renameSharedCategory(oldName, newName);
     setCategoriesList(prev => prev.map(c => c === oldName ? newName : c));
     if (selectedCategory === oldName) setSelectedCategory(newName);
     setEditingCategory('');
@@ -115,19 +140,29 @@ export default function RecipesTab({
   const [showAddForm, setShowAddForm] = useState(false);
   const [newProductName, setNewProductName] = useState('');
   const [newProductPorsi, setNewProductPorsi] = useState('10');
-  const [newProductKategori, setNewProductKategori] = useState('Roti');
+  const [newProductKategori, setNewProductKategori] = useState('Roti & Sourdough');
 
   // Edit existing product formula state
   const [isEditingProductDetails, setIsEditingProductDetails] = useState(false);
   const [editPorsiJual, setEditPorsiJual] = useState('');
   const [editHargaJual, setEditHargaJual] = useState('');
-  const [editKategori, setEditKategori] = useState('Roti');
+  const [editKategori, setEditKategori] = useState('Roti & Sourdough');
 
   // Active Ingredient adding in formulation state
   const [activeRecipePorsi, setActiveRecipePorsi] = useState<number>(10);
   const [selectedBahan, setSelectedBahan] = useState('');
   const [takaranBahan, setTakaranBahan] = useState('');
   const [takaranSatuan, setTakaranSatuan] = useState('gr');
+
+  // ─── VARIAN STATE ───
+  const [showVariantPanel, setShowVariantPanel] = useState(false);
+  const [newVariantName, setNewVariantName] = useState('');
+  const [newVariantPorsi, setNewVariantPorsi] = useState('1');
+  const [newVariantHarga, setNewVariantHarga] = useState('');
+  const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
+  const [editingVariantIngredients, setEditingVariantIngredients] = useState<{ namaBahan: string; takaran: number }[]>([]);
+  const [selectedVariantIngBahan, setSelectedVariantIngBahan] = useState('');
+  const [selectedVariantIngTakaran, setSelectedVariantIngTakaran] = useState('');
 
   // Inline ingredient quantity editing state
   const [editingBahanName, setEditingBahanName] = useState<string | null>(null);
@@ -144,7 +179,7 @@ export default function RecipesTab({
       setActiveRecipePorsi(activeProduct.porsiJual);
       setEditPorsiJual(activeProduct.porsiJual.toString());
       setEditHargaJual(activeProduct.hargaJual.toString());
-      setEditKategori(activeProduct.kategori || 'Roti');
+      setEditKategori(activeProduct.kategori || categoriesList.find(c => c !== 'Semua') || 'Roti & Sourdough');
     }
     if (selectedProductName) {
       setRecipeImage(getSavedRecipeImage(selectedProductName));
@@ -337,7 +372,7 @@ export default function RecipesTab({
     // Reset formulation fields
     setNewProductName('');
     setNewProductPorsi('10');
-    setNewProductKategori('Roti');
+    setNewProductKategori('Roti & Sourdough');
   };
 
   // Delete product
@@ -967,7 +1002,253 @@ export default function RecipesTab({
                 )}
               </div>
 
-              {/* Informasi: Add-on/Topping dipindah ke tab khusus */}
+              {/* ─── VARIAN PANEL — selalu tampil (untuk tambah varian pertama) ─── */}
+              <div className="bg-gradient-to-br from-purple-50 to-white rounded-2xl border border-purple-200 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-xs font-black text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>📐 Varian Ukuran</span>
+                    </h4>
+                    {activeProduct.variants && activeProduct.variants.length > 0 && (
+                      <span className="text-[9px] font-mono bg-purple-200 text-purple-800 px-2 py-0.5 rounded-full">
+                        {activeProduct.variants.filter(v => v.active !== false).length} aktif
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setShowVariantPanel(!showVariantPanel)}
+                    className="text-[10px] font-bold text-purple-700 bg-white border border-purple-200 px-3 py-1 rounded-lg hover:bg-purple-100 cursor-pointer transition"
+                  >
+                    {showVariantPanel ? 'Tutup' : '+ Varian Baru'}
+                  </button>
+                </div>
+
+                {(!activeProduct.variants || activeProduct.variants.length === 0) && !showVariantPanel && (
+                  <p className="text-[10px] text-gray-400 py-2 text-center">
+                    Belum ada varian ukuran. Klik "+ Varian Baru" untuk menambahkan varian (misal: 20×20, 20×10).
+                  </p>
+                )}
+
+                {/* Daftar varian existing */}
+                {activeProduct.variants && activeProduct.variants.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {activeProduct.variants.map(v => (
+                      <div key={v.id} className={`p-3 rounded-xl border ${v.active !== false ? 'bg-white border-purple-200' : 'bg-gray-50 border-gray-200 opacity-60'}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-gray-800">{v.name}</span>
+                            {v.active === false && (
+                              <span className="text-[9px] text-gray-400 font-bold uppercase">Nonaktif</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                onUpdateVariant?.(activeProduct.namaProduk, v.id, { active: v.active !== false ? false : true });
+                              }}
+                              className={`text-[9px] px-1.5 py-0.5 rounded font-bold cursor-pointer ${v.active !== false ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-500'}`}
+                            >
+                              {v.active !== false ? 'Aktif' : 'Nonaktif'}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingVariantId(v.id);
+                                setEditingVariantIngredients(v.ingredients || []);
+                              }}
+                              className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => onDeleteVariant?.(activeProduct.namaProduk, v.id)}
+                              className="p-1 text-red-500 hover:bg-red-50 rounded cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-gray-500">Porsi: {v.porsi}</span>
+                          <span className="font-bold font-mono text-purple-700">
+                            {v.hargaJual > 0 ? formatCurrency(v.hargaJual) : 'Harga belum diatur'}
+                          </span>
+                        </div>
+                        {v.ingredients && v.ingredients.length > 0 && (
+                          <p className="text-[9px] text-gray-400 mt-1 truncate">
+                            {v.ingredients.length} bahan override
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Form tambah varian */}
+                {showVariantPanel && (
+                  <div className="bg-white p-4 rounded-xl border border-purple-200 space-y-3">
+                    <h5 className="text-[10px] font-bold text-purple-800 uppercase tracking-wider">Tambah Varian Baru</h5>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[9px] font-bold text-gray-500 block mb-0.5">Nama Varian</label>
+                        <input
+                          type="text"
+                          placeholder="Ukuran 20×20"
+                          value={newVariantName}
+                          onChange={e => setNewVariantName(e.target.value)}
+                          className="w-full text-xs border border-gray-200 rounded-lg p-2"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-gray-500 block mb-0.5">Porsi</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={newVariantPorsi}
+                          onChange={e => setNewVariantPorsi(e.target.value)}
+                          className="w-full text-xs border border-gray-200 rounded-lg p-2 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-gray-500 block mb-0.5">Harga Jual</label>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="Otomatis dari bahan"
+                          value={newVariantHarga}
+                          onChange={e => setNewVariantHarga(e.target.value)}
+                          className="w-full text-xs border border-gray-200 rounded-lg p-2 font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => {
+                          const name = newVariantName.trim();
+                          if (!name) return;
+                          const porsi = parseInt(newVariantPorsi) || 1;
+                          const harga = parseInt(newVariantHarga) || 0;
+                          onAddVariant?.(activeProduct.namaProduk, {
+                            id: `var-${Date.now()}`,
+                            name,
+                            porsi,
+                            hargaJual: harga,
+                            active: true,
+                          });
+                          setNewVariantName('');
+                          setNewVariantPorsi('1');
+                          setNewVariantHarga('');
+                          setShowVariantPanel(false);
+                        }}
+                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer"
+                      >
+                        + Tambah Varian
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Panel edit varian — atur ingredients override */}
+                {editingVariantId && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">
+                        Edit Bahan Varian (override resep dasar)
+                      </h5>
+                      <button
+                        onClick={() => setEditingVariantId(null)}
+                        className="text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <p className="text-[9px] text-amber-700">
+                      Kosongkan jika takaran sama dengan resep dasar. Isi hanya untuk bahan yang berbeda.
+                    </p>
+                    
+                    {/* Daftar ingredients override */}
+                    <div className="space-y-1.5">
+                      {editingVariantIngredients.map((ing, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-gray-700 flex-1">{ing.namaBahan}</span>
+                          <input
+                            type="number"
+                            step="any"
+                            value={ing.takaran}
+                            onChange={e => {
+                              const updated = [...editingVariantIngredients];
+                              updated[idx] = { ...updated[idx], takaran: parseFloat(e.target.value) || 0 };
+                              setEditingVariantIngredients(updated);
+                            }}
+                            className="w-20 text-xs border border-gray-200 rounded-lg p-1.5 font-mono text-right"
+                          />
+                          <span className="text-[9px] text-gray-400 w-8">gr</span>
+                          <button
+                            onClick={() => {
+                              setEditingVariantIngredients(prev => prev.filter((_, i) => i !== idx));
+                            }}
+                            className="p-1 text-red-400 hover:text-red-600 cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Tambah bahan override */}
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={selectedVariantIngBahan}
+                        onChange={e => setSelectedVariantIngBahan(e.target.value)}
+                        className="flex-1 text-xs border border-gray-200 rounded-lg p-2"
+                      >
+                        <option value="">Pilih bahan...</option>
+                        {bahanBaku.map(b => (
+                          <option key={b.nama} value={b.nama}>{b.nama}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="Takaran (gr)"
+                        value={selectedVariantIngTakaran}
+                        onChange={e => setSelectedVariantIngTakaran(e.target.value)}
+                        className="w-24 text-xs border border-gray-200 rounded-lg p-2 font-mono"
+                      />
+                      <button
+                        onClick={() => {
+                          const nama = selectedVariantIngBahan.trim();
+                          const takaran = parseFloat(selectedVariantIngTakaran) || 0;
+                          if (!nama || takaran <= 0) return;
+                          setEditingVariantIngredients(prev => [
+                            ...prev.filter(i => i.namaBahan !== nama),
+                            { namaBahan: nama, takaran },
+                          ]);
+                          setSelectedVariantIngBahan('');
+                          setSelectedVariantIngTakaran('');
+                        }}
+                        className="px-2.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+
+                    <div className="flex justify-end pt-2 border-t border-amber-200">
+                      <button
+                        onClick={() => {
+                          onUpdateVariant?.(activeProduct.namaProduk, editingVariantId, {
+                            ingredients: editingVariantIngredients,
+                          });
+                          setEditingVariantId(null);
+                        }}
+                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer"
+                      >
+                        <Save className="w-3 h-3 inline mr-1" />
+                        Simpan Bahan Varian
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="bg-slate-50 p-4 rounded-2xl border border-dashed border-indigo-200">
                 <div className="flex items-center gap-3 text-xs">
                   <Coins className="w-5 h-5 text-indigo-600 shrink-0" />

@@ -193,6 +193,51 @@ export function calculateBahanADS(
 // Sudah ditangani secara terpisah di modul Anggaran & Alokasi (AnggaranAlokasiTab).
 // HPP sekarang = Biaya Bahan murni.
 
+/**
+ * Hitung HPP untuk varian tertentu — override takaran bahan jika varian punya ingredients sendiri
+ */
+function calculateVariantHPP(
+  variant: { name: string; porsi: number; ingredients?: { namaBahan: string; takaran: number }[] },
+  baseProductName: string,
+  baseDetails: DetailResep[],
+  bahanMap: Map<string, BahanBaku>
+): { biayaBahanTotal: number; bahanList: any[]; hppTotal: number; hppPerPorsi: number } {
+  // Gunakan ingredients varian jika ada, fallback ke resep dasar
+  const variantDetails = variant.ingredients && variant.ingredients.length > 0
+    ? variant.ingredients.map(ing => ({
+        namaProduk: baseProductName,
+        namaBahan: ing.namaBahan,
+        takaran: ing.takaran,
+      }))
+    : baseDetails;
+
+  let biayaBahanTotal = 0;
+  const bahanListMapped = variantDetails.map((detail) => {
+    const material = bahanMap.get(detail.namaBahan.toLowerCase().trim());
+    const hargaSatuan = material ? material.hargaSatuan : 0;
+    const totalBiayaBahan = detail.takaran * hargaSatuan;
+    biayaBahanTotal += totalBiayaBahan;
+
+    return {
+      namaBahan: detail.namaBahan,
+      takaran: detail.takaran,
+      satuan: material ? material.satuan : 'gr',
+      hargaBeli: material ? material.hargaBeli : 0,
+      isiKemasan: material ? material.isiKemasan : 1,
+      hargaSatuan,
+      totalBiayaBahan,
+    };
+  });
+
+  const variantPorsi = variant.porsi || 1;
+  return {
+    biayaBahanTotal,
+    bahanList: bahanListMapped,
+    hppTotal: biayaBahanTotal,
+    hppPerPorsi: biayaBahanTotal / variantPorsi,
+  };
+}
+
 export function calculateAllProducts(
   bahanBaku: BahanBaku[],
   productHpp: ProductHpp[],
@@ -252,6 +297,23 @@ export function calculateAllProducts(
     const profitPerPorsi = hargaJualPerPorsi - hppPerPorsi;
     const marginPersen = hargaJualPerPorsi > 0 ? (profitPerPorsi / hargaJualPerPorsi) * 100 : 0;
 
+    // ─── HITUNG VARIAN jika ada ───
+    const variantResults = (product.variants || [])
+      .filter(v => v.active !== false)
+      .map(v => {
+        const vHpp = calculateVariantHPP(v, product.namaProduk, productDetailRows, bahanMap);
+        return {
+          id: v.id,
+          name: v.name,
+          porsi: v.porsi,
+          hargaJual: v.hargaJual || 0,
+          biayaBahanTotal: vHpp.biayaBahanTotal,
+          hppTotal: vHpp.hppTotal,
+          hppPerPorsi: vHpp.hppPerPorsi,
+          bahanList: vHpp.bahanList,
+        };
+      });
+
     return {
       namaProduk: product.namaProduk,
       porsiJual: product.porsiJual,
@@ -269,6 +331,7 @@ export function calculateAllProducts(
       biayaUtilitas,
       biayaKemasan,
       bahanList: bahanListMapped,
+      variants: variantResults,
     };
   });
 }

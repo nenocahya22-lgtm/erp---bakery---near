@@ -742,7 +742,8 @@ export default function DataPusatTab({
               const defaultKategori = bahanKategoriFilter !== 'Semua' ? bahanKategoriFilter : 'Produk';
               const defaultSatuan = defaultKategori === 'Minuman' ? 'ml' : defaultKategori === 'Alat' ? 'pcs' : 'gr';
               const defaultIsi = defaultKategori === 'Alat' ? 1 : 1000;
-              setBahanForm({kode: autoKode, nama: '', satuan: defaultSatuan, isiKemasan: defaultIsi, hargaBeliReal: 0, markupPercent: 25, kategori: defaultKategori});
+              const defaultMarkup = defaultKategori === 'Alat' ? 0 : 25;
+              setBahanForm({kode: autoKode, nama: '', satuan: defaultSatuan, isiKemasan: defaultIsi, hargaBeliReal: 0, markupPercent: defaultMarkup, kategori: defaultKategori});
               setShowBahanModal(true);
             }}
               className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer">
@@ -833,7 +834,8 @@ export default function DataPusatTab({
                     const matchKategori = bahanKategoriFilter === 'Semua' || (b.kategori || 'Produk') === bahanKategoriFilter;
                     return matchSearch && matchKategori;
                   }).map((b, idx) => {
-                    const hargaMarkup = b.hargaBeliReal > 0 ? b.hargaBeliReal * (1 + (b.markupPercent||25)/100) : b.hargaBeli;
+                    const markPct = b.markupPercent ?? 25;
+                    const hargaMarkup = b.hargaBeliReal > 0 ? b.hargaBeliReal * (1 + markPct/100) : b.hargaBeli;
                     return (
                       <tr key={b.nama} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-mono text-gray-500">{b.kode || `BB-${String(idx + 1).padStart(3, '0')}`}</td>
@@ -842,12 +844,12 @@ export default function DataPusatTab({
                         <td className="px-4 py-3 font-mono">{b.isiKemasan}</td>
                         <td className="px-4 py-3">{b.satuan}</td>
                         <td className="px-4 py-3 text-right font-mono">{b.hargaBeliReal > 0 ? formatCurrency(b.hargaBeliReal) : formatCurrency(b.hargaBeli)}</td>
-                        <td className="px-4 py-3 text-right font-mono font-bold text-amber-700">{b.markupPercent||25}%</td>
+                        <td className="px-4 py-3 text-right font-mono font-bold text-amber-700">{markPct}%</td>
                         <td className="px-4 py-3 text-right font-mono font-bold text-emerald-700">{formatCurrency(Math.round(hargaMarkup))}</td>
                         <td className="px-4 py-3 text-right font-mono text-gray-500">{formatCurrency(b.hargaSatuan)}/{b.satuan}</td>
                         <td className="px-4 py-3 text-center">
                           <div className="flex justify-center gap-1">
-                            <button onClick={() => { setEditingBahan(b); setBahanForm({kode:b.kode||'',nama:b.nama,satuan:b.satuan,isiKemasan:b.isiKemasan,hargaBeliReal:b.hargaBeliReal||b.hargaBeli,markupPercent:b.markupPercent||25,kategori:b.kategori||'Produk'}); setShowBahanModal(true); }}
+                            <button onClick={() => { setEditingBahan(b); setBahanForm({kode:b.kode||'',nama:b.nama,satuan:b.satuan,isiKemasan:b.isiKemasan,hargaBeliReal:b.hargaBeliReal||b.hargaBeli,markupPercent:markPct,kategori:b.kategori||'Produk'}); setShowBahanModal(true); }}
                               className="p-1.5 text-gray-400 hover:text-emerald-600 rounded-lg hover:bg-gray-100 cursor-pointer" title="Edit">
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>

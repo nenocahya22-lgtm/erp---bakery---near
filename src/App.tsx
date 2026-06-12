@@ -762,71 +762,44 @@ export default function App() {
     setHasUnsavedChanges(true);
   };
 
+  // ─── VARIAN HANDLERS ───
+  const handleAddVariant = (productName: string, variant: import('./types').ProductVariant) => {
+    setProductHpp(prev => prev.map(p =>
+      p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
+        ? { ...p, variants: [...(p.variants || []), variant] }
+        : p
+    ));
+    setHasUnsavedChanges(true);
+    showToast(`Varian "${variant.name}" ditambahkan ke ${productName}!`, 'success');
+  };
+
+  const handleUpdateVariant = (productName: string, variantId: string, updates: Partial<import('./types').ProductVariant>) => {
+    setProductHpp(prev => prev.map(p =>
+      p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
+        ? {
+            ...p,
+            variants: (p.variants || []).map(v =>
+              v.id === variantId ? { ...v, ...updates } : v
+            ),
+          }
+        : p
+    ));
+    setHasUnsavedChanges(true);
+    showToast(`Varian ${productName} diperbarui!`, 'success');
+  };
+
+  const handleDeleteVariant = (productName: string, variantId: string) => {
+    setProductHpp(prev => prev.map(p =>
+      p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
+        ? { ...p, variants: (p.variants || []).filter(v => v.id !== variantId) }
+        : p
+    ));
+    setHasUnsavedChanges(true);
+    showToast(`Varian dihapus dari ${productName}!`, 'info');
+  };
+
   const handleCompletePOSSale = (productName: string, soldQty: number, totalRevenue: number, source?: string, cabangId?: string) => {
-    // 1. Locate the recipe ingredients for this product
-    const ingredientsForProduct = detailResep.filter(
-      (r) => r.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
-    );
-
-    // 2. Locate the yield of this product (how many portions the recipe creates)
-    const productInfo = productHpp.find(
-      (p) => p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
-    );
-    const yieldPortions = productInfo?.porsiJual || 1;
-
-    // 3. Deduct raw materials based on this formulation inside our main bahanBaku state! (Only if it's not a branch sale)
-    let criticalStockWarning = false;
-    if (!cabangId) {
-      setBahanBaku((prevBahan) => {
-        return prevBahan.map((b) => {
-          const ingredientUsed = ingredientsForProduct.find(
-            (ing) => ing.namaBahan.toLowerCase().trim() === b.nama.toLowerCase().trim()
-          );
-
-          if (ingredientUsed) {
-            // consumedAmount = (takaran / yieldPortions) * soldQty
-            const consumedAmount = (ingredientUsed.takaran / yieldPortions) * soldQty;
-            const currentUnitStock = b.isiKemasan > 0 ? (b.isiKemasan - consumedAmount) : 0;
-            
-            if (currentUnitStock < 50) {
-              criticalStockWarning = true;
-            }
-            return {
-              ...b,
-              isiKemasan: Math.max(0, Number(currentUnitStock.toFixed(2)))
-            };
-          }
-          return b;
-        });
-      });
-
-      // 4. Deduct warehouse stock levels AFTER state update via setTimeout (mencegah race condition localStorage)
-      setTimeout(() => {
-        const savedStocks = localStorage.getItem('stock_levels_data');
-        if (savedStocks) {
-          try {
-            const parsed = JSON.parse(savedStocks);
-            ingredientsForProduct.forEach((ing) => {
-              const keys = Object.keys(parsed);
-              const matchedKey = keys.find(k => k.toLowerCase().includes(ing.namaBahan.toLowerCase()) || ing.namaBahan.toLowerCase().includes(k.toLowerCase()));
-              if (matchedKey) {
-                const spec = parsed[matchedKey];
-                if (spec.kitchen >= 1) {
-                  spec.kitchen = Math.max(0, Number((spec.kitchen - (ing.takaran * soldQty / 1000)).toFixed(2)));
-                } else if (spec.mainWh >= 1) {
-                  spec.mainWh = Math.max(0, Number((spec.mainWh - (ing.takaran * soldQty / 1000)).toFixed(2)));
-                }
-              }
-            });
-            localStorage.setItem('stock_levels_data', JSON.stringify(parsed));
-          } catch (err) {
-            console.error('Failed to deduct warehouse level stocks:', err);
-          }
-        }
-      }, 100);
-    }
-
-    // 5. Record revenue to revenue tracker (for profit distribution)
+    // 3. Record revenue to revenue tracker (for profit distribution)
     try {
       const saved = localStorage.getItem('revenue_tracker_data');
       const tracker = saved ? JSON.parse(saved) : { transactions: [], dailyTotals: {} };
@@ -888,7 +861,7 @@ export default function App() {
 
     setHasUnsavedChanges(true);
     const revStr = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(totalRevenue);
-    showToast(`Transaksi Sukses! Menjual ${soldQty} pcs "${productName}" (${revStr}). Bahan baku otomatis dipotong.`, 'success');
+    showToast(`Transaksi Sukses! Menjual ${soldQty} pcs "${productName}" (${revStr}).`, 'success');
   };
 
   // ─── PRODUCTION CENTER — Potong stok bahan baku saat baking log disimpan ───
@@ -1119,65 +1092,24 @@ export default function App() {
         tracker.dailyTotals[today].sources['Web Store'] += order.totalAmount;
         localStorage.setItem('revenue_tracker_data', JSON.stringify(tracker));
       } catch (e) { console.warn('Failed to save revenue_tracker_data:', e); }
-      // ⚠️ Stok TIDAK langsung dipotong saat order masuk — tunggu sampai pembayaran dikonfirmasi
-      // Lihat listener listenOrderStatusChanges di bawah untuk auto-deduct stok
+      // ⚠️ Stok bahan baku dipotong SAAT PRODUKSI (Production Center), bukan saat penjualan
+      // Ini mencegah double deduction. Lihat handleProductionComplete untuk logika potong stok.
     }, (err) => console.warn('Order listener error:', err));
 
-    // ─── LISTENER: Auto-deduct stok hanya saat status order berubah jadi Diproses/Lunas ───
-    // Gunakan refs untuk menghindari stale closure
+    // ─── LISTENER: Update status order Web Store saat pembayaran dikonfirmasi ───
+    // CATATAN: Stok bahan baku TIDAK dipotong di sini. Hanya Production Center yang memotong stok.
+    // Ini untuk mencegah double deduction (Bug #6 sebelumnya).
     const unsubStatus = listenOrderStatusChanges((order, previousStatus) => {
-      // Guard: cegah double deduction untuk order yang sudah diproses
+      // Guard: cegah double-processing untuk order yang sudah diproses
       if (processedOrderIdsRef.current.has(order.id)) {
         console.log(`Order ${order.id.slice(-8)} sudah diproses, skip.`);
         return;
       }
       processedOrderIdsRef.current.add(order.id);
 
-      showToast(`🔔 Pembayaran dikonfirmasi untuk pesanan ${order.id.slice(-8)}! Status: ${previousStatus} → ${order.status}. Memotong stok bahan baku...`, 'success');
+      showToast(`🔔 Pembayaran dikonfirmasi untuk pesanan ${order.id.slice(-8)}! Status: ${previousStatus} → ${order.status}.`, 'success');
 
-      // Pakai refs agar selalu dapat data terbaru tanpa re-subscribe
-      const currentBahan = bahanBakuRef.current;
-      const currentResep = detailResepRef.current;
-      const currentHpp = productHppRef.current;
       const currentCalc = calculatedProductsRef.current;
-
-      // Deduct bahan baku stok berdasarkan resep (pakai functional update + .map() — tanpa JSON.parse deep clone)
-      setBahanBaku((prevBahan) => {
-        // Build lookup: bahan → total consumed dari semua items dalam order
-        const deductionMap = new Map<string, { consumed: number; nama: string; satuan: string }>();
-        order.items.forEach((item) => {
-          const ingredientsForProduct = currentResep.filter(
-            (r) => r.namaProduk.toLowerCase().trim() === item.name.toLowerCase().trim()
-          );
-          const productInfo = currentHpp.find(
-            (p) => p.namaProduk.toLowerCase().trim() === item.name.toLowerCase().trim()
-          );
-          const yieldPortions = productInfo?.porsiJual || 1;
-          ingredientsForProduct.forEach((ing) => {
-            const consumedAmount = (ing.takaran / yieldPortions) * item.quantity;
-            const key = ing.namaBahan.toLowerCase().trim();
-            const existing = deductionMap.get(key);
-            deductionMap.set(key, {
-              consumed: (existing?.consumed || 0) + consumedAmount,
-              nama: ing.namaBahan,
-              satuan: existing?.satuan || 'gr',
-            });
-          });
-        });
-        // Selective map — hanya create objek baru untuk item yang berubah
-        return prevBahan.map((b) => {
-          const ded = deductionMap.get(b.nama.toLowerCase().trim());
-          if (ded) {
-            const oldStock = b.isiKemasan;
-            const newStock = oldStock - ded.consumed;
-            if (newStock < 50 && oldStock >= 50) {
-              showToast(`⚠️ Stok ${b.nama} menipis (sisa ${Math.round(newStock)} ${b.satuan}) — segera order!`, 'info');
-            }
-            return { ...b, isiKemasan: Math.max(0, Number(newStock.toFixed(2))) };
-          }
-          return b;
-        });
-      });
 
       // Update status order di pos_orders_data (baca fresh)
       try {
@@ -1191,11 +1123,11 @@ export default function App() {
         }
       } catch (e) { /* silent */ }
 
-      // Sync produk ke Firestore dengan data stok terbaru (delay biar state settled)
+      // Sync produk ke Firestore (gunakan refs untuk data terbaru)
       if (currentCalc.length > 0) {
         setTimeout(() => {
-          const updatedCalc = calculateAllProducts(bahanBakuRef.current, currentHpp, currentResep);
-          syncProductsToFirestore(updatedCalc, currentHpp, currentResep, bahanBakuRef.current, 'pusat').catch(console.warn);
+          const updatedCalc = calculateAllProducts(bahanBakuRef.current, productHppRef.current, detailResepRef.current);
+          syncProductsToFirestore(updatedCalc, productHppRef.current, detailResepRef.current, bahanBakuRef.current, 'pusat').catch(console.warn);
         }, 2000);
       }
     }, (err) => console.warn('Status change listener error:', err));
@@ -1575,6 +1507,9 @@ export default function App() {
                 onAddProduct={handleAddProduct}
                 onUpdateProductIngredients={handleUpdateProductIngredients}
                 onDeleteProduct={handleDeleteProduct}
+                onAddVariant={handleAddVariant}
+                onUpdateVariant={handleUpdateVariant}
+                onDeleteVariant={handleDeleteVariant}
               />
             )}
             {activeTab === 'hpp' && (

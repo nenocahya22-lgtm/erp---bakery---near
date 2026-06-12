@@ -41,6 +41,7 @@ import {
   FirestoreProductSummary,
 } from '../lib/firestore-bridge';
 import { safeGetLocalStorage } from '../lib/safe-json';
+import { getSharedCategories, setSharedCategories } from '../lib/category-store';
 
 const STORAGE_KEY = 'storenear_web_config';
 
@@ -114,9 +115,16 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
     loadFromFirestore();
   }, []);
 
-  // Auto-save to localStorage
+  // Auto-save to localStorage + sync kategori ke shared store
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...config, lastUpdated: new Date().toISOString() }));
+    // Sync kategori dari config ke shared store agar Formulasi Resep juga update
+    if (config.categories && config.categories.length > 0) {
+      setSharedCategories({
+        categories: config.categories,
+        categoryIcons: config.categoryIcons || {},
+      });
+    }
   }, [config]);
 
   // Fetch all products from Firestore (web store) — untuk panel Data Web Store
@@ -729,6 +737,12 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
                     const newIcons = { ...(config.categoryIcons || {}) };
                     delete newIcons[cat];
                     updateConfig({ categories: newCats, categoryIcons: newIcons });
+                    // Hapus juga dari shared store agar Formulasi Resep ikut update
+                    const shared = getSharedCategories();
+                    setSharedCategories({
+                      categories: newCats,
+                      categoryIcons: newIcons,
+                    });
                   }}
                   className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 cursor-pointer"
                 >
@@ -782,10 +796,14 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
                 onClick={() => {
                   const name = newCategoryName.trim();
                   if (name && !(config.categories || []).includes(name)) {
+                    const newCats = [...(config.categories || []), name];
+                    const newIcons = { ...(config.categoryIcons || {}), [name]: newCategoryIcon };
                     updateConfig({ 
-                      categories: [...(config.categories || []), name],
-                      categoryIcons: { ...(config.categoryIcons || {}), [name]: newCategoryIcon }
+                      categories: newCats,
+                      categoryIcons: newIcons
                     });
+                    // Juga daftarkan ke shared store agar Formulasi Resep ikut update
+                    setSharedCategories({ categories: newCats, categoryIcons: newIcons });
                     setNewCategoryName('');
                   }
                 }}
@@ -799,16 +817,21 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
           {/* Reset ke default */}
           <div className="border-t border-gray-100 pt-3 mt-3">
             <button
-              onClick={() => updateConfig({ 
-                categories: ['Roti & Sourdough', 'Viennoiserie & Croissant', 'Kue & Tart', 'Kue Kering & Cookies', 'Minuman Kopi & Teh'],
-                categoryIcons: {
-                  'Roti & Sourdough': 'wheat',
-                  'Viennoiserie & Croissant': 'croissant',
-                  'Kue & Tart': 'cake',
-                  'Kue Kering & Cookies': 'cookie',
-                  'Minuman Kopi & Teh': 'coffee'
-                }
-              })}
+              onClick={() => {
+                const defaults = {
+                  categories: ['Roti & Sourdough', 'Viennoiserie & Croissant', 'Kue & Tart', 'Kue Kering & Cookies', 'Minuman Kopi & Teh'],
+                  categoryIcons: {
+                    'Roti & Sourdough': 'wheat',
+                    'Viennoiserie & Croissant': 'croissant',
+                    'Kue & Tart': 'cake',
+                    'Kue Kering & Cookies': 'cookie',
+                    'Minuman Kopi & Teh': 'coffee'
+                  }
+                };
+                updateConfig(defaults);
+                // Sync ke shared store agar Formulasi Resep juga ikut reset
+                setSharedCategories(defaults);
+              }}
               className="px-3 py-1.5 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-lg transition-all cursor-pointer"
             >
               Reset ke Default
@@ -1130,8 +1153,8 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
 
           <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
             {config.products.map((p, idx) => (
-              <div key={p.productName} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-white border border-gray-200 shrink-0">
+              <div key={p.productName} className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-white border border-gray-200 shrink-0 mt-1">
                   {p.displayImage ? (
                     <img src={p.displayImage} alt={p.productName} className="w-full h-full object-cover" />
                   ) : (
@@ -1151,6 +1174,21 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
                       return <span className="text-[9px] text-gray-400 italic">Harga belum diatur</span>;
                     })()}
                   </div>
+                  {/* ─── VARIAN CHIPS ─── */}
+                  {p.variants && p.variants.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {p.variants.map(v => (
+                        <div key={v.id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                          v.active !== false
+                            ? 'bg-purple-50 border-purple-200 text-purple-700'
+                            : 'bg-gray-100 border-gray-200 text-gray-400'
+                        }`}>
+                          <span>{v.name}</span>
+                          <span className="font-mono">{formatCurrency(v.price || 0)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex gap-2 mt-1.5">
                     <input className="flex-1 px-2.5 py-1.5 text-[10px] border border-gray-200 rounded-lg outline-none focus:border-emerald-400"
                       value={p.description} onChange={e => updateProduct(idx, { description: e.target.value })} placeholder="Deskripsi produk..." />

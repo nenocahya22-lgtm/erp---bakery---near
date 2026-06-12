@@ -11,6 +11,16 @@ export interface BahanBaku {
   markupPercent?: number; // Markup percentage (e.g., 25 for 25%)
 }
 
+export interface ProductVariant {
+  id: string;
+  name: string; // e.g. "Ukuran 20×20", "Ukuran 20×10"
+  porsi: number; // Berapa porsi / potong yang dihasilkan varian ini
+  hargaJual: number; // Harga jual varian ini
+  active: boolean;
+  // Opsional: override bahan jika proporsi berbeda dari resep dasar
+  ingredients?: { namaBahan: string; takaran: number }[];
+}
+
 export interface ProductHpp {
   kode?: string; // Auto-generated kode like PRD-001
   namaProduk: string;
@@ -18,6 +28,7 @@ export interface ProductHpp {
   hargaJual: number; // Harga jual total resep atau per porsi
   kategori?: string; // e.g. 'Roti', 'Cake', 'Cookies', 'Coffee', 'Lainnya'
   wastePercent?: number; // Waste/shrinkage % (default 0). Example: 5 berarti 5% shrinkage
+  variants?: ProductVariant[]; // Varian ukuran untuk produk ini
 }
 
 export interface ProductTopping {
@@ -46,14 +57,32 @@ export interface CalculationResult {
   biayaBahanTotal: number;
   hppTotalResep: number;
   hppPerPorsi: number;
-  hargaJualPerPorsi: number;
-  profitPerPorsi: number;    marginPersen: number;
+  hargaJualPerPorsi: number;    profitPerPorsi: number;    marginPersen: number;
     wastePercent: number; // Waste/shrinkage factor used in calculation
     hppBeforeWaste: number; // HPP before applying waste factor
     biayaOverhead?: number;
     biayaTenagaKerja?: number;
     biayaUtilitas?: number;
     biayaKemasan?: number;
+    // Hasil kalkulasi per varian (jika produk punya varian ukuran)
+    variants?: {
+      id: string;
+      name: string;
+      porsi: number;
+      hargaJual: number;
+      biayaBahanTotal: number;
+      hppTotal: number;
+      hppPerPorsi: number;
+      bahanList: {
+        namaBahan: string;
+        takaran: number;
+        satuan: string;
+        hargaBeli: number;
+        isiKemasan: number;
+        hargaSatuan: number;
+        totalBiayaBahan: number;
+      }[];
+    }[];
     bahanList: {
     namaBahan: string;
     takaran: number;
@@ -221,6 +250,7 @@ export interface WebStoreProduct {
   description: string;
   kategori: string;
   discountPercent?: number; // 0-100, 0 = no discount
+  variants?: { id: string; name: string; price: number; originalPrice?: number }[]; // Varian ukuran untuk Web Store
 }
 
 export interface WebStorePromo {
@@ -399,7 +429,7 @@ export interface AutoPromoSignal {
   status: 'pending' | 'activated' | 'dismissed';
 }
 
-export const createDefaultWebStoreConfig = (products: { namaProduk: string; kategori?: string }[], cabangId?: string): WebStoreConfig => ({
+export const createDefaultWebStoreConfig = (products: { namaProduk: string; kategori?: string; variants?: { id: string; name: string; hargaJual: number }[] }[], cabangId?: string): WebStoreConfig => ({
   storeName: 'NEAR BAKERY & CO.',
   navbarBrandText: 'NEAR BAKERY & CO.',
   slogan: 'Artisan Bakery Premium',
@@ -435,17 +465,28 @@ export const createDefaultWebStoreConfig = (products: { namaProduk: string; kate
     displayImage: '',
     description: '',
     kategori: p.kategori || 'Lainnya',
+    variants: p.variants ? p.variants.filter(v => v.hargaJual > 0).map(v => ({
+      id: v.id,
+      name: v.name,
+      price: v.hargaJual,
+    })) : undefined,
   })),
   productGridTitle: 'Pilihan Hari Ini',
   emptyStateTitle: 'Belum Ada Menu Tersedia',
   emptyStateDescription: 'Database Anda saat ini kosong. Masuk ke panel penjual untuk menambahkan produk.',
-  categories: ['Roti & Sourdough', 'Viennoiserie & Croissant', 'Kue & Tart', 'Kue Kering & Cookies', 'Minuman Kopi & Teh'],
+  categories: [
+    'Roti & Sourdough',
+    'Viennoiserie & Croissant',
+    'Kue & Tart',
+    'Kue Kering & Cookies',
+    'Minuman Kopi & Teh',
+  ],
   categoryIcons: {
     'Roti & Sourdough': 'wheat',
     'Viennoiserie & Croissant': 'croissant',
     'Kue & Tart': 'cake',
     'Kue Kering & Cookies': 'cookie',
-    'Minuman Kopi & Teh': 'coffee'
+    'Minuman Kopi & Teh': 'coffee',
   },
   colorBrandGreen: '#006241',
   colorGreenAccent: '#00754A',
