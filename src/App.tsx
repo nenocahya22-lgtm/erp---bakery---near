@@ -48,6 +48,7 @@ import DoughTemperatureTab from './components/DoughTemperatureTab';
 import BackupSystemTab from './components/BackupSystemTab';
 import PembukuanTab from './components/PembukuanTab';
 import WebStoreManagerTab from './components/WebStoreManagerTab';
+import ChatTab from './components/ChatTab';
 import ToppingsTab from './components/ToppingsTab';
 
 // Production Center
@@ -88,6 +89,7 @@ import {
   PieChart,
   Cloud,
   Building2,
+  MessageSquare,
 } from 'lucide-react';
 
 export default function App() {
@@ -1753,6 +1755,9 @@ export default function App() {
                 }}
               />
             )}
+            {activeTab === 'erp_chat' && (
+              <ChatTab />
+            )}
             {activeTab === 'erp_pembukuan' && (
               <PembukuanTab
                 calculatedProducts={calculatedProducts}
@@ -1955,6 +1960,7 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
         <div className="space-y-1">
           <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑦ Backup</span>
           {sidebarBtn('erp_webstore', <Globe className="w-4 h-4" />, '🌐 Web Store')}
+          {sidebarBtn('erp_chat', <MessageSquare className="w-4 h-4" />, '💬 Chat Pembeli')}
           {sidebarBtn('erp_backup', <Cloud className="w-4 h-4" />, '💾 Backup & Restore')}
         </div>
       </nav>
