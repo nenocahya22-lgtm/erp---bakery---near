@@ -23,12 +23,25 @@ const SATUAN_CONVERSIONS: Record<string, { toBase: (v: number) => number; fromBa
 /**
  * Konversi nilai antar satuan yang kompatibel (mass→mass, volume→volume, count→count).
  * Contoh: convertSatuan(2000, 'gr', 'kg') → 2
+ * 
+ * Untuk satuan count (pcs/bungkus/dll): nilai takaran resep HARUS dalam satuan yang sama
+ * dengan satuan material. Sistem TIDAK bisa otomatis konversi gr → pcs karena
+ * berat per pcs berbeda tiap bahan. Contoh: 1 telur = 50gr, 1 plastik = 2gr.
+ * Jika Anda memasukkan takaran 200gr telur, dan satuan material adalah 'pcs',
+ * sistem akan menganggap 200 pcs — ini SALAH.
+ * Solusi: Ubah satuan material ke 'gr' atau masukkan takaran dalam 'pcs'.
  */
-export function convertSatuan(value: number, fromSatuan: string, toSatuan: string): number {
+export function convertSatuan(value: number, fromSatuan: string, toSatuan: string, warnIncompatible: boolean = false): number {
   const from = SATUAN_CONVERSIONS[fromSatuan];
   const to = SATUAN_CONVERSIONS[toSatuan];
-  if (!from || !to) return value; // unknown unit, return as-is
-  if (from.group !== to.group) return value; // incompatible groups
+  if (!from || !to) return value;
+  if (from.group !== to.group) {
+    // Incompatible groups — return as-is dan beri warning
+    if (warnIncompatible) {
+      console.warn(`⚠️ Konversi satuan tidak kompatibel: ${fromSatuan} (${from.group}) → ${toSatuan} (${to.group}). Nilai digunakan apa adanya.`);
+    }
+    return value;
+  }
   const baseValue = from.toBase(value);
   return to.fromBase(baseValue);
 }
@@ -157,16 +170,17 @@ export function calculateBahanADS(
   if (relatedProducts.length === 0) return result;
   
   // Sum konsumsi per cabang
-  productADS.forEach((cabangMap, productKey) => {
-    cabangMap.forEach((entry) => {
-      const relatedProd = relatedProducts.find(
-        r => r.namaProduk.toLowerCase().trim() === productKey
-      );
-      if (!relatedProd) return;
-      
-      const key = entry.cabangId;
-      const existing = result.get(key);
-      const dailyConsumption = entry.dailySales * (relatedProd.takaran / 1000);
+    productADS.forEach((cabangMap, productKey) => {
+      cabangMap.forEach((entry) => {
+        const relatedProd = relatedProducts.find(
+          r => r.namaProduk.toLowerCase().trim() === productKey
+        );
+        if (!relatedProd) return;
+
+        const key = entry.cabangId;
+        const existing = result.get(key);
+        // Konsumsi harian = ADS × takaran per resep (dalam satuan takaran resep)
+        const dailyConsumption = entry.dailySales * relatedProd.takaran;
       
       if (existing) {
         result.set(key, {
@@ -215,7 +229,18 @@ function calculateVariantHPP(
   const bahanListMapped = variantDetails.map((detail) => {
     const material = bahanMap.get(detail.namaBahan.toLowerCase().trim());
     const hargaSatuan = material ? material.hargaSatuan : 0;
-    const totalBiayaBahan = detail.takaran * hargaSatuan;
+    // Normalisasi satuan (sama seperti calculateAllProducts)
+    const materialSatuan = material?.satuan || 'gr';
+    const conv = SATUAN_CONVERSIONS[materialSatuan];
+    let takaranEffective: number;
+    if (conv?.group === 'mass') {
+      takaranEffective = convertSatuan(detail.takaran, 'gr', materialSatuan);
+    } else if (conv?.group === 'volume') {
+      takaranEffective = convertSatuan(detail.takaran, 'ml', materialSatuan);
+    } else {
+      takaranEffective = detail.takaran;
+    }
+    const totalBiayaBahan = takaranEffective * hargaSatuan;
     biayaBahanTotal += totalBiayaBahan;
 
     return {
@@ -258,12 +283,21 @@ export function calculateAllProducts(
     const bahanListMapped = productDetailRows.map((detail) => {
       const material = bahanMap.get(detail.namaBahan.toLowerCase().trim());
       const hargaSatuan = material ? material.hargaSatuan : 0;
-      // 🔧 Normalisasi satuan: takaran resep dalam gram, konversi ke satuan material
+      // 🔧 Normalisasi satuan — tentukan asal satuan takaran berdasarkan grup material:
+      // - Mass (gr/kg/ons) → takaran diasumsikan dalam gram, konversi ke satuan material
+      // - Volume (ml/liter) → takaran diasumsikan dalam ml, konversi ke satuan material
+      // - Count (pcs/pack/dll) → takaran HARUS dalam satuan material (tidak ada otomatis)
       const materialSatuan = material?.satuan || 'gr';
       const conv = SATUAN_CONVERSIONS[materialSatuan];
-      const takaranInMaterialUnit = conv?.group === 'mass'
-        ? convertSatuan(detail.takaran, 'gr', materialSatuan)
-        : detail.takaran;
+      let takaranInMaterialUnit: number;
+      if (conv?.group === 'mass') {
+        takaranInMaterialUnit = convertSatuan(detail.takaran, 'gr', materialSatuan);
+      } else if (conv?.group === 'volume') {
+        takaranInMaterialUnit = convertSatuan(detail.takaran, 'ml', materialSatuan);
+      } else {
+        // Count group — gunakan takaran langsung (harus dalam satuan material)
+        takaranInMaterialUnit = detail.takaran;
+      }
       const totalBiayaBahan = takaranInMaterialUnit * hargaSatuan;
       biayaBahanTotal += totalBiayaBahan;
 
