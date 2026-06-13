@@ -6,6 +6,7 @@ import {
   Printer, Star, FileText, ClipboardCheck, Save
 } from 'lucide-react';
 import { safeGetLocalStorage } from '../lib/safe-json';
+import { hashPassword as pbkdf2Hash } from '../lib/password';
 
 interface DataPusatTabProps {
   bahanBaku: BahanBaku[];
@@ -61,13 +62,9 @@ export default function DataPusatTab({
     setShowCabangModal(true);
   };
 
-  // ─── HASH PASSWORD FUNCTION ───
+  // ─── HASH PASSWORD FUNCTION (PBKDF2) ───
   const hashPassword = async (password: string): Promise<string> => {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return pbkdf2Hash(password);
   };
 
   // ─── HELPERS ───

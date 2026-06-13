@@ -1,15 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Cabang } from '../types';
 import { Lock, User, Eye, EyeOff, Building2, ArrowLeft } from 'lucide-react';
-
-// SHA-256 hash — harus match dengan yang di DataPusatTab
-async function hashPasswordSHA256(pass: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(pass);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
+import { verifyPassword } from '../lib/password';
 
 interface BranchLoginProps {
   cabangList: Cabang[];
@@ -41,10 +33,8 @@ export default function BranchLogin({ cabangList, onLoginSuccess, onBackToOwner 
     const found = cabangList.find(c => c.username.toLowerCase() === cleanUser && c.isActive);
 
     if (found) {
-      // Hash password input dan bandingkan dengan yang tersimpan (sudah SHA-256)
-      const hashedInput = await hashPasswordSHA256(cleanPass);
-      // Hanya cocokkan dengan hash — tidak ada fallback plaintext demi keamanan
-      const passwordMatch = found.password === hashedInput;
+      // Verifikasi password dengan PBKDF2 (atau legacy SHA-256)
+      const passwordMatch = await verifyPassword(cleanPass, found.password);
 
       if (passwordMatch) {
         localStorage.setItem('branch_authenticated', JSON.stringify({ id: found.id, nama: found.nama }));

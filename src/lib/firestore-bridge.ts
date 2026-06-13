@@ -1,6 +1,10 @@
 /**
  * Firestore Bridge — menghubungkan ERP dengan database Firestore yang sama dengan Web Store
- * Kedua aplikasi menggunakan Firebase project yang sama: near-bakery-store
+ * Kedua aplikasi menggunakan Firebase project: quick-codex-1cf5x (Web Store)
+ * 
+ * CATATAN: Firebase App untuk Google Auth (Google Sheets) masih pakai project terpisah
+ * (near-bakery-store) via firebase.ts. Hanya Firestore yang disatukan ke project Web Store
+ * agar ERP dan Web Store berbagi data yang sama.
  */
 
 import { initializeApp } from 'firebase/app';
@@ -21,13 +25,25 @@ import {
   Timestamp,
   deleteDoc,
 } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
 import { WebStoreConfig, PaymentMethod, BahanBaku, ProductHpp, DetailResep, CalculationResult, Cabang } from '../types';
 import { getSavedRecipeImage } from './image-generator';
 
-// Inisialisasi Firebase untuk Firestore (sama dengan web store)
-const app = initializeApp(firebaseConfig, 'erp-bridge');
-export const db = getFirestore(app);
+// Firebase config untuk project Web Store (quick-codex-1cf5x)
+// — database yang SAMA digunakan oleh aplikasi Web Store (storenear)
+// — Google Auth untuk Sheets tetap pakai project ERP terpisah
+const webStoreFirebaseConfig = {
+  projectId: 'quick-codex-1cf5x',
+  appId: '1:540332291979:web:a7eb10f36506c6830fa18e',
+  apiKey: 'AIzaSyCbKLmaJUA2CEtdodtdmhivSaEFPK7bd7I',
+  authDomain: 'quick-codex-1cf5x.firebaseapp.com',
+  firestoreDatabaseId: 'ai-studio-9e420702-3e63-4587-a7e9-2f225c2ac0c6',
+  storageBucket: 'quick-codex-1cf5x.firebasestorage.app',
+  messagingSenderId: '540332291979',
+};
+
+// Inisialisasi Firebase untuk Firestore (project Web Store)
+const app = initializeApp(webStoreFirebaseConfig, 'erp-bridge');
+export const db = getFirestore(app, webStoreFirebaseConfig.firestoreDatabaseId);
 
 // ============================================================================
 // WEB STORE CONFIG — simpan & baca konfigurasi web store dari Firestore

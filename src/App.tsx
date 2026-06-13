@@ -15,6 +15,7 @@ import { googleSignIn } from './lib/firebase';import { extractSpreadsheetId,
 import { calculateAllProducts } from './lib/calculations';
 import { safeGetLocalStorage } from './lib/safe-json';
 import { listenNewOrders, listenNotifications, syncProductsToFirestore, listenNewChats, listenOrderStatusChanges, getFirestoreCategories } from './lib/firestore-bridge';
+import { loadAllFromFirestore, saveAllToFirestore, listenAllChanges, ErpSyncData } from './lib/erp-firestore-sync';
 import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, WasteLog, Cabang, SuratOrder, BranchStock, BranchTransaction, ProductTopping, IoTDevice } from './types';
 
 import OwnerLogin from './components/OwnerLogin';
@@ -396,6 +397,14 @@ export default function App() {
     localStorage.removeItem('bahan_baku_data');
     localStorage.removeItem('product_hpp_data');
     localStorage.removeItem('detail_resep_data');
+    
+    // Juga hapus data dari Firestore cloud
+    saveAllToFirestore({
+      bahanBaku: [], productHpp: [], detailResep: [],
+      cabangList: [], suratOrders: [],
+      wasteLogs: [], writeOffLogs: [], rdExperiments: [],
+      toppings: [], cabangStok: [], branchTransactions: [],
+    }).catch(() => {});
     
     setHasUnsavedChanges(true);
     showToast('Sistem Near Bakery & Co berhasil diformat steril! Semua data contoh telah dibersihkan.', 'success');
@@ -1268,6 +1277,71 @@ export default function App() {
       }
     }
   }, [isOwnerAuthenticated]);
+
+  // ─── FIRESTORE SYNC — Auto-load data from Firestore on login ───
+  const [firestoreLoaded, setFirestoreLoaded] = useState(false);
+
+  useEffect(() => {
+    if ((isOwnerAuthenticated || branchAuth) && !firestoreLoaded) {
+      loadAllFromFirestore().then(remoteData => {
+        if (remoteData) {
+          // Firestore has data — use it (overwrites localStorage)
+          setBahanBaku(remoteData.bahanBaku);
+          setProductHpp(remoteData.productHpp);
+          setDetailResep(remoteData.detailResep);
+          setCabangList(remoteData.cabangList);
+          setSuratOrders(remoteData.suratOrders);
+          setWasteLogs(remoteData.wasteLogs);
+          setWriteOffLogs(remoteData.writeOffLogs);
+          setRdExperiments(remoteData.rdExperiments);
+          setToppings(remoteData.toppings);
+          setCabangStok(remoteData.cabangStok);
+          setBranchTransactions(remoteData.branchTransactions);
+          showToast('☁️ Data tersinkron dari cloud — semua perangkat pakai data terbaru!', 'success');
+        } else {
+          // Firestore kosong, data dari localStorage akan otomatis di-upload
+          const hasLocalData = bahanBaku.length > 0 || productHpp.length > 0 || detailResep.length > 0;
+          if (hasLocalData) {
+            saveAllToFirestore({ bahanBaku, productHpp, detailResep, cabangList, suratOrders, wasteLogs, writeOffLogs, rdExperiments, toppings, cabangStok, branchTransactions }).then(() => {
+              showToast('☁️ Data lokal diunggah ke cloud — aman di semua perangkat!', 'success');
+            });
+          }
+        }
+        setFirestoreLoaded(true);
+      }).catch(err => {
+        console.warn('Firestore initial load failed (offline mode ok):', err);
+        setFirestoreLoaded(true);
+      });
+    }
+  }, [isOwnerAuthenticated, branchAuth]);
+
+  // ─── FIRESTORE AUTO-SAVE — Simpan ke Firestore setiap ada perubahan ───
+  useEffect(() => {
+    if (!firestoreLoaded) return;
+    const timer = setTimeout(() => {
+      saveAllToFirestore({ bahanBaku, productHpp, detailResep, cabangList, suratOrders, wasteLogs, writeOffLogs, rdExperiments, toppings, cabangStok, branchTransactions }).catch(() => {});
+    }, 2000); // debounce 2 detik
+    return () => clearTimeout(timer);
+  }, [bahanBaku, productHpp, detailResep, cabangList, suratOrders, wasteLogs, writeOffLogs, rdExperiments, toppings, cabangStok, branchTransactions, firestoreLoaded]);
+
+  // ─── FIRESTORE REAL-TIME LISTENER — update dari perangkat lain ───
+  useEffect(() => {
+    if (!firestoreLoaded) return;
+    const unsub = listenAllChanges({
+      onBahanBaku: (items) => { setBahanBaku(items); },
+      onProductHpp: (items) => { setProductHpp(items); },
+      onDetailResep: (items) => { setDetailResep(items); },
+      onCabangList: (items) => { setCabangList(items); },
+      onSuratOrders: (items) => { setSuratOrders(items); },
+      onWasteLogs: (items) => { setWasteLogs(items); },
+      onWriteOffLogs: (items) => { setWriteOffLogs(items); },
+      onRdExperiments: (items) => { setRdExperiments(items); },
+      onToppings: (items) => { setToppings(items); },
+      onCabangStok: (items) => { setCabangStok(items); },
+      onBranchTransactions: (items) => { setBranchTransactions(items); },
+    });
+    return () => unsub();
+  }, [firestoreLoaded]);
 
   // ─── AUTH GATE ───
   const [showBranchLogin, setShowBranchLogin] = useState(false);

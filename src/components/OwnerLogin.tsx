@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Lock, User, Eye, EyeOff, ShieldCheck, HelpCircle, KeyRound, Save, X } from 'lucide-react';
+import { hashPassword, verifyPassword, isPbkdf2Hash, bytesToHex } from '../lib/password';
 
 interface OwnerLoginProps {
   onLoginSuccess: () => void;
 }
 
-// Default password hash untuk "owner123"
+// Default password hash untuk "owner123" (SHA-256 legacy — akan upgrade ke PBKDF2 saat login)
 const DEFAULT_PASSWORD_HASH = '43a0d17178a9d26c9e0fe9a74b0b45e38d32f27aed887a008a54bf6e033bf7b9';
 
 function getStoredPasswordHash(): string {
@@ -25,13 +26,18 @@ function setStoredPasswordHash(hash: string): void {
   }
 }
 
-const hashPassword = async (password: string): Promise<string> => {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-};
+async function checkPassword(inputPassword: string): Promise<boolean> {
+  const storedHash = getStoredPasswordHash();
+  const isValid = await verifyPassword(inputPassword, storedHash);
+
+  // Upgrade SHA-256 legacy ke PBKDF2
+  if (isValid && !isPbkdf2Hash(storedHash)) {
+    const newHash = await hashPassword(inputPassword);
+    setStoredPasswordHash(newHash);
+  }
+
+  return isValid;
+}
 
 export default function OwnerLogin({ onLoginSuccess }: OwnerLoginProps) {
   const [username, setUsername] = useState('');
@@ -79,16 +85,20 @@ export default function OwnerLogin({ onLoginSuccess }: OwnerLoginProps) {
     const cleanPass = password.trim();
 
     if (cleanUser === 'owner') {
-      const inputHash = await hashPassword(cleanPass);
-      const storedHash = getStoredPasswordHash();
+      const isValid = await checkPassword(cleanPass);
       
-      if (inputHash === storedHash) {
+      if (isValid) {
+        // Generate session token dari SHA-256 password
+        const encoder = new TextEncoder();
+        const data = encoder.encode(cleanPass + 'near-bakery-session');
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const sessionToken = bytesToHex(new Uint8Array(hashBuffer));
         sessionStorage.setItem('owner_authenticated', 'true');
         sessionStorage.setItem('owner_authenticated_at', new Date().toISOString());
         sessionStorage.setItem('owner_session_id', crypto.randomUUID());
         localStorage.setItem('owner_authenticated', 'true');
         localStorage.setItem('owner_authenticated_at', new Date().toISOString());
-        localStorage.setItem('owner_session_token', inputHash.substring(0, 16));
+        localStorage.setItem('owner_session_token', sessionToken.substring(0, 16));
         setError('');
         onLoginSuccess();
       } else {
@@ -108,10 +118,8 @@ export default function OwnerLogin({ onLoginSuccess }: OwnerLoginProps) {
       return;
     }
 
-    const oldHash = await hashPassword(oldPass.trim());
-    const storedHash = getStoredPasswordHash();
-
-    if (oldHash !== storedHash) {
+    const isValid = await checkPassword(oldPass.trim());
+    if (!isValid) {
       setPassMsg('Password lama salah!');
       return;
     }
