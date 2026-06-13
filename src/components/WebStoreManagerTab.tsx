@@ -198,6 +198,16 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
     }
   }, [isFirestoreConnected, fetchFirestoreProducts, fetchFirestoreCategories]);
 
+  // Auto-import kategori dari Firestore ke local config jika local masih kosong
+  useEffect(() => {
+    if (firestoreCategories && firestoreCategories.categories.length > 0 && (!config.categories || config.categories.length === 0)) {
+      updateConfig({
+        categories: firestoreCategories.categories,
+        categoryIcons: { ...(config.categoryIcons || {}), ...firestoreCategories.categoryIcons },
+      });
+    }
+  }, [firestoreCategories]);
+
   // Sync products from productHpp
   useEffect(() => {
     setConfig(prev => {
