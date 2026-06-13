@@ -270,9 +270,26 @@ export async function syncProductsToFirestore(
     }
   } catch (e) { /* silent */ }
   
+  let mergedCategories = [...catList];
+  
+  // 🔄 SCAN kategori dari products collection (Web Store) agar kategori Web Store ikut terdeteksi
+  try {
+    const prodSnap = await getDocs(collection(db, 'products'));
+    const webStoreCategories = new Set<string>();
+    prodSnap.forEach(p => {
+      const cat = p.data().category;
+      if (cat && typeof cat === 'string' && cat.trim()) webStoreCategories.add(cat.trim());
+    });
+    for (const cat of webStoreCategories) {
+      if (!mergedCategories.includes(cat)) {
+        mergedCategories.push(cat);
+        if (!catIcons[cat]) catIcons[cat] = 'package';
+      }
+    }
+  } catch (e) { /* silent — non-critical */ }
+  
   // 🔄 MERGE dengan kategori dari ERP (tambah yang belum ada)
   const erpCategories = [...new Set(productHpp.map(p => p.kategori || 'Lainnya').filter(Boolean))];
-  const mergedCategories = [...catList];
   for (const cat of erpCategories) {
     if (!mergedCategories.includes(cat)) {
       mergedCategories.push(cat);
@@ -351,17 +368,29 @@ export async function getAllFirestoreProducts(): Promise<FirestoreProductSummary
   }
 }
 
-/** Ambil daftar kategori dari Firestore (collection categories/{cabangId}) */
+/** Ambil daftar kategori dari Firestore (collection categories/{cabangId}) — fallback scan products */
 export async function getFirestoreCategories(cabangId: string = 'pusat'): Promise<{ categories: string[]; categoryIcons: Record<string, string> } | null> {
   try {
     const docRef = doc(db, 'categories', cabangId);
     const snap = await getDoc(docRef);
-    if (!snap.exists()) return null;
-    const data = snap.data() as any;
-    return {
-      categories: data.categories || [],
-      categoryIcons: data.categoryIcons || {},
-    };
+    if (snap.exists()) {
+      const data = snap.data() as any;
+      const cats = data.categories || [];
+      if (cats.length > 0) {
+        return { categories: cats, categoryIcons: data.categoryIcons || {} };
+      }
+    }
+    // Fallback: scan categories dari products collection
+    const prodSnap = await getDocs(collection(db, 'products'));
+    const catSet = new Set<string>();
+    prodSnap.forEach(p => {
+      const cat = p.data().category;
+      if (cat && typeof cat === 'string' && cat.trim()) catSet.add(cat.trim());
+    });
+    if (catSet.size > 0) {
+      return { categories: [...catSet], categoryIcons: {} };
+    }
+    return null;
   } catch (e) {
     console.warn('Failed to fetch categories:', e);
     return null;
