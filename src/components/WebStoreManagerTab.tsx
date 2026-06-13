@@ -38,6 +38,7 @@ import {
   getAllSubdomains,
   getAllFirestoreProducts,
   getFirestoreCategories,
+  saveCategoriesToFirestore,
   FirestoreProductSummary,
 } from '../lib/firestore-bridge';
 import { safeGetLocalStorage } from '../lib/safe-json';
@@ -126,6 +127,16 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
       });
     }
   }, [config]);
+
+  // Auto-save kategori ke Firestore ketika berubah
+  useEffect(() => {
+    if (!isFirestoreConnected || !config.categories) return;
+    const cabangId = config.cabangId || 'pusat';
+    const timer = setTimeout(() => {
+      saveCategoriesToFirestore(cabangId, config.categories || [], config.categoryIcons || {});
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [config.categories, config.categoryIcons, config.cabangId, isFirestoreConnected]);
 
   // Fetch all products from Firestore (web store) — untuk panel Data Web Store
   const fetchFirestoreProducts = useCallback(async () => {

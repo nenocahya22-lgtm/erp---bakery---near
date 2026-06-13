@@ -397,6 +397,21 @@ export async function getFirestoreCategories(cabangId: string = 'pusat'): Promis
   }
 }
 
+/** Simpan kategori ke Firestore (collection categories/{cabangId}) */
+export async function saveCategoriesToFirestore(
+  cabangId: string,
+  categories: string[],
+  categoryIcons: Record<string, string>,
+): Promise<void> {
+  const catDocRef = doc(db, 'categories', cabangId);
+  await setDoc(catDocRef, {
+    cabangId,
+    categories,
+    categoryIcons,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 // ============================================================================
 // ORDERS — baca dan listen orders dari web store
 // ============================================================================
