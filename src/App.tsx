@@ -1522,9 +1522,14 @@ export default function App() {
                   </>
                 )}
               </button>
-            ) : (
+            ) : firestoreLoaded ? (
               <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 p-2 rounded-xl flex items-center gap-1.5">
                 <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                <span>☁️ Cloud Sync Aktif</span>
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 p-2 rounded-xl flex items-center gap-1.5">
+                <AlertTriangle className="w-3 h-3 text-amber-500" />
                 <span>Mode Offline — Data Local Storage</span>
               </span>
             )}
