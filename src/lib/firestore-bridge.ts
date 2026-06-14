@@ -1,13 +1,14 @@
 /**
  * Firestore Bridge — menghubungkan ERP dengan database Firestore yang sama dengan Web Store
- * Kedua aplikasi menggunakan Firebase project: quick-codex-1cf5x (Web Store)
+ * Kedua aplikasi menggunakan Firebase project: near-bakery-store
  * 
- * CATATAN: Firebase App untuk Google Auth (Google Sheets) masih pakai project terpisah
- * (near-bakery-store) via firebase.ts. Hanya Firestore yang disatukan ke project Web Store
- * agar ERP dan Web Store berbagi data yang sama.
+ * Project near-bakery-store berisi: chats, orders, products, categories, webstore_config
+ * Google Auth untuk Owner Login tetap pakai project yang sama (near-bakery-store).
  */
 
+
 import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously } from 'firebase/auth';
 import {
   getFirestore,
   collection,
@@ -28,9 +29,9 @@ import {
 import { WebStoreConfig, PaymentMethod, BahanBaku, ProductHpp, DetailResep, CalculationResult, Cabang } from '../types';
 import { getSavedRecipeImage } from './image-generator';
 
-// Firebase config untuk project Web Store (quick-codex-1cf5x)
+// Firebase config untuk project Web Store (near-bakery-store)
 // — database yang SAMA digunakan oleh aplikasi Web Store (storenear)
-// — Google Auth untuk Sheets tetap pakai project ERP terpisah
+// — Semua data ERP + Web Store disatukan di project yang sama
 // Konfigurasi dari environment variables (VITE_* untuk client-side)
 const webStoreFirebaseConfig = {
   projectId: import.meta.env.VITE_WEBSTORE_PROJECT_ID || '',
@@ -51,6 +52,15 @@ const _useNamedDb = _firestoreDbId.length > 0;
 export const db = _useNamedDb
   ? getFirestore(app, _firestoreDbId)
   : getFirestore(app);
+
+// Anonymous Auth — ERP perlu login anonim ke Firebase agar Firestore Rules
+// yang require `request.auth != null` (seperti collection chats) bisa diakses.
+// Project quick-codex-1cf5x dari AI Studio, kita tidak bisa edit Rules-nya,
+// jadi ERP login anonim untuk memenuhi syarat auth.
+const _auth = getAuth(app);
+signInAnonymously(_auth).catch((err) => {
+  console.warn('⚠️ Anonymous auth skipped (chats may not load):', err.message);
+});
 
 // ============================================================================
 // WEB STORE CONFIG — simpan & baca konfigurasi web store dari Firestore
