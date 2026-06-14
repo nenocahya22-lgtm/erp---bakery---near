@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { BahanBaku, Cabang, SuratOrder, BranchStock, BranchTransaction, WasteLog, StockOpname, PurchaseOrder } from '../types';
+import { BahanBaku, Cabang, SuratOrder, BranchStock, BranchTransaction, WasteLog, StockOpname, PurchaseOrder, OpnameDraft } from '../types';
 import {
   Building2, Plus, Trash2, Edit2, X, Package, Truck, CheckCircle2,
   AlertTriangle, Search, Users, KeyRound, Eye, EyeOff, BarChart3,
-  Printer, Star, FileText, ClipboardCheck, Save
+  Printer, Star, FileText, ClipboardCheck, Save, ThumbsUp, ThumbsDown, Clock
 } from 'lucide-react';
 import { safeGetLocalStorage } from '../lib/safe-json';
 import { hashPassword as pbkdf2Hash } from '../lib/password';
@@ -24,6 +24,9 @@ interface DataPusatTabProps {
   cabangStok: BranchStock[];
   branchTransactions: BranchTransaction[];
   wasteLogs: WasteLog[];
+  opnameDrafts: OpnameDraft[];
+  onApproveOpname: (draftId: string) => void;
+  onRejectOpname: (draftId: string, note?: string) => void;
 }
 
 export default function DataPusatTab({
@@ -31,6 +34,7 @@ export default function DataPusatTab({
   cabangList, onAddCabang, onEditCabang, onDeleteCabang,
   suratOrders, onAddSuratOrder, onUpdateSuratOrder, onReturSuratOrder,
   cabangStok, branchTransactions, wasteLogs,
+  opnameDrafts, onApproveOpname, onRejectOpname,
 }: DataPusatTabProps) {
   const [activeSection, setActiveSection] = useState<'cabang' | 'bahan' | 'stok' | 'stok_cabang' | 'supplier' | 'pengiriman' | 'stok_opname' | 'rekap'>('cabang');
 
@@ -178,6 +182,8 @@ export default function DataPusatTab({
   const [poHarga, setPoHarga] = useState('');
   const [poSearch, setPoSearch] = useState('');
   const [stokOpnameFilter, setStokOpnameFilter] = useState<string>('all');
+  const [showApproval, setShowApproval] = useState(true);
+  const pendingDrafts = opnameDrafts.filter(d => d.status === 'pending');
   const [soCabangFilter, setSoCabangFilter] = useState<string>('all');
   const [showExportHistory, setShowExportHistory] = useState(false);
   const [exportHistory, setExportHistory] = useState<{type:string;format:string;timestamp:string;count:number}[]>(() =>
@@ -1668,6 +1674,86 @@ export default function DataPusatTab({
       {/* ─── SECTION: STOK OPNAME PER CABANG ─── */}
       {activeSection === 'stok_opname' && (
         <div className="space-y-4">
+          {/* ─── PENDING APPROVAL PANEL ─── */}
+          {pendingDrafts.length > 0 && (
+            <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl shadow-xs overflow-hidden">
+              <div className="p-4 border-b border-amber-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-amber-600" />
+                  <div>
+                    <h3 className="text-sm font-bold text-amber-900">⏳ Persetujuan Stok Opname</h3>
+                    <p className="text-[10px] text-amber-700">{pendingDrafts.length} draft menunggu persetujuan Anda</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowApproval(!showApproval)}
+                  className="text-xs font-bold text-amber-700 hover:text-amber-900 px-2 py-1 bg-amber-100 rounded-lg cursor-pointer">
+                  {showApproval ? 'Sembunyikan' : 'Lihat'}
+                </button>
+              </div>
+              {showApproval && (
+                <div className="divide-y divide-amber-100 max-h-[400px] overflow-y-auto">
+                  {pendingDrafts.map(draft => (
+                    <div key={draft.id} className="p-4 flex items-start gap-3 hover:bg-amber-100/50">
+                      <div className="w-8 h-8 rounded-full bg-amber-200 flex items-center justify-center shrink-0">
+                        <ClipboardCheck className="w-4 h-4 text-amber-700" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-bold text-gray-800">{draft.bahanNama}</span>
+                          <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">{draft.cabangNama}</span>
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 text-[11px]">
+                          <span className="text-gray-500">Teoritis: <strong>{draft.stokTeoritis}</strong></span>
+                          <span className="text-emerald-700 font-bold">→ Fisik: <strong>{draft.stokFisik}</strong></span>
+                          <span className="text-gray-400">{draft.satuan}</span>
+                          <span className="text-gray-400">• {new Date(draft.tanggal).toLocaleDateString('id-ID')}</span>
+                        </div>
+                        {draft.stokTeoritis !== draft.stokFisik && (
+                          <div className={`mt-1 text-[10px] font-bold ${draft.stokFisik > draft.stokTeoritis ? 'text-blue-600' : 'text-red-600'}`}>
+                            {draft.stokFisik > draft.stokTeoritis
+                              ? `🔵 Plus ${(draft.stokFisik - draft.stokTeoritis).toFixed(1)} ${draft.satuan}`
+                              : `🔴 Minus ${(draft.stokTeoritis - draft.stokFisik).toFixed(1)} ${draft.satuan}`}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button onClick={() => onApproveOpname(draft.id)}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1">
+                          <ThumbsUp className="w-3 h-3" /> Setujui
+                        </button>
+                        <button onClick={() => {
+                          const note = window.prompt('Alasan penolakan (opsional):', '');
+                          onRejectOpname(draft.id, note || undefined);
+                        }}
+                          className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1">
+                          <ThumbsDown className="w-3 h-3" /> Tolak
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ─── INTEGRITAS STOK ALERT ─── */}
+          {cabangList.filter(c => c.isActive).map(cabang => {
+            const items = cabangStok.filter(s => s.cabangId === cabang.id);
+            const selisihTotal = items.reduce((sum, s) => sum + Math.abs(s.stokFisik - s.stokTeoritis), 0);
+            const masalahCount = items.filter(s => Math.abs(s.stokFisik - s.stokTeoritis) > 0).length;
+            if (masalahCount === 0) return null;
+            return (
+              <div key={cabang.id} className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                <div className="text-[11px]">
+                  <span className="font-bold text-amber-900">⚠️ {cabang.nama}:</span>
+                  {' '}{masalahCount} bahan dengan selisih stok (total {selisihTotal.toFixed(0)} unit).
+                  {' '}<span className="text-amber-700">Cek opname dan pastikan produksi tercatat.</span>
+                </div>
+              </div>
+            );
+          })}
+
           <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-5">
             <div className="flex items-center gap-2.5 mb-4">
               <ClipboardCheck className="w-5 h-5 text-emerald-600" />

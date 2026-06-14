@@ -16,7 +16,7 @@ import { calculateAllProducts } from './lib/calculations';
 import { safeGetLocalStorage } from './lib/safe-json';
 import { listenNewOrders, listenNotifications, syncProductsToFirestore, listenNewChats, listenOrderStatusChanges, getFirestoreCategories } from './lib/firestore-bridge';
 import { loadAllFromFirestore, saveAllToFirestore, listenAllChanges, ErpSyncData } from './lib/erp-firestore-sync';
-import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, WasteLog, Cabang, SuratOrder, BranchStock, BranchTransaction, ProductTopping, IoTDevice } from './types';
+import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, WasteLog, Cabang, SuratOrder, BranchStock, BranchTransaction, ProductTopping, IoTDevice, OpnameDraft } from './types';
 
 import OwnerLogin from './components/OwnerLogin';
 import DashboardTab from './components/DashboardTab';
@@ -1077,6 +1077,59 @@ export default function App() {
     });
   };
 
+  // ─── OPNAME DRAFTS — Stock Opname Approval ───
+  const [opnameDrafts, setOpnameDrafts] = useState<OpnameDraft[]>(() =>
+    safeGetLocalStorage<OpnameDraft[]>('opname_drafts_data', [])
+  );
+  useEffect(() => {
+    const timer = setTimeout(() => localStorage.setItem('opname_drafts_data', JSON.stringify(opnameDrafts)), 500);
+    return () => clearTimeout(timer);
+  }, [opnameDrafts]);
+
+  const handleAddOpnameDraft = (cabangId: string, cabangNama: string, bahanNama: string, stokFisik: number, stokTeoritis: number, satuan: string, petugas: string) => {
+    // Replace existing draft for same cabang+bahan if exists
+    setOpnameDrafts(prev => {
+      const filtered = prev.filter(d => !(d.cabangId === cabangId && d.bahanNama === bahanNama && d.status === 'pending'));
+      const draft: OpnameDraft = {
+        id: `op-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        cabangId,
+        cabangNama,
+        bahanNama,
+        stokFisik,
+        stokTeoritis,
+        satuan,
+        tanggal: new Date().toISOString(),
+        petugas,
+        status: 'pending',
+      };
+      return [...filtered, draft];
+    });
+  };
+
+  const handleApproveOpname = (draftId: string) => {
+    const draft = opnameDrafts.find(d => d.id === draftId);
+    if (!draft) return;
+    // Update cabangStok with approved stokFisik
+    setCabangStok(prev => prev.map(s =>
+      s.cabangId === draft.cabangId && s.bahanNama === draft.bahanNama
+        ? { ...s, stokFisik: draft.stokFisik, lastUpdated: new Date().toISOString() }
+        : s
+    ));
+    // Mark draft as approved
+    setOpnameDrafts(prev => prev.map(d =>
+      d.id === draftId ? { ...d, status: 'approved' as const } : d
+    ));
+    showToast(`✅ Stok opname "${draft.bahanNama}" di ${draft.cabangNama} telah disetujui!`, 'success');
+  };
+
+  const handleRejectOpname = (draftId: string, note?: string) => {
+    setOpnameDrafts(prev => prev.map(d =>
+      d.id === draftId ? { ...d, status: 'rejected' as const, rejectNote: note } : d
+    ));
+    const draft = opnameDrafts.find(d => d.id === draftId);
+    showToast(`❌ Stok opname "${draft?.bahanNama}" ditolak.`, 'info');
+  };
+
   // ─── BRANCH AUTH HANDLERS ───
   const handleBranchLogin = (cabang: Cabang) => {
     setBranchAuth({ id: cabang.id, nama: cabang.nama });
@@ -1526,7 +1579,7 @@ export default function App() {
           onAddSuratOrder={handleAddSuratOrder}
           onUpdateSuratOrder={handleUpdateSuratOrder}
           onCompletePOSSale={handleCompletePOSSale}
-          onSyncStokOpname={handleSyncStokOpname}
+          onAddOpnameDraft={handleAddOpnameDraft}
           onLogout={handleBranchLogout}
         />
       );
@@ -1673,6 +1726,9 @@ export default function App() {
                 cabangStok={cabangStok}
                 branchTransactions={branchTransactions}
                 wasteLogs={wasteLogs}
+                opnameDrafts={opnameDrafts}
+                onApproveOpname={handleApproveOpname}
+                onRejectOpname={handleRejectOpname}
               />
             )}
             {activeTab === 'materials' && (

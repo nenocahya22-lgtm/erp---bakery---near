@@ -22,7 +22,7 @@ interface BranchDashboardProps {
   onAddSuratOrder: (so: SuratOrder) => void;
   onUpdateSuratOrder: (id: string, so: SuratOrder) => void;
   onCompletePOSSale: (productName: string, soldQty: number, totalRevenue: number, source?: string, cabangId?: string) => void;
-  onSyncStokOpname: (cabangId: string, bahanNama: string, stokFisik: number, satuan: string) => void;
+  onAddOpnameDraft: (cabangId: string, cabangNama: string, bahanNama: string, stokFisik: number, stokTeoritis: number, satuan: string, petugas: string) => void;
   onLogout: () => void;
 }
 
@@ -30,7 +30,7 @@ export default function BranchDashboard({
   cabang, bahanBaku, suratOrders, productHpp, detailResep,
   calculatedProducts, wasteLogs, cabangStok, branchTransactions,
   onAddWasteLog, onDeleteWasteLog,
-  onAddSuratOrder, onUpdateSuratOrder, onCompletePOSSale, onSyncStokOpname, onLogout,
+  onAddSuratOrder, onUpdateSuratOrder, onCompletePOSSale, onAddOpnameDraft, onLogout,
 }: BranchDashboardProps) {
   const [activeModul, setActiveModul] = useState<'pos' | 'minta' | 'so' | 'waste' | 'laporan' | 'planner' | 'prodcenter'>('pos');
 
@@ -136,8 +136,10 @@ export default function BranchDashboard({
   const handleSaveStokOpname = (bahanNama: string, fisik: number) => {
     setStokOpname(prev => ({ ...prev, [bahanNama]: fisik }));
     const bahan = bahanBaku.find(b => b.nama === bahanNama);
-    onSyncStokOpname(cabang.id, bahanNama, fisik, bahan?.satuan || 'pcs');
-    showLocalToast(`Stok ${bahanNama} dicatat: ${fisik}`, 'info');
+    const teoritis = getStokTeoritis(bahanNama);
+    // Simpan sebagai draft — Owner harus approve dulu
+    onAddOpnameDraft(cabang.id, cabang.nama, bahanNama, fisik, teoritis, bahan?.satuan || 'pcs', 'Staff Cabang');
+    showLocalToast(`✏️ Stok ${bahanNama}: ${fisik} (draft — menunggu persetujuan Owner)`, 'info');
   };
 
   // ─── PLANNER STATE (shared antara kiri & kanan) ───

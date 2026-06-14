@@ -209,6 +209,21 @@ export interface StockOpname {
   tanggal: string;
 }
 
+// === OPNAME DRAFT — Stock Opname Approval ===
+export interface OpnameDraft {
+  id: string;
+  cabangId: string;
+  cabangNama: string;
+  bahanNama: string;
+  stokFisik: number; // proposed new physical stock
+  stokTeoritis: number; // current theoretical stock
+  satuan: string;
+  tanggal: string;
+  petugas: string;
+  status: 'pending' | 'approved' | 'rejected';
+  rejectNote?: string;
+}
+
 export interface PurchaseOrder {
   id: string;
   poNo: string;
