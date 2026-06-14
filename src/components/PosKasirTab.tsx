@@ -580,11 +580,11 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
                         ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20 shadow-md'
                         : 'bg-white border-gray-200 hover:border-emerald-300 hover:shadow-md'
                     }`}>
-                    <div className="w-full aspect-square rounded-lg overflow-hidden bg-gray-50 border border-gray-100">
+                    <div className="w-full aspect-square rounded-lg overflow-hidden bg-gray-50 border border-gray-100 flex items-center justify-center">
                       <img src={img} alt={p.namaProduk}
                         className="w-full h-full object-cover"
                         referrerPolicy="no-referrer"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="#f2f0eb"/><text x="100" y="105" text-anchor="middle" font-family="Inter,sans-serif" font-size="12" fill="#006241" font-weight="600">Near Bakery</text></svg>'); }} />
                     </div>
                     <div className="w-full min-w-0">
                       <span className="block text-[11px] font-bold text-gray-900 truncate">{p.namaProduk}</span>

@@ -1,45 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, ShieldCheck, ShoppingCart, Key, AlertTriangle, CheckCircle2, ExternalLink, Globe, RefreshCw } from 'lucide-react';
+import { Layers, ShieldCheck, ShoppingCart, AlertTriangle, CheckCircle2, Globe, RefreshCw } from 'lucide-react';
 import { CalculationResult } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
-import { listenNewOrders, getAllOrders, WebStoreOrder } from '../lib/firestore-bridge';
-
-interface PlatformApiKey {
-  platform: string;
-  label: string;
-  key: string;
-  isConnected: boolean;
-}
+import { listenNewOrders, getAllOrders, WebStoreOrder, updateOrderStatus } from '../lib/firestore-bridge';
 
 interface PesananOnlineTabProps {
   calculatedProducts: CalculationResult[];
   onCompletePOSSale: (productName: string, qty: number, totalRevenue: number, source?: string) => void;
 }
 
-const DEFAULT_PLATFORMS: PlatformApiKey[] = [
-  { platform: 'GoFood', label: 'GoFood API Key', key: '', isConnected: false },
-  { platform: 'GrabFood', label: 'GrabFood API Key', key: '', isConnected: false },
-  { platform: 'ShopeeFood', label: 'ShopeeFood API Key', key: '', isConnected: false },
-];
-
 export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale }: PesananOnlineTabProps) {
-  const [platforms, setPlatforms] = useState<PlatformApiKey[]>(() => {
-    const saved = localStorage.getItem('ojol_api_keys');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return DEFAULT_PLATFORMS.map(dp => {
-          const existing = parsed.find((p: PlatformApiKey) => p.platform === dp.platform);
-          return existing || dp;
-        });
-      } catch { /* ignore */ }
-    }
-    return DEFAULT_PLATFORMS;
-  });
-
-  const [showApiSettings, setShowApiSettings] = useState(false);
-  const [editingKey, setEditingKey] = useState('');
-  const [editingPlatform, setEditingPlatform] = useState('');
 
   // ─── WEB STORE BRIDGE — Real-time dari Firestore ───
   const [webStoreStatus, setWebStoreStatus] = useState<'disconnected' | 'connecting' | 'connected'>(
@@ -85,26 +55,22 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
     };
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem('ojol_api_keys', JSON.stringify(platforms));
-  }, [platforms]);
-
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
-  const handleSaveApiKey = (platform: string) => {
-    setPlatforms(prev => prev.map(p =>
-      p.platform === platform
-        ? { ...p, key: editingKey, isConnected: editingKey.length > 0 }
-        : p
-    ));
-    setEditingKey('');
-    setEditingPlatform('');
-  };
-
-  const handleRevealKey = (platform: PlatformApiKey) => {
-    setEditingPlatform(platform.platform);
-    setEditingKey(platform.key);
+  const handleUpdateOrderStatus = async (orderId: string, newStatus: string, paymentStatus?: string) => {
+    try {
+      await updateOrderStatus(orderId, newStatus, paymentStatus);
+      setFirestoreOrders(prev => prev.map(o =>
+        o.id === orderId
+          ? { ...o, status: newStatus as any, ...(paymentStatus ? { paymentStatus: paymentStatus as any } : {}) }
+          : o
+      ));
+      showLocalToast('Status berhasil diubah ke ' + newStatus + '!', 'success');
+    } catch (err) {
+      console.error('Failed to update order status:', err);
+      showLocalToast('Gagal mengupdate status pesanan di Firestore.', 'error');
+    }
   };
 
   const handleRefreshOrders = async () => {
@@ -129,8 +95,6 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
     setTimeout(() => setLocalToast(null), 3000);
   };
 
-  const connectedCount = platforms.filter(p => p.isConnected).length;
-
   return (
     <div className="space-y-6">
       {localToast && (
@@ -140,81 +104,14 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
       )}
 
       {/* HEADER */}
-      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex justify-between items-start">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Layers className="w-6 h-6 text-emerald-600" /> Pesanan Online & Web Store Bridge
-          </h2>
-          <p className="text-xs text-gray-500 mt-1">
-            Integrasi GoFood, GrabFood, ShopeeFood, dan jembatan ke Web Store (storenear).
-          </p>
-        </div>
-        <button onClick={() => setShowApiSettings(!showApiSettings)}
-          className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
-            showApiSettings ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-white hover:bg-slate-800'
-          }`}>
-          <Key className="w-3.5 h-3.5" /> API Keys {connectedCount > 0 && `(${connectedCount}/3)`}
-        </button>
+      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100">
+        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+          <Layers className="w-6 h-6 text-emerald-600" /> Pesanan Online & Web Store Bridge
+        </h2>
+        <p className="text-xs text-gray-500 mt-1">
+          Integrasi pesanan dari Web Store (storenear) secara real-time via Firestore.
+        </p>
       </div>
-
-      {/* API SETTINGS PANEL */}
-      {showApiSettings && (
-        <div className="bg-white p-5 rounded-2xl border-2 border-amber-200 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
-              <Key className="w-4 h-4 text-amber-600" /> Pengaturan API Key Platform
-            </h3>
-            <span className="text-[10px] text-gray-400">Data disimpan di browser Anda</span>
-          </div>
-          <p className="text-xs text-amber-700 bg-amber-50 p-3 rounded-xl border border-amber-200">
-            <AlertTriangle className="w-3.5 h-3.5 inline mr-1" />
-            Masukkan API Key dari masing-masing platform. Biarkan kosong jika belum punya — sistem tetap bisa simulasi.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {platforms.map(platform => (
-              <div key={platform.platform} className={`p-4 rounded-xl border text-xs space-y-3 ${
-                platform.isConnected ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'
-              }`}>
-                <div className="flex justify-between items-center">
-                  <span className="font-black uppercase text-sm">{platform.platform}</span>
-                  {platform.isConnected ? (
-                    <span className="text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> Terhubung
-                    </span>
-                  ) : (
-                    <span className="text-red-700 bg-red-100 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3" /> Belum Diisi
-                    </span>
-                  )}
-                </div>
-                {editingPlatform === platform.platform ? (
-                  <div className="space-y-2">
-                    <input type="password" value={editingKey}
-                      onChange={(e) => setEditingKey(e.target.value)}
-                      placeholder="Masukkan API Key..." className="w-full border border-gray-200 rounded-lg p-2 font-mono text-[10px]" autoFocus />
-                    <div className="flex gap-2">
-                      <button onClick={() => handleSaveApiKey(platform.platform)}
-                        className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer">Simpan</button>
-                      <button onClick={() => { setEditingPlatform(''); setEditingKey(''); }}
-                        className="py-1.5 px-3 bg-gray-200 hover:bg-gray-300 text-gray-700 text-[10px] font-bold rounded-lg transition cursor-pointer">Batal</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-[9px] text-gray-500 uppercase tracking-wider font-bold mb-1">
-                      {platform.isConnected ? 'API Key tersimpan' : 'Belum ada API Key'}
-                    </p>
-                    <button onClick={() => handleRevealKey(platform)}
-                      className="w-full py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-[10px] font-bold rounded-lg transition cursor-pointer">
-                      {platform.isConnected ? 'Ganti API Key' : 'Isi API Key'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ─── WEB STORE BRIDGE — REAL-TIME DARI FIRESTORE ─── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
@@ -233,7 +130,7 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
                 </h3>
                 <p className="text-[10px] text-gray-500">
                   Pesanan dari Web Store (storenear) langsung masuk secara real-time dari Firestore.
-                  Stok bahan baku akan otomatis berkurang saat pesanan dikonfirmasi (lunas/diproses).
+                  Stok bahan baku otomatis terpotong saat pesanan dikonfirmasi (lunas/diproses).
                 </p>
               </div>
             </div>
@@ -246,8 +143,9 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-[10px] text-emerald-800 flex items-start gap-2">
               <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
-                <strong>Firestore Terhubung!</strong> Pesanan dari Web Store muncul secara real-time. 
-                Stok bahan baku akan otomatis dipotong saat pembayaran dikonfirmasi (status → Diproses/Lunas).
+                <strong>Firestore Terhubung!</strong> Pesanan dari Web Store muncul secara real-time.
+                Gunakan tombol aksi di bawah untuk mengonfirmasi pembayaran.
+                Stok bahan baku OTOMATIS terpotong saat status → Diproses/Lunas).
               </div>
             </div>
           ) : (
@@ -316,6 +214,32 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
                         {o.items.reduce((s, i) => s + i.quantity, 0)} items
                       </span>
                     </div>
+                    <div className="flex flex-col gap-1 ml-2">
+                      {(o.status === 'Menunggu Pembayaran' || o.status === 'Belum Bayar') && (
+                        <button onClick={() => handleUpdateOrderStatus(o.id, 'Diproses', 'Lunas')}
+                          className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold rounded transition cursor-pointer whitespace-nowrap">
+                          Konfirmasi Bayar
+                        </button>
+                      )}
+                      {(o.status === 'Menunggu Pembayaran' || o.status === 'Belum Bayar') && (
+                        <button onClick={() => handleUpdateOrderStatus(o.id, 'Dibatalkan')}
+                          className="px-2 py-1 bg-red-500 hover:bg-red-600 text-white text-[9px] font-bold rounded transition cursor-pointer whitespace-nowrap">
+                          Batalkan
+                        </button>
+                      )}
+                      {o.status === 'Diproses' && (
+                        <button onClick={() => handleUpdateOrderStatus(o.id, 'Dikirim')}
+                          className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-bold rounded transition cursor-pointer whitespace-nowrap">
+                          Kirim
+                        </button>
+                      )}
+                      {o.status === 'Dikirim' && (
+                        <button onClick={() => handleUpdateOrderStatus(o.id, 'Selesai')}
+                          className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[9px] font-bold rounded transition cursor-pointer whitespace-nowrap">
+                          Selesai
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -344,31 +268,21 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
               <li>Setiap checkout di Web Store → order tersimpan di Firestore collection <code className="bg-slate-800 px-1 rounded text-emerald-300">orders</code></li>
               <li>ERP mendengarkan (listen) perubahan collection orders secara real-time</li>
               <li>Saat order baru masuk → muncul notifikasi + tercatat di revenue tracker</li>
-              <li>Saat order berubah status jadi <strong className="text-white">Diproses / Lunas</strong> → stok bahan baku OTOMATIS terpotong</li>
-              <li>Stok hanya dipotong setelah pembayaran dikonfirmasi — AMAN dari pembatalan</li>
+              <li>Saat Owner konfirmasi status menjadi <strong className="text-white">Diproses / Lunas</strong> → stok bahan baku OTOMATIS terpotong</li>
+              <li>Stok hanya dipotong setelah Owner konfirmasi — AMAN dari pembatalan</li>
             </ol>
           </div>
         </div>
       </div>
 
-      {/* Platform status cards */}
+      {/* Platform status */}
       <div className="bg-slate-900 text-slate-100 p-5 rounded-2xl border border-slate-800 shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold text-white uppercase tracking-wider">Status Platform Online</h3>
-          <span className="text-[10px] text-slate-500 bg-slate-950 px-2 py-1 rounded-lg font-mono">{connectedCount}/3 platform</span>
-        </div>
+        <h3 className="text-xs font-bold text-white uppercase tracking-wider">Status Platform Online</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {platforms.map(p => (
-            <div key={p.platform} className={`p-4 rounded-xl space-y-2 ${
-              p.isConnected ? 'bg-slate-950 border border-emerald-800/50' : 'bg-slate-950/50 border border-red-900/30'
-            }`}>
-              <div className="flex justify-between items-center">
-                <span className={`text-sm font-black uppercase ${p.platform === 'GoFood' ? 'text-rose-500' : p.platform === 'GrabFood' ? 'text-emerald-400' : 'text-orange-500'}`}>{p.platform}</span>
-                {p.isConnected ? <span className="text-[9px] text-emerald-400 font-bold">🔑 Connected</span> : <span className="text-[9px] text-red-400 font-bold">🔴 No API Key</span>}
-              </div>
-              <p className="text-[10px] text-slate-500 text-center py-2">
-                {p.isConnected ? '✅ Terhubung — pesanan otomatis masuk.' : '🔑 Atur API Key untuk menghubungkan.'}
-              </p>
+          {['GoFood', 'GrabFood', 'ShopeeFood'].map(p => (
+            <div key={p} className="p-4 rounded-xl bg-slate-950/50 border border-amber-800/30">
+              <span className={`text-sm font-black uppercase ${p === 'GoFood' ? 'text-rose-500' : p === 'GrabFood' ? 'text-emerald-400' : 'text-orange-500'}`}>{p}</span>
+              <p className="text-[10px] text-slate-500 text-center py-2">Integrasi langsung belum tersedia. Pesanan dari platform ini dapat dicatat manual via POS Kasir sebagai "WhatsApp Order".</p>
             </div>
           ))}
         </div>

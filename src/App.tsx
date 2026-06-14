@@ -416,10 +416,10 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Notifications toast state
-  const [toasts, setToasts] = useState<{ id: string; message: string; type: 'success' | 'error' | 'info' }[]>([]);
+  const [toasts, setToasts] = useState<{ id: string; message: string; type: 'success' | 'error' | 'info' | 'warning' }[]>([]);
 
   // Show a nicely styled sliding toast message
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+  const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
@@ -884,6 +884,15 @@ export default function App() {
       showToast(`⚠️ Produk "${productName}" belum punya resep, stok tidak dipotong.`, 'info');
       return;
     }
+
+    // DOUBLE-DEDUCTION GUARD: Cek apakah produk ini sudah auto-deduct
+    const alreadyDeducted = [...autoDeductedProductsRef.current].some(
+      (p) => p.toLowerCase().trim() === productName.toLowerCase().trim()
+    );
+    if (alreadyDeducted) {
+      console.warn(`[Double-Deduction] Produk "${productName}" sudah dipotong otomatis dari Web Store!`);
+      showToast(`Stok "${productName}" sudah dipotong dari Web Store! Yakin catat produksi?`, 'warning');
+    }
     const productInfo = productHpp.find(
       (p) => p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
     );
@@ -960,6 +969,10 @@ export default function App() {
 
   // Cache untuk mencegah double-processing order (Web Store auto-deduct)
   const processedOrderIdsRef = useRef<Set<string>>(new Set());
+
+  // Cache untuk track produk yang sudah auto-deduct dari Web Store
+  // Digunakan oleh handleProductionComplete untuk memberi warning double-deduction
+  const autoDeductedProductsRef = useRef<Set<string>>(new Set());
 
   const handleUpdateSuratOrder = (id: string, so: SuratOrder) => {
     const prevStatus = suratOrders.find(s => s.id === id)?.status;
@@ -1140,6 +1153,54 @@ export default function App() {
           const updatedCalc = calculateAllProducts(bahanBakuRef.current, productHppRef.current, detailResepRef.current);
           syncProductsToFirestore(updatedCalc, productHppRef.current, detailResepRef.current, bahanBakuRef.current, 'pusat').catch(console.warn);
         }, 2000);
+      }
+
+      // AUTO-DEDUCT STOK: Potong bahan baku saat order dikonfirmasi (Diproses / Lunas)
+      // Web Store order ready-to-ship -> stok bahan baku langsung terpotong
+      try {
+        const curBahan = bahanBakuRef.current;
+        const curResep = detailResepRef.current;
+        const curHpp = productHppRef.current;
+        let stockChanged = false;
+
+        order.items.forEach((item: any) => {
+          const pName = item.name || item.productId || '';
+          const hasRecipe = curResep.some(
+            (r) => r.namaProduk.toLowerCase().trim() === pName.toLowerCase().trim()
+          );
+          if (hasRecipe) stockChanged = true;
+        });
+
+        if (stockChanged) {
+          // Track nama produk untuk double-deduction guard
+          order.items.forEach((item: any) => {
+            const pName = (item.name || item.productId || '').trim();
+            if (pName) autoDeductedProductsRef.current.add(pName);
+          });
+          console.log('[Auto-Deduct] Tracked:', [...autoDeductedProductsRef.current].join(', '));
+
+          // Hitung ulang bahan baku setelah semua item diproses (immutable pattern)
+          const updatedBahan = curBahan.map(b => {
+            let newStock = b.isiKemasan;
+            order.items.forEach((item: any) => {
+              const pName = item.name || item.productId || '';
+              const qty2 = item.quantity || 1;
+              curResep.filter(r => r.namaProduk.toLowerCase().trim() === pName.toLowerCase().trim())
+                .forEach(ing => {
+                  if (ing.namaBahan.toLowerCase().trim() === b.nama.toLowerCase().trim()) {
+                    const pInfo2 = curHpp.find(p => p.namaProduk.toLowerCase().trim() === pName.toLowerCase().trim());
+                    const yieldP2 = pInfo2?.porsiJual || 1;
+                    newStock -= (ing.takaran / yieldP2) * qty2;
+                  }
+                });
+            });
+            return { ...b, isiKemasan: Math.max(0, Number(newStock.toFixed(2))) };
+          });
+          setBahanBaku(updatedBahan);
+          showToast('Stok bahan baku otomatis dipotong untuk pesanan #' + order.id.slice(-8), 'success');
+        }
+      } catch (e) {
+        console.warn('Auto-deduct stock error:', e);
       }
     }, (err) => console.warn('Status change listener error:', err));
 
@@ -1823,6 +1884,8 @@ export default function App() {
                 ? 'bg-emerald-950 text-white border-emerald-800'
                 : t.type === 'error'
                 ? 'bg-red-950 text-white border-red-800'
+                : t.type === 'warning'
+                ? 'bg-amber-950 text-white border-amber-700'
                 : 'bg-slate-900 text-white border-slate-755'
             }`}
           >
@@ -1830,6 +1893,8 @@ export default function App() {
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             ) : t.type === 'error' ? (
               <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+            ) : t.type === 'warning' ? (
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
             ) : (
               <Layers className="w-4 h-4 text-emerald-300 shrink-0" />
             )}

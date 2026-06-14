@@ -3,10 +3,24 @@ import { Cabang } from '../types';
 import { Lock, User, Eye, EyeOff, Building2, ArrowLeft } from 'lucide-react';
 import { verifyPassword } from '../lib/password';
 
+const SESSION_EXPIRY_HOURS = 24;
+
 interface BranchLoginProps {
   cabangList: Cabang[];
   onLoginSuccess: (cabang: Cabang) => void;
   onBackToOwner: () => void;
+}
+
+function isBranchSessionExpired(): boolean {
+  const stored = localStorage.getItem('branch_authenticated_at');
+  if (!stored) return true;
+  try {
+    const loginTime = new Date(stored).getTime();
+    const now = Date.now();
+    return (now - loginTime) > SESSION_EXPIRY_HOURS * 60 * 60 * 1000;
+  } catch {
+    return true;
+  }
 }
 
 export default function BranchLogin({ cabangList, onLoginSuccess, onBackToOwner }: BranchLoginProps) {
@@ -15,6 +29,16 @@ export default function BranchLogin({ cabangList, onLoginSuccess, onBackToOwner 
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [systemTime, setSystemTime] = useState('');
+
+  // Validasi session expired saat mount
+  useEffect(() => {
+    if (localStorage.getItem('branch_authenticated')) {
+      if (isBranchSessionExpired()) {
+        localStorage.removeItem('branch_authenticated');
+        localStorage.removeItem('branch_authenticated_at');
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const updateTime = () => {

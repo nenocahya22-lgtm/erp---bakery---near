@@ -31,14 +31,15 @@ import { getSavedRecipeImage } from './image-generator';
 // Firebase config untuk project Web Store (quick-codex-1cf5x)
 // — database yang SAMA digunakan oleh aplikasi Web Store (storenear)
 // — Google Auth untuk Sheets tetap pakai project ERP terpisah
+// Konfigurasi dari environment variables (VITE_* untuk client-side)
 const webStoreFirebaseConfig = {
-  projectId: 'quick-codex-1cf5x',
-  appId: '1:540332291979:web:a7eb10f36506c6830fa18e',
-  apiKey: 'AIzaSyCbKLmaJUA2CEtdodtdmhivSaEFPK7bd7I',
-  authDomain: 'quick-codex-1cf5x.firebaseapp.com',
-  firestoreDatabaseId: 'ai-studio-9e420702-3e63-4587-a7e9-2f225c2ac0c6',
-  storageBucket: 'quick-codex-1cf5x.firebasestorage.app',
-  messagingSenderId: '540332291979',
+  projectId: import.meta.env.VITE_WEBSTORE_PROJECT_ID || '',
+  appId: import.meta.env.VITE_WEBSTORE_APP_ID || '',
+  apiKey: import.meta.env.VITE_WEBSTORE_API_KEY || '',
+  authDomain: import.meta.env.VITE_WEBSTORE_AUTH_DOMAIN || '',
+  firestoreDatabaseId: import.meta.env.VITE_WEBSTORE_DATABASE_ID || '',
+  storageBucket: import.meta.env.VITE_WEBSTORE_STORAGE_BUCKET || '',
+  messagingSenderId: import.meta.env.VITE_WEBSTORE_MESSAGING_SENDER_ID || '',
 };
 
 // Inisialisasi Firebase untuk Firestore (project Web Store)
@@ -143,7 +144,7 @@ export async function syncProductsToFirestore(
   // (daripada sequential getDoc per produk yang lambat untuk >50 produk)
   const productRefs = calculatedProducts.map(calc => ({
     calc,
-    productId: `PRD-${calc.namaProduk.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+    productId: hashProductName(calc.namaProduk),
     productInfo: productHpp.find(
       (p) => p.namaProduk.toLowerCase().trim() === calc.namaProduk.toLowerCase().trim()
     ),
@@ -160,6 +161,23 @@ export async function syncProductsToFirestore(
       existingDataMap.set(productRefs[i].productId, snap.data());
     }
   });
+
+  // Legacy migration: cek juga old ID (PRD-nama-produk) untuk produk yang belum migrasi
+  await Promise.all(productRefs.map(async (pRef) => {
+    const { productId, calc } = pRef;
+    if (existingDataMap.has(productId)) return; // Already has new ID
+    const oldId = 'PRD-' + calc.namaProduk.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    if (oldId === productId) return; // Same ID, no migration needed
+    try {
+      const oldSnap = await getDoc(doc(db, 'products', oldId));
+      if (oldSnap.exists()) {
+        // Copy legacy data to new ID
+        const oldData = oldSnap.data();
+        existingDataMap.set(productId, oldData);
+        console.log('Migrated legacy product: ' + oldId + ' -> ' + productId);
+      }
+    } catch (e) { /* silent */ }
+  }));
 
   for (const pRef of productRefs) {
     const { calc, productId, productInfo } = pRef;
@@ -557,6 +575,26 @@ export async function getAllOrders(cabangId?: string): Promise<WebStoreOrder[]> 
   const orders: WebStoreOrder[] = [];
   snap.forEach((d) => orders.push(d.data() as WebStoreOrder));
   return orders;
+}
+
+// --- HELPER: Stable product ID from name ---
+function hashProductName(name: string): string {
+  let hash = 0;
+  const s = name.toLowerCase().trim();
+  for (let i = 0; i < s.length; i++) {
+    const chr = s.charCodeAt(i);
+    hash = ((hash << 5) - hash) + chr;
+    hash |= 0;
+  }
+  return 'PRD-' + Math.abs(hash).toString(36).padStart(6, '0').slice(0, 8);
+}
+
+// --- UPDATE ORDER STATUS di Firestore ---
+export async function updateOrderStatus(orderId: string, newStatus: string, paymentStatus?: string): Promise<void> {
+  const orderRef = doc(db, 'orders', orderId);
+  const updateData: any = { status: newStatus };
+  if (paymentStatus) updateData.paymentStatus = paymentStatus;
+  await setDoc(orderRef, updateData, { merge: true });
 }
 
 // ============================================================================

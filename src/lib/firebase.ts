@@ -1,6 +1,17 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { safeGetLocalStorage } from './safe-json';
+
+// Firebase config dari environment variables (VITE_* untuk client-side)
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '',
+};
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -10,7 +21,7 @@ const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/spreadsheets');
 
 let isSigningIn = false;
-let cachedAccessToken: string | null = localStorage.getItem('google_access_token');
+let cachedAccessToken: string | null = safeGetLocalStorage<string | null>('google_access_token', null);
 
 // Initialize auth state listener
 export const initAuth = (

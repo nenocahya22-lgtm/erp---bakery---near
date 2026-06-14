@@ -4,6 +4,15 @@ import { TrendingUp, FolderTree, Package, DollarSign, AlertCircle, Sparkles, Ale
 import { safeGetLocalStorage } from '../lib/safe-json';
 import { jsPDF } from 'jspdf';
 
+const formatCurrency = (val: number) => {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(val);
+};
+
 interface AlertItem {
   id: string;
   type: 'margin_danger' | 'margin_warning' | 'margin_high' | 'stock_critical' | 'stock_low' | 'system_error' | 'info';
@@ -469,15 +478,6 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList
       });
     }
   });
-
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(val);
-  };
 
   const errorWarnings = warnings.filter(w => w.type === 'error');
   const hasAnomalies = errorWarnings.length > 0 || calculatedProducts.length === 0;

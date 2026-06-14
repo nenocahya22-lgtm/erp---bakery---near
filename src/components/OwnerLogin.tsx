@@ -39,6 +39,20 @@ async function checkPassword(inputPassword: string): Promise<boolean> {
   return isValid;
 }
 
+// ─── RATE LIMITING ───
+const MAX_LOGIN_ATTEMPTS = 5;
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 menit
+let loginAttempts: { count: number; windowStart: number } = { count: 0, windowStart: Date.now() };
+
+function checkRateLimit(): boolean {
+  const now = Date.now();
+  if (now - loginAttempts.windowStart > RATE_LIMIT_WINDOW_MS) {
+    loginAttempts = { count: 0, windowStart: now };
+  }
+  loginAttempts.count++;
+  return loginAttempts.count <= MAX_LOGIN_ATTEMPTS;
+}
+
 export default function OwnerLogin({ onLoginSuccess }: OwnerLoginProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -81,6 +95,14 @@ export default function OwnerLogin({ onLoginSuccess }: OwnerLoginProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Rate limiting check
+    if (!checkRateLimit()) {
+      const waitSeconds = Math.ceil((RATE_LIMIT_WINDOW_MS - (Date.now() - loginAttempts.windowStart)) / 1000);
+      setError(`Terlalu banyak percobaan login. Coba lagi dalam ${waitSeconds} detik.`);
+      return;
+    }
+    
     const cleanUser = username.trim().toLowerCase();
     const cleanPass = password.trim();
 
@@ -88,6 +110,8 @@ export default function OwnerLogin({ onLoginSuccess }: OwnerLoginProps) {
       const isValid = await checkPassword(cleanPass);
       
       if (isValid) {
+        // Reset rate limit on success
+        loginAttempts = { count: 0, windowStart: Date.now() };
         // Generate session token dari SHA-256 password
         const encoder = new TextEncoder();
         const data = encoder.encode(cleanPass + 'near-bakery-session');

@@ -151,70 +151,57 @@ export async function loadAllFromFirestore(): Promise<ErpSyncData | null> {
   }
 }
 
-export async function saveBahanBaku(items: BahanBaku[]): Promise<void> {
+async function saveWithFlag<T>(key: CollectionKey, items: T[]): Promise<void> {
   isApplyingRemoteUpdate = true;
-  await saveToFirestore('bahanBaku', items);
-  isApplyingRemoteUpdate = false;
+  try {
+    await saveToFirestore(key, items);
+  } finally {
+    isApplyingRemoteUpdate = false;
+  }
+}
+
+export async function saveBahanBaku(items: BahanBaku[]): Promise<void> {
+  return saveWithFlag('bahanBaku', items);
 }
 
 export async function saveProductHpp(items: ProductHpp[]): Promise<void> {
-  isApplyingRemoteUpdate = true;
-  await saveToFirestore('productHpp', items);
-  isApplyingRemoteUpdate = false;
+  return saveWithFlag('productHpp', items);
 }
 
 export async function saveDetailResep(items: DetailResep[]): Promise<void> {
-  isApplyingRemoteUpdate = true;
-  await saveToFirestore('detailResep', items);
-  isApplyingRemoteUpdate = false;
+  return saveWithFlag('detailResep', items);
 }
 
 export async function saveCabangList(items: Cabang[]): Promise<void> {
-  isApplyingRemoteUpdate = true;
-  await saveToFirestore('cabangList', items);
-  isApplyingRemoteUpdate = false;
+  return saveWithFlag('cabangList', items);
 }
 
 export async function saveSuratOrders(items: SuratOrder[]): Promise<void> {
-  isApplyingRemoteUpdate = true;
-  await saveToFirestore('suratOrders', items);
-  isApplyingRemoteUpdate = false;
+  return saveWithFlag('suratOrders', items);
 }
 
 export async function saveWasteLogs(items: WasteLog[]): Promise<void> {
-  isApplyingRemoteUpdate = true;
-  await saveToFirestore('wasteLogs', items);
-  isApplyingRemoteUpdate = false;
+  return saveWithFlag('wasteLogs', items);
 }
 
 export async function saveWriteOffLogs(items: WriteOffLog[]): Promise<void> {
-  isApplyingRemoteUpdate = true;
-  await saveToFirestore('writeOffLogs', items);
-  isApplyingRemoteUpdate = false;
+  return saveWithFlag('writeOffLogs', items);
 }
 
 export async function saveRdExperiments(items: RDExperiment[]): Promise<void> {
-  isApplyingRemoteUpdate = true;
-  await saveToFirestore('rdExperiments', items);
-  isApplyingRemoteUpdate = false;
+  return saveWithFlag('rdExperiments', items);
 }
 
 export async function saveToppings(items: ProductTopping[]): Promise<void> {
-  isApplyingRemoteUpdate = true;
-  await saveToFirestore('toppings', items);
-  isApplyingRemoteUpdate = false;
+  return saveWithFlag('toppings', items);
 }
 
 export async function saveCabangStok(items: BranchStock[]): Promise<void> {
-  isApplyingRemoteUpdate = true;
-  await saveToFirestore('cabangStok', items);
-  isApplyingRemoteUpdate = false;
+  return saveWithFlag('cabangStok', items);
 }
 
 export async function saveBranchTransactions(items: BranchTransaction[]): Promise<void> {
-  isApplyingRemoteUpdate = true;
-  await saveToFirestore('branchTransactions', items);
-  isApplyingRemoteUpdate = false;
+  return saveWithFlag('branchTransactions', items);
 }
 
 // ─── REAL-TIME LISTENER ───
@@ -251,18 +238,21 @@ export function listenAllChanges(listeners: ErpSyncListener): () => void {
 // ─── BULK SAVE ───
 export async function saveAllToFirestore(data: ErpSyncData): Promise<void> {
   isApplyingRemoteUpdate = true;
-  await Promise.all([
-    saveToFirestore('bahanBaku', data.bahanBaku),
-    saveToFirestore('productHpp', data.productHpp),
-    saveToFirestore('detailResep', data.detailResep),
-    saveToFirestore('cabangList', data.cabangList),
-    saveToFirestore('suratOrders', data.suratOrders),
-    saveToFirestore('wasteLogs', data.wasteLogs),
-    saveToFirestore('writeOffLogs', data.writeOffLogs),
-    saveToFirestore('rdExperiments', data.rdExperiments),
-    saveToFirestore('toppings', data.toppings),
-    saveToFirestore('cabangStok', data.cabangStok),
-    saveToFirestore('branchTransactions', data.branchTransactions),
-  ]);
-  isApplyingRemoteUpdate = false;
+  try {
+    await Promise.all([
+      saveToFirestore('bahanBaku', data.bahanBaku),
+      saveToFirestore('productHpp', data.productHpp),
+      saveToFirestore('detailResep', data.detailResep),
+      saveToFirestore('cabangList', data.cabangList),
+      saveToFirestore('suratOrders', data.suratOrders),
+      saveToFirestore('wasteLogs', data.wasteLogs),
+      saveToFirestore('writeOffLogs', data.writeOffLogs),
+      saveToFirestore('rdExperiments', data.rdExperiments),
+      saveToFirestore('toppings', data.toppings),
+      saveToFirestore('cabangStok', data.cabangStok),
+      saveToFirestore('branchTransactions', data.branchTransactions),
+    ]);
+  } finally {
+    isApplyingRemoteUpdate = false;
+  }
 }

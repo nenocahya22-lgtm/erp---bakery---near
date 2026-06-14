@@ -19,8 +19,8 @@ const API_KEY = process.env.GEMINI_API_KEY || '';
 function requireApiKey(req: express.Request, res: express.Response, next: express.NextFunction) {
   const providedKey = req.headers['x-api-key'] as string;
   
-  // Skip auth check in development mode (for local testing)
-  if (process.env.NODE_ENV === 'development') {
+  // Development mode: bypass if no GEMINI_API_KEY is set
+  if (!process.env.GEMINI_API_KEY && process.env.NODE_ENV === 'development') {
     return next();
   }
   
@@ -50,14 +50,8 @@ function getAiClient() {
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY is not defined in environment variables.');
     }
-    aiClient = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
-    });
+    aiClient = new GoogleGenAI({ apiKey });
+    // Catatan: User-Agent default digunakan untuk kompatibilitas API
   }
   return aiClient;
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Gauge, Thermometer, Droplets, Cpu, Wifi, WifiOff, ShieldCheck, RefreshCw, AlertTriangle, CheckCircle2, Plus, Trash2, Users, Calendar } from 'lucide-react';
 import { IoTDevice } from '../types';
+import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface WorkOrder {
   assetName: string;
@@ -12,13 +13,25 @@ interface WorkOrder {
 
 export default function SmartKitchenTab() {
   // ─── IOT DEVICES ───
-  const [devices, setDevices] = useState<IoTDevice[]>([]);
+  const [devices, setDevices] = useState<IoTDevice[]>(() =>
+    safeGetLocalStorage<IoTDevice[]>('smartkitchen_devices', [])
+  );
 
   // ─── WORK ORDERS (EAM) ───
-  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
+  const [workOrders, setWorkOrders] = useState<WorkOrder[]>(() =>
+    safeGetLocalStorage<WorkOrder[]>('smartkitchen_work_orders', [])
+  );
   const [newAssetName, setNewAssetName] = useState('');
   const [newAssetLimit, setNewAssetLimit] = useState('500');
   const [newAssetTargetDate, setNewAssetTargetDate] = useState('');
+
+  // Persist ke localStorage
+  useEffect(() => {
+    localStorage.setItem('smartkitchen_devices', JSON.stringify(devices));
+  }, [devices]);
+  useEffect(() => {
+    localStorage.setItem('smartkitchen_work_orders', JSON.stringify(workOrders));
+  }, [workOrders]);
 
   // ─── BAKER SHIFT ───
   const [dailyDonutsTarget, setDailyDonutsTarget] = useState(200);
