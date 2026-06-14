@@ -53,24 +53,31 @@ export default function ChatTab() {
   // Listen to all chat rooms
   useEffect(() => {
     const q = query(collection(db, 'chats'), orderBy('lastMessageTime', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      const rooms: ChatRoom[] = [];
-      snap.forEach((d) => {
-        const data = d.data();
-        rooms.push({
-          id: d.id,
-          buyerId: data.buyerId || '',
-          buyerName: data.buyerName || 'Unknown',
-          buyerEmail: data.buyerEmail || '',
-          lastMessage: data.lastMessage || '',
-          lastMessageTime: data.lastMessageTime || null,
-          unreadBySeller: data.unreadBySeller || false,
-          unreadByBuyer: data.unreadByBuyer || false,
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const rooms: ChatRoom[] = [];
+        snap.forEach((d) => {
+          const data = d.data();
+          rooms.push({
+            id: d.id,
+            buyerId: data.buyerId || '',
+            buyerName: data.buyerName || 'Unknown',
+            buyerEmail: data.buyerEmail || '',
+            lastMessage: data.lastMessage || '',
+            lastMessageTime: data.lastMessageTime || null,
+            unreadBySeller: data.unreadBySeller || false,
+            unreadByBuyer: data.unreadByBuyer || false,
+          });
         });
-      });
-      setChatRooms(rooms);
-      setLoading(false);
-    });
+        setChatRooms(rooms);
+        setLoading(false);
+      },
+      (err) => {
+        console.warn('❌ Chat rooms listener error:', err);
+        setLoading(false);
+      }
+    );
     return () => unsub();
   }, []);
 
@@ -78,20 +85,26 @@ export default function ChatTab() {
   useEffect(() => {
     if (!activeChatId) { setMessages([]); return; }
     const q = query(collection(db, 'chats', activeChatId, 'messages'), orderBy('createdAt', 'asc'));
-    const unsub = onSnapshot(q, (snap) => {
-      const msgs: ChatMessage[] = [];
-      snap.forEach((d) => {
-        const data = d.data();
-        msgs.push({
-          id: d.id,
-          senderId: data.senderId || '',
-          senderRole: data.senderRole || 'buyer',
-          message: data.message || '',
-          createdAt: data.createdAt || null,
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const msgs: ChatMessage[] = [];
+        snap.forEach((d) => {
+          const data = d.data();
+          msgs.push({
+            id: d.id,
+            senderId: data.senderId || '',
+            senderRole: data.senderRole || 'buyer',
+            message: data.message || '',
+            createdAt: data.createdAt || null,
+          });
         });
-      });
-      setMessages(msgs);
-    });
+        setMessages(msgs);
+      },
+      (err) => {
+        console.warn('❌ Messages listener error:', err);
+      }
+    );
     // Mark room as read
     const markRead = async () => {
       try {
