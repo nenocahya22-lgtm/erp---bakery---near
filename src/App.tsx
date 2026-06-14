@@ -974,6 +974,11 @@ export default function App() {
   // Digunakan oleh handleProductionComplete untuk memberi warning double-deduction
   const autoDeductedProductsRef = useRef<Set<string>>(new Set());
 
+  // ─── CHAT NOTIFICATION — Track lastMessage untuk deteksi pesan baru ───
+  // Hanya trigger notifikasi ketika lastMessage benar-benar berubah (pesan baru)
+  // Bukan untuk chat baru (added) atau update field lain (unreadBySeller dll)
+  const chatLastMsgRef = useRef<Map<string, string>>(new Map());
+
   const handleUpdateSuratOrder = (id: string, so: SuratOrder) => {
     const prevStatus = suratOrders.find(s => s.id === id)?.status;
     setSuratOrders(prev => prev.map(s => s.id === id ? so : s));
@@ -1300,21 +1305,41 @@ export default function App() {
     }, (err) => console.warn('Notification listener error:', err));
 
     // Listen for new chat messages from Web Store
+    // ─── HANYA NOTIFIKASI UNTUK PESAN BARU (lastMessage berubah) ───
+    // Tidak trigger untuk: added (chat baru), modified (update unreadBySeller dll)
+    // Hanya trigger ketika lastMessage berubah = ada pesan baru dari buyer
+    const chatMsgTracker = chatLastMsgRef.current;
+    
     const unsubChats = listenNewChats((chat) => {
-      if (chat.unreadBySeller && chat.lastMessage) {
-        showToast(`💬 Chat dari ${chat.buyerName}: "${chat.lastMessage.length > 50 ? chat.lastMessage.substring(0, 50) + '...' : chat.lastMessage}"`, 'info');
-        // Also record to local storage so dashboard can show count
-        try {
-          const saved = localStorage.getItem('unread_chats_data');
-          const chats = saved ? JSON.parse(saved) : [];
-          const existing = chats.findIndex((c: any) => c.id === chat.id);
-          if (existing >= 0) {
-            chats[existing] = { ...chats[existing], ...chat, lastSeen: Date.now() };
-          } else {
-            chats.push({ ...chat, lastSeen: Date.now() });
-          }
-          localStorage.setItem('unread_chats_data', JSON.stringify(chats));
-        } catch (e) { /* silent */ }
+      // Update localStorage always (utk badge unread count)
+      try {
+        const saved = localStorage.getItem('unread_chats_data');
+        const chats = saved ? JSON.parse(saved) : [];
+        const existing = chats.findIndex((c: any) => c.id === chat.id);
+        if (existing >= 0) {
+          chats[existing] = { ...chats[existing], ...chat, lastSeen: Date.now() };
+        } else {
+          chats.push({ ...chat, lastSeen: Date.now() });
+        }
+        localStorage.setItem('unread_chats_data', JSON.stringify(chats));
+      } catch (e) { /* silent */ }
+
+      if (!chat.unreadBySeller || !chat.lastMessage) return;
+
+      const prevLastMsg = chatMsgTracker.get(chat.id);
+      const currentMsg = chat.lastMessage;
+
+      // ─── DETEKSI PESAN BARU ───
+      // Notif hanya jika lastMessage berubah (ada pesan baru yang masuk)
+      // Tidak notif saat initial load (tracker masih kosong) atau update field lain
+      if (prevLastMsg !== undefined && prevLastMsg !== currentMsg) {
+        // Ini pesan baru! Simpan & notifikasi
+        chatMsgTracker.set(chat.id, currentMsg);
+        const msgDisplay = currentMsg.length > 50 ? currentMsg.substring(0, 50) + '...' : currentMsg;
+        showToast(`💬 Chat dari ${chat.buyerName}: "${msgDisplay}"`, 'info');
+      } else if (prevLastMsg === undefined) {
+        // Initial load — simpan lastMessage tanpa trigger notifikasi
+        chatMsgTracker.set(chat.id, currentMsg);
       }
     }, (err) => console.warn('Chat listener error:', err));
 

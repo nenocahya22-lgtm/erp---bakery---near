@@ -1,7 +1,134 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { CalculationResult, BahanBaku, ProductHpp, DetailResep, WasteLog, Cabang, SuratOrder } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
-import { Megaphone, RefreshCw, Sparkles, Send, Users, Mail, TrendingUp, ShoppingCart, BarChart3, AlertTriangle, Tag, Globe, Brain, Lightbulb, ClipboardList } from 'lucide-react';
+import { Megaphone, RefreshCw, Sparkles, Send, Users, Mail, TrendingUp, ShoppingCart, BarChart3, AlertTriangle, Tag, Globe, Brain, Lightbulb, ClipboardList, MessageCircle, HelpCircle } from 'lucide-react';
+
+// ─── GENERATE LOCAL ANSWER untuk Free-Form Q&A ───
+function generateLocalAnswer(question: string, data: {
+  bahanBaku: BahanBaku[];
+  productHpp: ProductHpp[];
+  detailResep: DetailResep[];
+  calculatedProducts: CalculationResult[];
+  wasteLogs: WasteLog[];
+  cabangList: Cabang[];
+  suratOrders: SuratOrder[];
+  revenueData: any;
+  autoAnalysis: any;
+}): string {
+  const { bahanBaku, productHpp, calculatedProducts, wasteLogs, cabangList, suratOrders, revenueData, autoAnalysis } = data;
+  const q = question.toLowerCase();
+  const fmt = (v: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
+
+  // Produk terlaris / best seller
+  if (q.includes('terlaris') || q.includes('best seller') || q.includes('populer') || q.includes('laku')) {
+    if (autoAnalysis.topProducts.length === 0) return '📊 Belum ada data penjualan. Mulai transaksi POS dulu ya!';
+    let ans = '🏆 **PRODUK TERLARIS**\n\n';
+    autoAnalysis.topProducts.forEach((p: any, i: number) => {
+      ans += `${i + 1}. **${p.name}** — ${fmt(p.revenue)} (${p.qty} pcs terjual)\n`;
+    });
+    return ans;
+  }
+
+  // Margin / profit
+  if (q.includes('margin') || q.includes('profit') || q.includes('untung') || q.includes('hpp')) {
+    if (calculatedProducts.length === 0) return '📝 Belum ada produk terdaftar. Buat resep dulu di Formulasi Resep.';
+    let ans = '📊 **ANALISIS MARGIN & HPP**\n\n';
+    const lowMargin = calculatedProducts.filter(p => p.marginPersen < 20);
+    const healthyMargin = calculatedProducts.filter(p => p.marginPersen >= 20 && p.marginPersen <= 40);
+    const highMargin = calculatedProducts.filter(p => p.marginPersen > 40);
+    ans += `✅ Margin Sehat (20-40%): ${healthyMargin.length} produk\n`;
+    ans += `💎 Margin Premium (>40%): ${highMargin.length} produk\n`;
+    ans += `⚠️ Margin Rendah (<20%): ${lowMargin.length} produk\n\n`;
+    if (lowMargin.length > 0) {
+      ans += '**Review harga untuk produk ini:**\n';
+      lowMargin.slice(0, 3).forEach((p: any) => {
+        ans += `• ${p.namaProduk}: margin ${p.marginPersen.toFixed(1)}% (HPP ${fmt(p.hppPerPorsi)}, jual ${fmt(p.hargaJualPerPorsi)})\n`;
+      });
+    }
+    return ans;
+  }
+
+  // Stok rendah
+  if (q.includes('stok') || q.includes('stock') || q.includes('habis') || q.includes('kurang')) {
+    const lowBahan = bahanBaku.filter(b => b.isiKemasan < 100);
+    if (lowBahan.length === 0) return '✅ Semua stok bahan baku aman!';
+    let ans = `⚠️ **BAHAN STOK RENDAH (${lowBahan.length} item)**\n\n`;
+    lowBahan.forEach(b => {
+      ans += `• ${b.nama}: sisa ${b.isiKemasan} ${b.satuan}\n`;
+    });
+    ans += '\n💡 Segera order ke supplier!';
+    return ans;
+  }
+
+  // Waste
+  if (q.includes('waste') || q.includes('sampah') || q.includes('mubazir') || q.includes('loss') || q.includes('terbuang')) {
+    if (wasteLogs.length === 0) return '✅ Tidak ada waste tercatat. Produksi efisien!';
+    let ans = `🗑️ **ANALISIS WASTE**\n\nTotal waste: ${fmt(autoAnalysis.totalWaste)}\nJumlah catatan: ${wasteLogs.length}\n\n**Per lokasi:**\n`;
+    Object.entries(autoAnalysis.wasteByLocation || {}).forEach(([loc, val]: any) => {
+      ans += `• ${loc}: ${fmt(val)}\n`;
+    });
+    return ans;
+  }
+
+  // Revenue
+  if (q.includes('revenue') || q.includes('omzet') || q.includes('penjualan') || q.includes('pendapatan') || q.includes('berapa') || q.includes('total')) {
+    let ans = '📈 **INFORMASI KEUANGAN**\n\n';
+    ans += `Total Revenue: ${fmt(autoAnalysis.totalRevenue)}\n`;
+    ans += `Total Transaksi: ${autoAnalysis.totalOrders}\n`;
+    ans += `Cabang Aktif: ${autoAnalysis.totalBranches}\n`;
+    ans += `Waste Terkini: ${fmt(autoAnalysis.totalWaste)}\n`;
+    return ans;
+  }
+
+  // Cabang
+  if (q.includes('cabang') || q.includes('outlet') || q.includes('toko')) {
+    const active = cabangList.filter(c => c.isActive);
+    let ans = `🏪 **INFORMASI CABANG**\n\nTotal cabang: ${cabangList.length}\nCabang aktif: ${active.length}\n\n`;
+    active.forEach(c => { ans += `• ${c.nama} (@${c.username})\n`; });
+    ans += `\n🚚 Permintaan SO pending: ${autoAnalysis.pendingSO}`;
+    return ans;
+  }
+
+  // Resep / menu
+  if (q.includes('resep') || q.includes('menu') || q.includes('produk') || q.includes('makanan') || q.includes('roti')) {
+    if (productHpp.length === 0) return '📝 Belum ada produk terdaftar.';
+    let ans = `📝 **DAFTAR MENU (${productHpp.length} produk)**\n\n`;
+    productHpp.forEach(p => {
+      const calc = calculatedProducts.find(c => c.namaProduk === p.namaProduk);
+      ans += `• ${p.namaProduk} — ${p.kategori || '-'}`;
+      if (calc) ans += ` — Margin ${calc.marginPersen.toFixed(1)}%`;
+      ans += '\n';
+    });
+    return ans;
+  }
+
+  // Pelanggan
+  if (q.includes('pelanggan') || q.includes('customer') || q.includes('pembeli') || q.includes('konsumen')) {
+    const orders = revenueData.transactions || [];
+    const uniqueCustomers = new Set(orders.map((t: any) => t.customerName || 'Pelanggan').filter(Boolean)).size;
+    let ans = '👥 **INFORMASI PELANGGAN**\n\n';
+    ans += `Total pelanggan unik: ~${uniqueCustomers}\n`;
+    ans += `Total transaksi: ${orders.length}\n`;
+    if (orders.length > 0) {
+      const avg = orders.reduce((s: number, t: any) => s + (t.amount || 0), 0) / orders.length;
+      ans += `Rata-rata belanja: ${fmt(Math.round(avg))}`;
+    }
+    return ans;
+  }
+
+  // Falling back to general analysis
+  let ans = '📋 **JAWABAN OTOMATIS**\n\n';
+  ans += `Sistem membaca ${bahanBaku.length} bahan baku, ${productHpp.length} resep, `;
+  ans += `${wasteLogs.length} catatan waste, ${cabangList.length} cabang.\n\n`;
+  ans += '**Coba tanya spesifik:**\n';
+  ans += '• "Apa produk terlaris?"\n';
+  ans += '• "Stok apa yang habis?"\n';
+  ans += '• "Berapa total revenue?"\n';
+  ans += '• "Produk dengan margin rendah"\n';
+  ans += '• "Info cabang"\n';
+  ans += '• "Data waste / sampah"';
+  return ans;
+}
 
 interface CrmMarketingTabProps {
   calculatedProducts: CalculationResult[];
@@ -32,6 +159,12 @@ export default function CrmMarketingTab({
   const [blastTarget, setBlastTarget] = useState('Semua');
   const [showAutoAnalysis, setShowAutoAnalysis] = useState(false);
   const [aiError, setAiError] = useState('');
+  // ─── FREE-FORM Q&A ───
+  const [freeQuestion, setFreeQuestion] = useState('');
+  const [qaHistory, setQaHistory] = useState<{ question: string; answer: string }[]>(() =>
+    safeGetLocalStorage<{ question: string; answer: string }[]>('crm_qa_history', [])
+  );
+  const [qaLoading, setQaLoading] = useState(false);
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
@@ -324,6 +457,33 @@ export default function CrmMarketingTab({
     }
   };
 
+  // ─── FREE-FORM Q&A — Tanya apa saja tentang bisnis ───
+  const handleFreeQuestion = () => {
+    if (!freeQuestion.trim()) return;
+    setQaLoading(true);
+    const q = freeQuestion.trim();
+    setFreeQuestion('');
+
+    // Small delay agar loading spinner visible
+    setTimeout(() => {
+      const answer = generateLocalAnswer(q, {
+        bahanBaku, productHpp, detailResep, calculatedProducts,
+        wasteLogs, cabangList, suratOrders, revenueData, autoAnalysis,
+      });
+
+      const newEntry = { question: q, answer };
+      const updated = [...qaHistory, newEntry].slice(-20);
+      setQaHistory(updated);
+      localStorage.setItem('crm_qa_history', JSON.stringify(updated));
+      setQaLoading(false);
+    }, 150);
+  };
+
+  const clearQaHistory = () => {
+    setQaHistory([]);
+    localStorage.removeItem('crm_qa_history');
+  };
+
   const handleBlastWhatsApp = () => {
     setBlastSending(true);
     setTimeout(() => {
@@ -578,6 +738,49 @@ export default function CrmMarketingTab({
                 {blastSending ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Mengirim...</> : <><Send className="w-3.5 h-3.5" /> Kirim Broadcast WA</>}
               </button>
             </div>
+          </div>
+
+          {/* ─── FREE-FORM Q&A — Tanya Bebas ─── */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-100 pb-2">
+              <MessageCircle className="w-4 h-4 text-indigo-600" /> Tanya Bebas — AI Marketing
+            </h3>
+            <p className="text-[10px] text-gray-500">
+              Tanya apa saja tentang bisnis Anda. Sistem akan menjawab berdasarkan data real-time.
+            </p>
+            <div className="flex gap-2">
+              <input type="text" value={freeQuestion} onChange={e => setFreeQuestion(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleFreeQuestion(); }}
+                placeholder="Contoh: produk apa yang paling laku?"
+                className="flex-1 border border-gray-200 rounded-xl p-2.5 text-xs bg-white focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none" />
+              <button onClick={handleFreeQuestion} disabled={qaLoading || !freeQuestion.trim()}
+                className="px-3 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1">
+                {qaLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <HelpCircle className="w-3.5 h-3.5" />}
+                Tanya
+              </button>
+            </div>
+            {qaHistory.length > 0 && (
+              <div className="max-h-[300px] overflow-y-auto space-y-2">
+                {qaHistory.slice().reverse().map((entry, i) => (
+                  <div key={i} className="p-3 bg-gray-50 border border-gray-150 rounded-xl text-[10px]">
+                    <div className="flex items-start gap-2">
+                      <span className="text-indigo-500 font-bold shrink-0 mt-0.5">Q:</span>
+                      <span className="text-gray-800 font-medium">{entry.question}</span>
+                    </div>
+                    <div className="flex items-start gap-2 mt-1.5">
+                      <span className="text-emerald-500 font-bold shrink-0 mt-0.5">A:</span>
+                      <span className="text-gray-600 whitespace-pre-wrap">{entry.answer}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {qaHistory.length > 0 && (
+              <button onClick={clearQaHistory}
+                className="text-[9px] text-gray-400 hover:text-red-500 transition cursor-pointer">
+                🗑️ Hapus riwayat tanya jawab
+              </button>
+            )}
           </div>
 
           {/* System Health */}
