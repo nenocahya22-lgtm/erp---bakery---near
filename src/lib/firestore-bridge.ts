@@ -37,14 +37,20 @@ const webStoreFirebaseConfig = {
   appId: import.meta.env.VITE_WEBSTORE_APP_ID || '',
   apiKey: import.meta.env.VITE_WEBSTORE_API_KEY || '',
   authDomain: import.meta.env.VITE_WEBSTORE_AUTH_DOMAIN || '',
-  firestoreDatabaseId: import.meta.env.VITE_WEBSTORE_DATABASE_ID || '',
   storageBucket: import.meta.env.VITE_WEBSTORE_STORAGE_BUCKET || '',
   messagingSenderId: import.meta.env.VITE_WEBSTORE_MESSAGING_SENDER_ID || '',
 };
 
 // Inisialisasi Firebase untuk Firestore (project Web Store)
+// CATATAN: Jika env vars kosong (misal di Vercel tanpa env vars),
+// Firebase akan menggunakan config kosong — app tetap render & error
+// akan muncul sebagai warning, bukan blank screen.
+const _firestoreDbId = (import.meta.env.VITE_WEBSTORE_DATABASE_ID || '').trim();
 const app = initializeApp(webStoreFirebaseConfig, 'erp-bridge');
-export const db = getFirestore(app, webStoreFirebaseConfig.firestoreDatabaseId);
+const _useNamedDb = _firestoreDbId.length > 0;
+export const db = _useNamedDb
+  ? getFirestore(app, _firestoreDbId)
+  : getFirestore(app);
 
 // ============================================================================
 // WEB STORE CONFIG — simpan & baca konfigurasi web store dari Firestore
