@@ -1347,22 +1347,37 @@ export default function App() {
   useEffect(() => {
     if ((isOwnerAuthenticated || branchAuth) && !firestoreLoaded) {
       loadAllFromFirestore().then(remoteData => {
-        if (remoteData) {
-          // Firestore has data — use it (overwrites localStorage)
-          setBahanBaku(remoteData.bahanBaku);
-          setProductHpp(remoteData.productHpp);
-          setDetailResep(remoteData.detailResep);
-          setCabangList(remoteData.cabangList);
-          setSuratOrders(remoteData.suratOrders);
-          setWasteLogs(remoteData.wasteLogs);
-          setWriteOffLogs(remoteData.writeOffLogs);
-          setRdExperiments(remoteData.rdExperiments);
-          setToppings(remoteData.toppings);
-          setCabangStok(remoteData.cabangStok);
-          setBranchTransactions(remoteData.branchTransactions);
+        // Cek apakah remoteData beneran ada isinya atau cuma array kosong
+        const hasRemoteData = remoteData !== null && (
+          remoteData.bahanBaku.length > 0 ||
+          remoteData.productHpp.length > 0 ||
+          remoteData.detailResep.length > 0 ||
+          remoteData.cabangList.length > 0 ||
+          remoteData.suratOrders.length > 0 ||
+          remoteData.wasteLogs.length > 0 ||
+          remoteData.writeOffLogs.length > 0 ||
+          remoteData.rdExperiments.length > 0 ||
+          remoteData.toppings.length > 0 ||
+          remoteData.cabangStok.length > 0 ||
+          remoteData.branchTransactions.length > 0
+        );
+
+        if (hasRemoteData) {
+          // Firestore punya data — pakai data cloud (timpa localStorage)
+          setBahanBaku(remoteData!.bahanBaku);
+          setProductHpp(remoteData!.productHpp);
+          setDetailResep(remoteData!.detailResep);
+          setCabangList(remoteData!.cabangList);
+          setSuratOrders(remoteData!.suratOrders);
+          setWasteLogs(remoteData!.wasteLogs);
+          setWriteOffLogs(remoteData!.writeOffLogs);
+          setRdExperiments(remoteData!.rdExperiments);
+          setToppings(remoteData!.toppings);
+          setCabangStok(remoteData!.cabangStok);
+          setBranchTransactions(remoteData!.branchTransactions);
           showToast('☁️ Data tersinkron dari cloud — semua perangkat pakai data terbaru!', 'success');
         } else {
-          // Firestore kosong, data dari localStorage akan otomatis di-upload
+          // Firestore kosong atau data kosong — prioritaskan data localStorage
           const hasLocalData = bahanBaku.length > 0 || productHpp.length > 0 || detailResep.length > 0;
           if (hasLocalData) {
             saveAllToFirestore({ bahanBaku, productHpp, detailResep, cabangList, suratOrders, wasteLogs, writeOffLogs, rdExperiments, toppings, cabangStok, branchTransactions }).then(() => {
