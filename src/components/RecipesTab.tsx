@@ -256,6 +256,19 @@ export default function RecipesTab({
 
   const totalIngredientsCost = calculatedIngredients.reduce((acc, curr) => acc + curr.itemCost, 0);
 
+  // ─── NORMALISASI SATUAN ───
+  // Konversi takaran ke satuan dasar (gr untuk massa, ml untuk volume)
+  // agar kalkulasi HPP konsisten
+  const normalizeTakaran = (qty: number, satuan: string): number => {
+    if (satuan === 'kg') return qty * 1000;        // → gr
+    if (satuan === 'ons') return qty * 100;         // → gr
+    if (satuan === 'liter') return qty * 1000;      // → ml
+    if (satuan === 'sdm') return qty * 15;           // → ml (1 sdm ≈ 15 ml)
+    if (satuan === 'sdt') return qty * 5;            // → ml (1 sdt ≈ 5 ml)
+    if (satuan === 'cup') return qty * 240;          // → ml (1 cup ≈ 240 ml)
+    return qty; // gr, ml, pcs, etc — sudah dalam satuan dasar
+  };
+
   // Add ingredient to active recipe
   const handleAddIngredientToActive = (e: React.FormEvent) => {
     e.preventDefault();
@@ -263,6 +276,9 @@ export default function RecipesTab({
 
     const qty = parseFloat(takaranBahan) || 0;
     if (qty <= 0) return;
+
+    // 🔧 Normalisasi: konversi kg/liter/ons dll ke satuan dasar (gr/ml)
+    const normalizedQty = normalizeTakaran(qty, takaranSatuan);
 
     // Check if ingredient already in list
     const isAlreadyPresent = activeDetails.some(
@@ -272,13 +288,13 @@ export default function RecipesTab({
     let updatedDetails;
     if (isAlreadyPresent) {
       updatedDetails = activeDetails.map((d) =>
-        d.namaBahan.toLowerCase().trim() === selectedBahan.toLowerCase().trim() ? { ...d, takaran: d.takaran + qty } : d
+        d.namaBahan.toLowerCase().trim() === selectedBahan.toLowerCase().trim() ? { ...d, takaran: d.takaran + normalizedQty } : d
       );
     } else {
       const newDetail: DetailResep = {
         namaProduk: activeProduct.namaProduk,
         namaBahan: selectedBahan,
-        takaran: qty,
+        takaran: normalizedQty,
       };
       updatedDetails = [...activeDetails, newDetail];
     }

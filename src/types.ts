@@ -166,7 +166,7 @@ export interface BranchStock {
 export interface BranchTransaction {
   id: string;
   cabangId: string;
-  tipe: 'so_terima' | 'pos_jual' | 'waste' | 'so_minta' | 'so_kirim';
+  tipe: 'so_terima' | 'pos_jual' | 'waste' | 'so_minta' | 'so_kirim' | 'retur';
   bahanNama: string;
   qty: number;
   satuan: string;
@@ -191,8 +191,9 @@ export interface SuratOrder {
   cabangId: string;
   cabangNama: string;
   tanggalKirim: string;
-  status: 'minta' | 'dikirim' | 'diterima';
+  status: 'minta' | 'dikirim' | 'diterima' | 'diretur';
   items: { bahanNama: string; qty: number; qtyTerima?: number }[];
+  returNote?: string; // Catatan retur jika barang rusak di jalan
 }
 
 export interface StockOpname {

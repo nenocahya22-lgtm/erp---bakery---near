@@ -20,6 +20,7 @@ interface DataPusatTabProps {
   suratOrders: SuratOrder[];
   onAddSuratOrder: (so: SuratOrder) => void;
   onUpdateSuratOrder: (id: string, so: SuratOrder) => void;
+  onReturSuratOrder?: (id: string, returNote: string) => void;
   cabangStok: BranchStock[];
   branchTransactions: BranchTransaction[];
   wasteLogs: WasteLog[];
@@ -28,7 +29,7 @@ interface DataPusatTabProps {
 export default function DataPusatTab({
   bahanBaku, onAddMaterial, onEditMaterial, onDeleteMaterial,
   cabangList, onAddCabang, onEditCabang, onDeleteCabang,
-  suratOrders, onAddSuratOrder, onUpdateSuratOrder,
+  suratOrders, onAddSuratOrder, onUpdateSuratOrder, onReturSuratOrder,
   cabangStok, branchTransactions, wasteLogs,
 }: DataPusatTabProps) {
   const [activeSection, setActiveSection] = useState<'cabang' | 'bahan' | 'stok' | 'stok_cabang' | 'supplier' | 'pengiriman' | 'stok_opname' | 'rekap'>('cabang');
@@ -1460,6 +1461,16 @@ export default function DataPusatTab({
                                   className="inline-flex items-center gap-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[10px] font-bold px-2 py-1 rounded-lg transition cursor-pointer">
                                   <CheckCircle2 className="w-3 h-3" /> Terima
                                 </button>
+                                <button onClick={() => {
+                                  const note = window.prompt('Alasan retur (barang rusak di jalan):', 'Barang rusak saat pengiriman');
+                                  if (note !== null && onReturSuratOrder) {
+                                    onReturSuratOrder(so.id, note);
+                                  }
+                                }}
+                                  className="inline-flex items-center gap-1 bg-red-100 hover:bg-red-200 text-red-800 text-[10px] font-bold px-2 py-1 rounded-lg transition cursor-pointer"
+                                  title="Retur barang rusak di jalan — stok dikembalikan ke pusat">
+                                  <AlertTriangle className="w-3 h-3" /> Retur
+                                </button>
                                 <button onClick={() => handleCetakSuratJalan(so)}
                                   className="inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] font-bold px-2 py-1 rounded-lg transition cursor-pointer">
                                   <Printer className="w-3 h-3" /> Surat Jalan
@@ -1468,6 +1479,18 @@ export default function DataPusatTab({
                             )}
                             {so.status === 'diterima' && (
                               <span className="text-[10px] text-gray-400 font-semibold">Selesai</span>
+                            )}
+                            {so.status === 'diretur' && (
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800">
+                                  🔄 Diretur
+                                </span>
+                                {so.returNote && (
+                                  <span className="text-[9px] text-red-500 italic max-w-[120px] truncate" title={so.returNote}>
+                                    📝 {so.returNote}
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </div>
                         </td>

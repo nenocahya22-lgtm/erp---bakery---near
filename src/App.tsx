@@ -1018,6 +1018,43 @@ export default function App() {
     }
   };
 
+  // ─── RETUR SURAT ORDER — Barang rusak di jalan ───
+  const handleReturSuratOrder = (id: string, returNote: string) => {
+    const so = suratOrders.find(s => s.id === id);
+    if (!so) return;
+    if (!window.confirm(`Retur semua barang dari "${so.cabangNama}"?\n\nStok akan dikembalikan ke pusat.\nCatatan: ${returNote}`)) return;
+
+    // Update status SO
+    setSuratOrders(prev => prev.map(s =>
+      s.id === id ? { ...s, status: 'diretur' as const, returNote } : s
+    ));
+
+    // Kembalikan stok ke pusat (bahanBaku)
+    setBahanBaku(prev => prev.map(b => {
+      const item = so.items.find(i => i.bahanNama === b.nama);
+      if (item) {
+        return { ...b, isiKemasan: b.isiKemasan + item.qty };
+      }
+      return b;
+    }));
+
+    // Catat transaksi retur
+    so.items.forEach(item => {
+      const bahan = bahanBaku.find(b => b.nama === item.bahanNama);
+      addBranchTransaction({
+        cabangId: so.cabangId,
+        tipe: 'retur',
+        bahanNama: item.bahanNama,
+        qty: item.qty,
+        satuan: bahan?.satuan || 'pcs',
+        tanggal: new Date().toISOString(),
+        refId: so.id,
+      });
+    });
+
+    showToast(`🔄 Barang dari "${so.cabangNama}" diretur! Stok pusat dikembalikan.`, 'success');
+  };
+
   // ─── SYNC STOCK OPNAME FROM BRANCH ───
   const handleSyncStokOpname = (cabangId: string, bahanNama: string, stokFisik: number, satuan: string) => {
     setCabangStok(prev => {
@@ -1632,6 +1669,7 @@ export default function App() {
                 suratOrders={suratOrders}
                 onAddSuratOrder={handleAddSuratOrder}
                 onUpdateSuratOrder={handleUpdateSuratOrder}
+                onReturSuratOrder={handleReturSuratOrder}
                 cabangStok={cabangStok}
                 branchTransactions={branchTransactions}
                 wasteLogs={wasteLogs}
