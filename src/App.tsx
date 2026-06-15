@@ -967,11 +967,21 @@ export default function App() {
     showToast(msg, 'success');
   };
 
-  // Cache untuk mencegah double-processing order (Web Store auto-deduct)
-  const processedOrderIdsRef = useRef<Set<string>>(new Set());
+  // ─── PROCESSED ORDER IDS — persist ke localStorage agar tahan refresh ───
+  // Mencegah double-processing order dari Firestore listener
+  const processedOrderIdsRef = useRef<Set<string>>(() => {
+    const saved = safeGetLocalStorage<string[]>('processed_order_ids', []);
+    return new Set(saved);
+  });
 
-  // Cache untuk track produk yang sudah auto-deduct dari Web Store
-  // Digunakan oleh handleProductionComplete untuk memberi warning double-deduction
+  // Helper: add order ID dan simpan ke localStorage
+  const markOrderProcessed = (orderId: string) => {
+    processedOrderIdsRef.current.add(orderId);
+    localStorage.setItem('processed_order_ids', JSON.stringify([...processedOrderIdsRef.current]));
+  };
+
+  // Cache untuk track produk — Open PO: tidak ada auto-deduct via order
+  // Hanya Production Center yang memotong stok bahan baku
   const autoDeductedProductsRef = useRef<Set<string>>(new Set());
 
   // ─── CHAT NOTIFICATION — Track lastMessage untuk deteksi pesan baru ───
@@ -1163,7 +1173,9 @@ export default function App() {
   const wasteTotalLoss = wasteLogs.reduce((acc, curr) => acc + curr.lossValue, 0);
   const rdTotalCost = rdExperiments.reduce((acc, curr) => acc + curr.components.reduce((sum, c) => sum + (c.takaran * c.unitPrice), 0) + curr.estOverhead, 0);
 
-  // ─── FIRESTORE LISTENER — Notifikasi & Auto-Deduct Stok dari Web Store ───
+  // ─── FIRESTORE LISTENER — Notifikasi Order & Chat dari Web Store ───
+  // Dipisah dari useEffect utama agar tidak re-subscribe tiap state berubah (Bug Fix #1)
+  // Semua akses state via refs (bahanBakuRef, productHppRef, dll) — lihat di atas
   useEffect(() => {
     // Listen for new orders from web store
     const unsubOrders = listenNewOrders((order) => {
@@ -1211,8 +1223,9 @@ export default function App() {
         tracker.dailyTotals[today].sources['Web Store'] += order.totalAmount;
         localStorage.setItem('revenue_tracker_data', JSON.stringify(tracker));
       } catch (e) { console.warn('Failed to save revenue_tracker_data:', e); }
-      // ⚠️ Stok bahan baku dipotong SAAT PRODUKSI (Production Center), bukan saat penjualan
-      // Ini mencegah double deduction. Lihat handleProductionComplete untuk logika potong stok.
+      // Open PO / Restock system — stok bahan baku dipotong SAAT PRODUKSI (Production Center)
+      // Order Web Store hanya jadi trigger produksi, bukan auto-deduct stok.
+      // Lihat handleProductionComplete untuk logika potong stok.
     }, (err) => console.warn('Order listener error:', err));
 
     // ─── LISTENER: Update status order Web Store saat pembayaran dikonfirmasi ───
@@ -1224,7 +1237,7 @@ export default function App() {
         console.log(`Order ${order.id.slice(-8)} sudah diproses, skip.`);
         return;
       }
-      processedOrderIdsRef.current.add(order.id);
+      markOrderProcessed(order.id);
 
       showToast(`🔔 Pembayaran dikonfirmasi untuk pesanan ${order.id.slice(-8)}! Status: ${previousStatus} → ${order.status}.`, 'success');
 
@@ -1250,53 +1263,9 @@ export default function App() {
         }, 2000);
       }
 
-      // AUTO-DEDUCT STOK: Potong bahan baku saat order dikonfirmasi (Diproses / Lunas)
-      // Web Store order ready-to-ship -> stok bahan baku langsung terpotong
-      try {
-        const curBahan = bahanBakuRef.current;
-        const curResep = detailResepRef.current;
-        const curHpp = productHppRef.current;
-        let stockChanged = false;
-
-        order.items.forEach((item: any) => {
-          const pName = item.name || item.productId || '';
-          const hasRecipe = curResep.some(
-            (r) => r.namaProduk.toLowerCase().trim() === pName.toLowerCase().trim()
-          );
-          if (hasRecipe) stockChanged = true;
-        });
-
-        if (stockChanged) {
-          // Track nama produk untuk double-deduction guard
-          order.items.forEach((item: any) => {
-            const pName = (item.name || item.productId || '').trim();
-            if (pName) autoDeductedProductsRef.current.add(pName);
-          });
-          console.log('[Auto-Deduct] Tracked:', [...autoDeductedProductsRef.current].join(', '));
-
-          // Hitung ulang bahan baku setelah semua item diproses (immutable pattern)
-          const updatedBahan = curBahan.map(b => {
-            let newStock = b.isiKemasan;
-            order.items.forEach((item: any) => {
-              const pName = item.name || item.productId || '';
-              const qty2 = item.quantity || 1;
-              curResep.filter(r => r.namaProduk.toLowerCase().trim() === pName.toLowerCase().trim())
-                .forEach(ing => {
-                  if (ing.namaBahan.toLowerCase().trim() === b.nama.toLowerCase().trim()) {
-                    const pInfo2 = curHpp.find(p => p.namaProduk.toLowerCase().trim() === pName.toLowerCase().trim());
-                    const yieldP2 = pInfo2?.porsiJual || 1;
-                    newStock -= (ing.takaran / yieldP2) * qty2;
-                  }
-                });
-            });
-            return { ...b, isiKemasan: Math.max(0, Number(newStock.toFixed(2))) };
-          });
-          setBahanBaku(updatedBahan);
-          showToast('Stok bahan baku otomatis dipotong untuk pesanan #' + order.id.slice(-8), 'success');
-        }
-      } catch (e) {
-        console.warn('Auto-deduct stock error:', e);
-      }
+      // Open PO / Restock system — TIDAK auto-deduct stok dari order Web Store
+      // Stok bahan baku hanya dipotong saat produksi (Production Center)
+      // Order ini akan menjadi trigger produksi/restock di production planner
     }, (err) => console.warn('Status change listener error:', err));
 
     // Listen for ERP notifications
@@ -1349,7 +1318,7 @@ export default function App() {
       unsubNotif();
       unsubChats();
     };
-  }, [bahanBaku, productHpp, detailResep, calculatedProducts]);
+  }, []); // <-- empty deps! Subscribe sekali, akses data via refs
 
   // ─── FIRESTORE CATEGORY PULL — Ambil kategori dari Firestore sebagai source of truth ───
   // Saat startup, ERP menarik daftar kategori dari Firestore (web store / WebStoreManager)

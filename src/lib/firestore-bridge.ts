@@ -231,14 +231,9 @@ export async function syncProductsToFirestore(
         : `${calc.namaProduk} — Lezat dari Near Bakery & Co. Dibuat dengan bahan-bahan pilihan berkualitas terbaik.`;
     }
 
-    // Hitung stok dari bahan baku paling kritis
-    const bahanNames = calc.bahanList.map((b) => b.namaBahan.toLowerCase().trim());
-    const minStock = Math.min(
-      ...bahanNames.map((name) => {
-        const bahan = bahanBaku.find((b) => b.nama.toLowerCase().trim() === name);
-        return bahan ? Math.floor(bahan.isiKemasan / (calc.bahanList.find((bl) => bl.namaBahan.toLowerCase().trim() === name)?.takaran || 1)) : 0;
-      })
-    );
+    // Open PO / Restock system — produk selalu tersedia, tidak ada limitasi stok
+    // Order dari Web Store akan menjadi trigger produksi/restock, bukan auto-deduct
+    const productStock = 999;
 
     // Cek diskon dari WebStoreConfig
     let discountPercent = 0;
@@ -272,7 +267,7 @@ export async function syncProductsToFirestore(
       variants: webVariants,
       discountPercent: discountPercent > 0 ? discountPercent : undefined,
       originalPrice: discountPercent > 0 ? Math.round(calc.hargaJualPerPorsi) : undefined,
-      stock: Math.max(0, minStock),
+      stock: productStock,
       imageUrl: displayImage,
       category: kategori,
       rating: existingData ? (existingData as any).rating || 5.0 : 5.0,

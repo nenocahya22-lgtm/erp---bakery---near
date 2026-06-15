@@ -34,8 +34,8 @@ const COLLECTIONS = {
 type CollectionKey = keyof typeof COLLECTIONS;
 
 // ─── TRACK LAST SYNC TIMESTAMP ───
+// Cooldown per-collection (5 detik) mencegah echo-back tanpa blokir perangkat lain
 const lastSynced: Record<string, number> = {};
-let isApplyingRemoteUpdate = false;
 
 // ─── GENERIC SAVE ───
 async function saveToFirestore<T>(key: CollectionKey, items: T[]): Promise<void> {
@@ -44,6 +44,9 @@ async function saveToFirestore<T>(key: CollectionKey, items: T[]): Promise<void>
       items,
       lastUpdated: serverTimestamp(),
     });
+    // Set cooldown 5 detik untuk mencegah echo-back
+    // Ini menggantikan global flag isApplyingRemoteUpdate yang memblokir sync antar-perangkat
+    lastSynced[key] = Date.now() + 5000;
   } catch (err) {
     console.warn(`Firestore sync error (${key}):`, err);
   }
@@ -74,13 +77,14 @@ function listenFirestore<T>(
     doc(db, COLLECTIONS[key], CABANG_ID),
     (snap) => {
       if (!snap.exists()) return;
-      if (isApplyingRemoteUpdate) return;
 
       const data = snap.data() as ErpDoc<T>;
       const remoteTime = (data.lastUpdated as any)?.toMillis?.() || 0;
       const localTime = lastSynced[key] || 0;
 
-      // Only apply if remote data is newer than our last sync
+      // Hanya terapkan jika remote data lebih baru dari cooldown lokal
+      // Cooldown 5 detik (set oleh saveToFirestore) mencegah echo-back
+      // tanpa memblokir perangkat LAIN yang juga sync
       if (remoteTime > localTime && data.items) {
         lastSynced[key] = remoteTime;
         onData(data.items, true);
@@ -108,100 +112,86 @@ export type ErpSyncData = {
 };
 
 export async function loadAllFromFirestore(): Promise<ErpSyncData | null> {
-  isApplyingRemoteUpdate = true;
-  try {
-    const [
-      bahanBaku, productHpp, detailResep, cabangList, suratOrders,
-      wasteLogs, writeOffLogs, rdExperiments, toppings, cabangStok, branchTransactions,
-    ] = await Promise.all([
-      loadFromFirestore<BahanBaku>('bahanBaku'),
-      loadFromFirestore<ProductHpp>('productHpp'),
-      loadFromFirestore<DetailResep>('detailResep'),
-      loadFromFirestore<Cabang>('cabangList'),
-      loadFromFirestore<SuratOrder>('suratOrders'),
-      loadFromFirestore<WasteLog>('wasteLogs'),
-      loadFromFirestore<WriteOffLog>('writeOffLogs'),
-      loadFromFirestore<RDExperiment>('rdExperiments'),
-      loadFromFirestore<ProductTopping>('toppings'),
-      loadFromFirestore<BranchStock>('cabangStok'),
-      loadFromFirestore<BranchTransaction>('branchTransactions'),
-    ]);
+  const [
+    bahanBaku, productHpp, detailResep, cabangList, suratOrders,
+    wasteLogs, writeOffLogs, rdExperiments, toppings, cabangStok, branchTransactions,
+  ] = await Promise.all([
+    loadFromFirestore<BahanBaku>('bahanBaku'),
+    loadFromFirestore<ProductHpp>('productHpp'),
+    loadFromFirestore<DetailResep>('detailResep'),
+    loadFromFirestore<Cabang>('cabangList'),
+    loadFromFirestore<SuratOrder>('suratOrders'),
+    loadFromFirestore<WasteLog>('wasteLogs'),
+    loadFromFirestore<WriteOffLog>('writeOffLogs'),
+    loadFromFirestore<RDExperiment>('rdExperiments'),
+    loadFromFirestore<ProductTopping>('toppings'),
+    loadFromFirestore<BranchStock>('cabangStok'),
+    loadFromFirestore<BranchTransaction>('branchTransactions'),
+  ]);
 
-    const hasAnyData = bahanBaku || productHpp || detailResep || cabangList ||
-      suratOrders || wasteLogs || writeOffLogs || rdExperiments ||
-      toppings || cabangStok || branchTransactions;
+  const hasAnyData = bahanBaku || productHpp || detailResep || cabangList ||
+    suratOrders || wasteLogs || writeOffLogs || rdExperiments ||
+    toppings || cabangStok || branchTransactions;
 
-    if (!hasAnyData) return null;
+  if (!hasAnyData) return null;
 
-    return {
-      bahanBaku: bahanBaku || [],
-      productHpp: productHpp || [],
-      detailResep: detailResep || [],
-      cabangList: cabangList || [],
-      suratOrders: suratOrders || [],
-      wasteLogs: wasteLogs || [],
-      writeOffLogs: writeOffLogs || [],
-      rdExperiments: rdExperiments || [],
-      toppings: toppings || [],
-      cabangStok: cabangStok || [],
-      branchTransactions: branchTransactions || [],
-    };
-  } finally {
-    isApplyingRemoteUpdate = false;
-  }
-}
-
-async function saveWithFlag<T>(key: CollectionKey, items: T[]): Promise<void> {
-  isApplyingRemoteUpdate = true;
-  try {
-    await saveToFirestore(key, items);
-  } finally {
-    isApplyingRemoteUpdate = false;
-  }
+  return {
+    bahanBaku: bahanBaku || [],
+    productHpp: productHpp || [],
+    detailResep: detailResep || [],
+    cabangList: cabangList || [],
+    suratOrders: suratOrders || [],
+    wasteLogs: wasteLogs || [],
+    writeOffLogs: writeOffLogs || [],
+    rdExperiments: rdExperiments || [],
+    toppings: toppings || [],
+    cabangStok: cabangStok || [],
+    branchTransactions: branchTransactions || [],
+  };
 }
 
 export async function saveBahanBaku(items: BahanBaku[]): Promise<void> {
-  return saveWithFlag('bahanBaku', items);
+  return saveToFirestore('bahanBaku', items);
 }
 
 export async function saveProductHpp(items: ProductHpp[]): Promise<void> {
-  return saveWithFlag('productHpp', items);
+  return saveToFirestore('productHpp', items);
 }
 
 export async function saveDetailResep(items: DetailResep[]): Promise<void> {
-  return saveWithFlag('detailResep', items);
+  return saveToFirestore('detailResep', items);
 }
 
 export async function saveCabangList(items: Cabang[]): Promise<void> {
-  return saveWithFlag('cabangList', items);
+  return saveToFirestore('cabangList', items);
 }
 
 export async function saveSuratOrders(items: SuratOrder[]): Promise<void> {
-  return saveWithFlag('suratOrders', items);
+  return saveToFirestore('suratOrders', items);
 }
 
 export async function saveWasteLogs(items: WasteLog[]): Promise<void> {
-  return saveWithFlag('wasteLogs', items);
+  return saveToFirestore('wasteLogs', items);
 }
 
 export async function saveWriteOffLogs(items: WriteOffLog[]): Promise<void> {
-  return saveWithFlag('writeOffLogs', items);
+  return saveToFirestore('writeOffLogs', items);
 }
 
 export async function saveRdExperiments(items: RDExperiment[]): Promise<void> {
-  return saveWithFlag('rdExperiments', items);
+  return saveToFirestore('rdExperiments', items);
 }
 
 export async function saveToppings(items: ProductTopping[]): Promise<void> {
-  return saveWithFlag('toppings', items);
+  return saveToFirestore('toppings', items);
 }
 
 export async function saveCabangStok(items: BranchStock[]): Promise<void> {
-  return saveWithFlag('cabangStok', items);
+  return saveToFirestore('cabangStok', items);
 }
 
 export async function saveBranchTransactions(items: BranchTransaction[]): Promise<void> {
-  return saveWithFlag('branchTransactions', items);
+  return saveToFirestore('branchTransactions', items);
 }
 
 // ─── REAL-TIME LISTENER ───
@@ -235,24 +225,19 @@ export function listenAllChanges(listeners: ErpSyncListener): () => void {
   return () => unsubs.forEach(fn => fn());
 }
 
-// ─── BULK SAVE ───
+// ─── BULK SAVE — tanpa global flag, cooldown per-collection dari saveToFirestore ───
 export async function saveAllToFirestore(data: ErpSyncData): Promise<void> {
-  isApplyingRemoteUpdate = true;
-  try {
-    await Promise.all([
-      saveToFirestore('bahanBaku', data.bahanBaku),
-      saveToFirestore('productHpp', data.productHpp),
-      saveToFirestore('detailResep', data.detailResep),
-      saveToFirestore('cabangList', data.cabangList),
-      saveToFirestore('suratOrders', data.suratOrders),
-      saveToFirestore('wasteLogs', data.wasteLogs),
-      saveToFirestore('writeOffLogs', data.writeOffLogs),
-      saveToFirestore('rdExperiments', data.rdExperiments),
-      saveToFirestore('toppings', data.toppings),
-      saveToFirestore('cabangStok', data.cabangStok),
-      saveToFirestore('branchTransactions', data.branchTransactions),
-    ]);
-  } finally {
-    isApplyingRemoteUpdate = false;
-  }
+  await Promise.all([
+    saveToFirestore('bahanBaku', data.bahanBaku),
+    saveToFirestore('productHpp', data.productHpp),
+    saveToFirestore('detailResep', data.detailResep),
+    saveToFirestore('cabangList', data.cabangList),
+    saveToFirestore('suratOrders', data.suratOrders),
+    saveToFirestore('wasteLogs', data.wasteLogs),
+    saveToFirestore('writeOffLogs', data.writeOffLogs),
+    saveToFirestore('rdExperiments', data.rdExperiments),
+    saveToFirestore('toppings', data.toppings),
+    saveToFirestore('cabangStok', data.cabangStok),
+    saveToFirestore('branchTransactions', data.branchTransactions),
+  ]);
 }
