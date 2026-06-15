@@ -1,14 +1,11 @@
 // Vercel Serverless Function — POST /api/backup/send
 // Send backup data via email using SMTP
-import { parseBody } from '../_gemini';
-
 export default async function handler(req: any, res: any) {
   res.setHeader('Content-Type', 'application/json');
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed — use POST' });
 
   try {
-    const body = await parseBody(req);
-    const { toEmail, backupData, backupDate } = body;
+    const { toEmail, backupData, backupDate } = req.body || {};
 
     const smtpHost = process.env.SMTP_HOST;
     const smtpPort = process.env.SMTP_PORT;

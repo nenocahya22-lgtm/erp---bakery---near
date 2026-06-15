@@ -1,6 +1,6 @@
 // Vercel Serverless Function — POST /api/marketing/full-analysis
 // Full system analysis with Gemini AI — dipanggil dari CrmMarketingTab
-import { getAiClient, requireApiKey, parseBody } from '../_gemini';
+import { getAiClient, requireApiKey } from '../_gemini';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Content-Type', 'application/json');
@@ -14,8 +14,7 @@ export default async function handler(req: any, res: any) {
   if (!requireApiKey(req, res)) return;
 
   try {
-    const body = await parseBody(req);
-    const { products, bahanBaku, productHpp, detailResep, wasteLogs, cabangList, suratOrders, revenueData, ordersData, userQuery } = body;
+    const { products, bahanBaku, productHpp, detailResep, wasteLogs, cabangList, suratOrders, revenueData, ordersData, userQuery } = req.body || {};
 
     const client = getAiClient();
     const wasteTotal = (wasteLogs || []).reduce((s: number, w: any) => s + (w.lossValue || 0), 0);

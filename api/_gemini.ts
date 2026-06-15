@@ -23,18 +23,4 @@ export function requireApiKey(req: any, res: any): boolean {
   return false;
 }
 
-// Helper untuk parse JSON body
-export function parseBody(req: any): Promise<any> {
-  return new Promise((resolve, reject) => {
-    let body = '';
-    req.on('data', (chunk: string) => { body += chunk; });
-    req.on('end', () => {
-      try {
-        resolve(body ? JSON.parse(body) : {});
-      } catch {
-        reject(new Error('Invalid JSON'));
-      }
-    });
-    req.on('error', reject);
-  });
-}
+

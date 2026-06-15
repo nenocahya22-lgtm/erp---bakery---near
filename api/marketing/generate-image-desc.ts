@@ -1,6 +1,6 @@
 // Vercel Serverless Function — POST /api/marketing/generate-image-desc
 // Generate image description from product name
-import { getAiClient, requireApiKey, parseBody } from '../_gemini';
+import { getAiClient, requireApiKey } from '../_gemini';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Content-Type', 'application/json');
@@ -8,8 +8,7 @@ export default async function handler(req: any, res: any) {
   if (!requireApiKey(req, res)) return;
 
   try {
-    const body = await parseBody(req);
-    const { prompt } = body;
+    const { prompt } = req.body || {};
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
 
     const client = getAiClient();
@@ -23,6 +22,7 @@ export default async function handler(req: any, res: any) {
     res.status(200).json({ desc: englishDesc, url: `https://source.unsplash.com/600x400/?${searchQuery}` });
   } catch (error: any) {
     console.error('Image desc error:', error);
-    res.status(200).json({ desc: req.body?.prompt || 'Bakery food', url: `https://source.unsplash.com/600x400/?${encodeURIComponent((req.body?.prompt || 'bakery food').split(' ').slice(0, 5).join(' '))}` });
+    const fallbackPrompt = (req.body || {}).prompt || 'Bakery food';
+    res.status(200).json({ desc: fallbackPrompt, url: `https://source.unsplash.com/600x400/?${encodeURIComponent(fallbackPrompt.split(' ').slice(0, 5).join(' '))}` });
   }
 }
