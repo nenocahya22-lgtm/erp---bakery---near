@@ -327,7 +327,17 @@ export default function App() {
   // Handlers for state updates
   const handleAddRD = (exp: RDExperiment) => {
     setRdExperiments((prev) => [exp, ...prev]);
-    showToast(`Proyek Litbang "${exp.projectName}" berhasil didaftarkan!`, 'success');
+    // Deduct bahan baku untuk R&D — eksperimen menggunakan stok real dari gudang
+    if (exp.components.length > 0) {
+      setBahanBaku(prev => prev.map(b => {
+        const used = exp.components.find(c => c.bahanName === b.nama);
+        if (used) {
+          return { ...b, isiKemasan: Math.max(0, b.isiKemasan - used.takaran) };
+        }
+        return b;
+      }));
+    }
+    showToast(`🔬 Proyek Litbang "${exp.projectName}" berhasil! Bahan terpakai: ${exp.components.length} jenis.`, 'success');
   };
 
   const handleDeleteRD = (id: string) => {

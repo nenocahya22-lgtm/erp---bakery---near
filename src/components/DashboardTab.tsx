@@ -335,9 +335,7 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList
       localResult += '  📦 Bundling produk margin tinggi + rendah untuk subsidi silang\n';
       localResult += '  📊 Review harga jual produk dengan margin di bawah 20%\n';
       localResult += '  🗑️ Optimalkan stok bahan baku untuk kurangi waste (cek tab Manajemen Waste)\n';
-      localResult += '  📸 Update foto produk untuk meningkatkan persepsi nilai\n\n';
-      localResult += '⚙️ **Catatan:** Untuk analisis AI yang lebih dalam (Gemini), jalankan:\n';
-      localResult += '  • `npm run dev` — pastikan `.env` berisi `GEMINI_API_KEY`\n';
+      localResult += '  📸 Update foto produk untuk meningkatkan persepsi nilai\n';
       setAnalysisResult(localResult);
     } finally {
       setLoading(false);

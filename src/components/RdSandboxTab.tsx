@@ -30,8 +30,6 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
 
   // State draft Formulation
   const [newRDName, setNewRDName] = useState('');
-  const [newRDPortion, setNewRDPortion] = useState('10');
-  const [newRDOverhead, setNewRDOverhead] = useState('10000');
   const [newRDPrice, setNewRDPrice] = useState('0');
   const [rdIngredients, setRdIngredients] = useState<{ bahanName: string; takaran: number; satuan: string }[]>([]);
   const [selectedBahanIdx, setSelectedBahanIdx] = useState('0');
@@ -100,8 +98,8 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
     const newExperiment: RDExperiment = {
       id: `rd-${Date.now()}`,
       projectName: newRDName,
-      targetOutputPorsi: parseFloat(newRDPortion) || 1,
-      estOverhead: parseFloat(newRDOverhead) || 0,
+      targetOutputPorsi: 1,
+      estOverhead: 0,
       estHargaJual: parseFloat(newRDPrice) || 0,
       components: formattedComponents,
       dateCreated: new Date().toISOString().substring(0, 10)
@@ -109,8 +107,6 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
 
     onAddRD(newExperiment);
     setNewRDName('');
-    setNewRDPortion('10');
-    setNewRDOverhead('10000');
     setNewRDPrice('0');
     setRdIngredients([]);
     setSelectedExp(newExperiment.id);
@@ -145,24 +141,12 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
                 className="w-full border border-gray-200 rounded-lg p-2.5 text-xs" />
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="block text-[9px] uppercase font-bold text-gray-400 mb-1">Target Porsi</label>
-                <input type="number" required value={newRDPortion} onChange={(e) => setNewRDPortion(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono font-bold" />
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Total HPP (Rp) <span className="text-blue-500">*auto dr bahan</span></label>
+              <div className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono bg-gray-100 text-gray-500">
+                {formatCurrency(rdIngredients.reduce((s, i) => s + getIngredientCost(i.bahanName, i.takaran), 0))}
               </div>
-              <div>
-                <label className="block text-[9px] uppercase font-bold text-gray-400 mb-1">Overhead (Rp)</label>
-                <input type="number" required value={newRDOverhead} onChange={(e) => setNewRDOverhead(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono" />
-              </div>
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Total HPP (Rp) <span className="text-blue-500">*auto dr bahan</span></label>
-                  <div className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono bg-gray-100 text-gray-500">
-                    {formatCurrency(rdIngredients.reduce((s, i) => s + getIngredientCost(i.bahanName, i.takaran), 0))}
-                  </div>
-                  <input type="hidden" value={newRDPrice} readOnly />
-              </div>
+              <input type="hidden" value={newRDPrice} readOnly />
             </div>
 
             {/* Table-like ingredients input */}

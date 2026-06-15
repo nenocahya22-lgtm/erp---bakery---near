@@ -572,23 +572,10 @@ export default function RecipesTab({
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
-              </div>                <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Portion Yield</label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={newProductPorsi}
-                    onChange={(e) => setNewProductPorsi(e.target.value)}
-                    className="w-full text-xs border border-gray-200 bg-white rounded-lg p-2 font-mono font-bold text-center"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Total HPP (Rp) <span className="text-blue-500 font-normal normal-case">auto dari bahan</span></label>
-                  <div className="w-full border border-gray-200 bg-gray-100 rounded-lg p-2 font-mono text-emerald-800 font-bold text-center text-xs">
-                    Rp 0 (hitung otomatis setelah tambah bahan)
-                  </div>
+              </div>                <div>
+                <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Total HPP (Rp) <span className="text-blue-500 font-normal normal-case">auto dr bahan</span></label>
+                <div className="w-full border border-gray-200 bg-gray-100 rounded-lg p-2 font-mono text-emerald-800 font-bold text-center text-xs">
+                  Rp 0 (hitung otomatis setelah tambah bahan)
                 </div>
               </div>
 
