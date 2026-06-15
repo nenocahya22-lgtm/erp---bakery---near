@@ -1573,7 +1573,7 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
                         {fp.discountPercent && fp.discountPercent > 0 && (
                           <span className="text-[9px] text-amber-600 font-bold">-{fp.discountPercent}%</span>
                         )}
-                        <span className="text-[9px] text-gray-400">Stok: {fp.stock}</span>
+
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
