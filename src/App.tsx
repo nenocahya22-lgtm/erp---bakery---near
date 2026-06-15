@@ -737,6 +737,15 @@ export default function App() {
       setDetailResep((prev) => [...prev, ...ingredients]);
     }
     setHasUnsavedChanges(true);
+    // Auto-sync ke Firestore agar produk langsung muncul di Web Store
+    setTimeout(() => {
+      const updatedCalc = calculateAllProducts(bahanBakuRef.current, [...productHppRef.current, p], detailResepRef.current);
+      syncProductsToFirestore(updatedCalc, [...productHppRef.current, p], detailResepRef.current, bahanBakuRef.current, 'pusat').then(count => {
+        showToast(`Resep "${p.namaProduk}" diformulasikan! ${count} produk tersinkron ke Web Store.`, 'success');
+      }).catch((err) => {
+        console.warn('Auto-sync after recipe creation failed:', err);
+      });
+    }, 1000);
     showToast(`Resep Produk "${p.namaProduk}" diformulasikan!`, 'success');
   };
 

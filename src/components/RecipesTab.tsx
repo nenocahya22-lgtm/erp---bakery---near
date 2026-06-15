@@ -585,7 +585,7 @@ export default function RecipesTab({
                 type="submit"
                 className="w-full py-2.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs cursor-pointer text-center active:scale-[0.98]"
               >
-                Buat Resep Baru
+                ✅ Selesai & Simpan Resep
               </button>
               </div>
             </form>
@@ -864,7 +864,7 @@ export default function RecipesTab({
                 ) : (
                   <div className="border border-gray-100 rounded-xl overflow-hidden">
                     <div className="overflow-x-auto">
-                    <table className="w-full border-collapse text-left text-xs sm:text-sm">
+                    <table className="w-full min-w-[600px] border-collapse text-left text-xs sm:text-sm">
                       <thead>
                         <tr className="border-b border-gray-150 bg-slate-900 text-[10px] font-bold uppercase text-white font-mono">
                           <th className="px-2 sm:px-4 py-3 whitespace-nowrap">Nama Bahan</th>
@@ -926,7 +926,7 @@ export default function RecipesTab({
                                 </div>
                               )}
                             </td>
-                            {/* ─── NEW: Separate Satuan Column ─── */}
+
                             <td className="px-2 sm:px-4 py-3 text-center font-bold text-gray-600 text-xs whitespace-nowrap">
                               {ing.satuan}
                             </td>
