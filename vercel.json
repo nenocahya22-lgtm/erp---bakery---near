@@ -3,8 +3,5 @@
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
-  ],
-  "env": {
-    "GEMINI_API_KEY": ""
-  }
+  ]
 }
