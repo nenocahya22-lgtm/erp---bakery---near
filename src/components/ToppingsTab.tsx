@@ -19,7 +19,8 @@ export default function ToppingsTab({ toppings, productHpp, bahanBaku, onAddTopp
   const [showAddForm, setShowAddForm] = useState(false);
 
   // Form state
-  const [selectedProduk, setSelectedProduk] = useState('');
+  const [selectedProdukList, setSelectedProdukList] = useState<string[]>([]);
+  const [selectAllProduk, setSelectAllProduk] = useState(true);
   const [toppingName, setToppingName] = useState('');
   const [selectedBahan, setSelectedBahan] = useState('');
   const [takaran, setTakaran] = useState('');
@@ -29,9 +30,13 @@ export default function ToppingsTab({ toppings, productHpp, bahanBaku, onAddTopp
   const bahanMap = new Map<string, BahanBaku>();
   bahanBaku.forEach(b => bahanMap.set(b.nama.toLowerCase().trim(), b));
 
-  // Filter toppings
+  // Filter toppings — tampilkan utk multi-produk
   const filteredToppings = toppings.filter(t => {
-    if (productFilter !== 'semua' && t.namaProduk.toLowerCase().trim() !== productFilter.toLowerCase().trim()) return false;
+    if (productFilter !== 'semua') {
+      const matchesProduk = t.namaProduk === 'Semua Produk' ||
+        t.namaProduk.toLowerCase().trim() === productFilter.toLowerCase().trim();
+      if (!matchesProduk) return false;
+    }
     if (searchQuery && !t.namaTopping.toLowerCase().includes(searchQuery.toLowerCase()) && !t.namaBahan.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
@@ -58,26 +63,41 @@ export default function ToppingsTab({ toppings, productHpp, bahanBaku, onAddTopp
     const qty = parseFloat(takaran) || 0;
     if (qty <= 0) return;
 
-    const newTp: ProductTopping = {
-      id: Math.random().toString(36).substring(2, 9),
-      namaProduk: selectedProduk || 'Semua Produk',
-      namaTopping: toppingName.trim(),
-      namaBahan: selectedBahan,
-      takaran: qty,
-      hargaBeli: raw.hargaBeli,
-      isiKemasan: raw.isiKemasan,
-      satuan,
-      hargaSatuan: raw.hargaSatuan,
-      hargaJualTopping: Math.round(qty * raw.hargaSatuan),
-    };
+    // Tentukan produk target — multi-select checkbox selalu
+    let targetProducts: string[];
+    if (selectAllProduk) {
+      targetProducts = ['Semua Produk'];
+    } else {
+      targetProducts = selectedProdukList.length > 0
+        ? selectedProdukList
+        : ['Semua Produk'];
+    }
 
-    onAddTopping(newTp);
+    // Batch create: 1 topping entry per produk
+    targetProducts.forEach(produk => {
+      const newTp: ProductTopping = {
+        id: Math.random().toString(36).substring(2, 9),
+        namaProduk: produk,
+        namaTopping: toppingName.trim(),
+        namaBahan: selectedBahan,
+        takaran: qty,
+        hargaBeli: raw.hargaBeli,
+        isiKemasan: raw.isiKemasan,
+        satuan,
+        hargaSatuan: raw.hargaSatuan,
+        hargaJualTopping: Math.round(qty * raw.hargaSatuan),
+      };
+      onAddTopping(newTp);
+    });
+
     // Reset form
     setSelectedBahan('');
     setToppingName('');
     setTakaran('');
     setSatuan('gr');
     setHargaJual('');
+    setSelectedProdukList([]);
+    setSelectAllProduk(true);
     setShowAddForm(false);
   };
 
@@ -166,18 +186,54 @@ export default function ToppingsTab({ toppings, productHpp, bahanBaku, onAddTopp
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 block">Produk Terkait (opsional)</label>
-                  <select
-                    value={selectedProduk}
-                    onChange={e => setSelectedProduk(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl bg-white"
-                  >
-                    <option value="">Semua Produk (global)</option>
-                    {productHpp.map(p => (
-                      <option key={p.namaProduk} value={p.namaProduk}>{p.namaProduk}</option>
-                    ))}
-                  </select>
-                  <p className="text-[9px] text-gray-400 mt-1">Kosongkan jika topping tersedia untuk semua produk</p>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 block">Produk Terkait <span className="text-blue-500 font-normal normal-case">centang beberapa produk sekaligus</span></label>
+                  <div className="border border-gray-200 rounded-xl bg-white p-2 max-h-[180px] overflow-y-auto space-y-1">
+                    <label className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-indigo-50 cursor-pointer text-xs">
+                      <input
+                        type="checkbox"
+                        checked={selectAllProduk}
+                        onChange={e => {
+                          setSelectAllProduk(e.target.checked);
+                          if (e.target.checked) setSelectedProdukList([]);
+                        }}
+                        className="w-3.5 h-3.5 rounded accent-indigo-600"
+                      />
+                      <span className="font-bold text-indigo-700">🌐 Semua Produk (global)</span>
+                    </label>
+                    <div className="border-t border-gray-100" />
+                    {productHpp.map(p => {
+                      const checked = selectedProdukList.includes(p.namaProduk);
+                      return (
+                        <label key={p.namaProduk} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-indigo-50 cursor-pointer text-xs">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={selectAllProduk}
+                            onChange={e => {
+                              if (selectAllProduk) {
+                                setSelectAllProduk(false);
+                                setSelectedProdukList([p.namaProduk]);
+                              } else {
+                                setSelectedProdukList(prev =>
+                                  e.target.checked
+                                    ? [...prev, p.namaProduk]
+                                    : prev.filter(n => n !== p.namaProduk)
+                                );
+                              }
+                            }}
+                            className="w-3.5 h-3.5 rounded accent-indigo-600"
+                          />
+                          <span>{p.namaProduk}</span>
+                          <span className="text-[9px] text-gray-400 ml-auto">{p.kategori || '-'}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[9px] text-gray-400 mt-1">
+                    {selectAllProduk
+                      ? '✅ Topping berlaku untuk SEMUA produk — 1 klik cukup'
+                      : `📌 ${selectedProdukList.length} produk dipilih — 1 submit untuk semua`}
+                  </p>
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 block">Bahan Baku</label>

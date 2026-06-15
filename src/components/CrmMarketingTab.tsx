@@ -19,114 +19,307 @@ function generateLocalAnswer(question: string, data: {
   const q = question.toLowerCase();
   const fmt = (v: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
 
-  // Produk terlaris / best seller
+  // ─── PRODUK TERLARIS ───
   if (q.includes('terlaris') || q.includes('best seller') || q.includes('populer') || q.includes('laku')) {
     if (autoAnalysis.topProducts.length === 0) return '📊 Belum ada data penjualan. Mulai transaksi POS dulu ya!';
     let ans = '🏆 **PRODUK TERLARIS**\n\n';
     autoAnalysis.topProducts.forEach((p: any, i: number) => {
       ans += `${i + 1}. **${p.name}** — ${fmt(p.revenue)} (${p.qty} pcs terjual)\n`;
     });
+    ans += '\n💡 **SARAN MARKETING:**\n';
+    ans += '• Jadikan best seller sebagai **hero promo** — tampilkan di banner Web Store\n';
+    ans += '• **Bundle** produk kurang laku + best seller untuk naikkan penjualan\n';
+    ans += '• Pastikan stok bahan best seller selalu aman — jangan sampai kehabisan!\n';
+    ans += `• Rekomendasi harga jual best seller: naikkan 5-10% jika permintaan tinggi\n`;
     return ans;
   }
 
-  // Margin / profit
-  if (q.includes('margin') || q.includes('profit') || q.includes('untung') || q.includes('hpp')) {
+  // ─── MARGIN / PROFIT ───
+  if (q.includes('margin') || q.includes('profit') || q.includes('untung') || q.includes('hpp') || q.includes('laba')) {
     if (calculatedProducts.length === 0) return '📝 Belum ada produk terdaftar. Buat resep dulu di Formulasi Resep.';
-    let ans = '📊 **ANALISIS MARGIN & HPP**\n\n';
+    let ans = '📊 **ANALISIS MARGIN & HPP LENGKAP**\n\n';
     const lowMargin = calculatedProducts.filter(p => p.marginPersen < 20);
     const healthyMargin = calculatedProducts.filter(p => p.marginPersen >= 20 && p.marginPersen <= 40);
     const highMargin = calculatedProducts.filter(p => p.marginPersen > 40);
     ans += `✅ Margin Sehat (20-40%): ${healthyMargin.length} produk\n`;
     ans += `💎 Margin Premium (>40%): ${highMargin.length} produk\n`;
     ans += `⚠️ Margin Rendah (<20%): ${lowMargin.length} produk\n\n`;
+    
     if (lowMargin.length > 0) {
-      ans += '**Review harga untuk produk ini:**\n';
-      lowMargin.slice(0, 3).forEach((p: any) => {
-        ans += `• ${p.namaProduk}: margin ${p.marginPersen.toFixed(1)}% (HPP ${fmt(p.hppPerPorsi)}, jual ${fmt(p.hargaJualPerPorsi)})\n`;
+      ans += '**🔴 REVIEW HARGA — Margin Rendah:**\n';
+      lowMargin.slice(0, 5).forEach((p: any) => {
+        const targetPrice = Math.round(p.hppPerPorsi / 0.7); // target margin 30%
+        ans += `• **${p.namaProduk}**: margin ${p.marginPersen.toFixed(1)}%\n`;
+        ans += `  HPP ${fmt(p.hppPerPorsi)} → Jual ${fmt(p.hargaJualPerPorsi)} → **Saran: ${fmt(targetPrice)}** (+${Math.round((targetPrice / p.hppPerPorsi - 1) * 100)}%)\n`;
+      });
+      ans += '\n💡 Naikkan harga atau kecilkan porsi 10% untuk perbaiki margin.\n';
+    }
+    
+    if (highMargin.length > 0) {
+      ans += '\n**💎 PRODUK MARGIN PREMIUM — Bisa untuk Diskon:**\n';
+      highMargin.slice(0, 3).forEach((p: any) => {
+        ans += `• ${p.namaProduk}: margin ${p.marginPersen.toFixed(1)}% — aman untuk promo diskon 10-15%\n`;
       });
     }
+    
+    ans += '\n📋 **RINGKASAN:**\n';
+    const avgMargin = calculatedProducts.reduce((s, p) => s + p.marginPersen, 0) / calculatedProducts.length;
+    ans += `Rata-rata margin: ${avgMargin.toFixed(1)}%\n`;
+    if (avgMargin < 25) ans += '⚠️ Margin rata-rata di bawah 25% — prioritaskan efisiensi bahan dan review harga.\n';
+    else if (avgMargin >= 40) ans += '✅ Margin rata-rata premium — bisnis sehat, pertahankan!\n';
+    else ans += '✅ Margin rata-rata cukup sehat.\n';
     return ans;
   }
 
-  // Stok rendah
-  if (q.includes('stok') || q.includes('stock') || q.includes('habis') || q.includes('kurang')) {
+  // ─── STOK ───
+  if (q.includes('stok') || q.includes('stock') || q.includes('habis') || q.includes('kurang') || q.includes('bahan baku')) {
     const lowBahan = bahanBaku.filter(b => b.isiKemasan < 100);
-    if (lowBahan.length === 0) return '✅ Semua stok bahan baku aman!';
+    if (lowBahan.length === 0) {
+      let ans = '✅ **SEMUA STOK AMAN**\n\n';
+      ans += `Total ${bahanBaku.length} bahan baku terdaftar, semua stok mencukupi.\n\n`;
+      ans += '💡 Jaga konsistensi dengan rutin stok opname mingguan.\n';
+      ans += '📊 Pantau tren pemakaian bahan untuk antisipasi kenaikan harga supplier.';
+      return ans;
+    }
     let ans = `⚠️ **BAHAN STOK RENDAH (${lowBahan.length} item)**\n\n`;
-    lowBahan.forEach(b => {
-      ans += `• ${b.nama}: sisa ${b.isiKemasan} ${b.satuan}\n`;
+    // Urutkan dari yang paling kritis
+    lowBahan.sort((a, b) => a.isiKemasan - b.isiKemasan).slice(0, 10).forEach(b => {
+      ans += `• **${b.nama}**: sisa ${b.isiKemasan} ${b.satuan} — 🔴 KRITIS\n`;
     });
-    ans += '\n💡 Segera order ke supplier!';
+    if (lowBahan.length > 10) ans += `...dan ${lowBahan.length - 10} bahan lainnya\n`;
+    ans += '\n**🚨 TINDAKAN SEGERA:**\n';
+    ans += '1. Segera order ke supplier\n';
+    ans += '2. Cek supplier alternatif untuk harga lebih kompetitif\n';
+    ans += '3. Prioritaskan bahan untuk menu best seller\n';
+    ans += '4. Aktifkan notifikasi stok minimum di sistem\n';
     return ans;
   }
 
-  // Waste
-  if (q.includes('waste') || q.includes('sampah') || q.includes('mubazir') || q.includes('loss') || q.includes('terbuang')) {
-    if (wasteLogs.length === 0) return '✅ Tidak ada waste tercatat. Produksi efisien!';
-    let ans = `🗑️ **ANALISIS WASTE**\n\nTotal waste: ${fmt(autoAnalysis.totalWaste)}\nJumlah catatan: ${wasteLogs.length}\n\n**Per lokasi:**\n`;
-    Object.entries(autoAnalysis.wasteByLocation || {}).forEach(([loc, val]: any) => {
-      ans += `• ${loc}: ${fmt(val)}\n`;
-    });
-    return ans;
-  }
-
-  // Revenue
-  if (q.includes('revenue') || q.includes('omzet') || q.includes('penjualan') || q.includes('pendapatan') || q.includes('berapa') || q.includes('total')) {
-    let ans = '📈 **INFORMASI KEUANGAN**\n\n';
-    ans += `Total Revenue: ${fmt(autoAnalysis.totalRevenue)}\n`;
-    ans += `Total Transaksi: ${autoAnalysis.totalOrders}\n`;
-    ans += `Cabang Aktif: ${autoAnalysis.totalBranches}\n`;
-    ans += `Waste Terkini: ${fmt(autoAnalysis.totalWaste)}\n`;
-    return ans;
-  }
-
-  // Cabang
-  if (q.includes('cabang') || q.includes('outlet') || q.includes('toko')) {
-    const active = cabangList.filter(c => c.isActive);
-    let ans = `🏪 **INFORMASI CABANG**\n\nTotal cabang: ${cabangList.length}\nCabang aktif: ${active.length}\n\n`;
-    active.forEach(c => { ans += `• ${c.nama} (@${c.username})\n`; });
-    ans += `\n🚚 Permintaan SO pending: ${autoAnalysis.pendingSO}`;
-    return ans;
-  }
-
-  // Resep / menu
-  if (q.includes('resep') || q.includes('menu') || q.includes('produk') || q.includes('makanan') || q.includes('roti')) {
-    if (productHpp.length === 0) return '📝 Belum ada produk terdaftar.';
-    let ans = `📝 **DAFTAR MENU (${productHpp.length} produk)**\n\n`;
-    productHpp.forEach(p => {
-      const calc = calculatedProducts.find(c => c.namaProduk === p.namaProduk);
-      ans += `• ${p.namaProduk} — ${p.kategori || '-'}`;
-      if (calc) ans += ` — Margin ${calc.marginPersen.toFixed(1)}%`;
-      ans += '\n';
-    });
-    return ans;
-  }
-
-  // Pelanggan
-  if (q.includes('pelanggan') || q.includes('customer') || q.includes('pembeli') || q.includes('konsumen')) {
-    const orders = revenueData.transactions || [];
-    const uniqueCustomers = new Set(orders.map((t: any) => t.customerName || 'Pelanggan').filter(Boolean)).size;
-    let ans = '👥 **INFORMASI PELANGGAN**\n\n';
-    ans += `Total pelanggan unik: ~${uniqueCustomers}\n`;
-    ans += `Total transaksi: ${orders.length}\n`;
-    if (orders.length > 0) {
-      const avg = orders.reduce((s: number, t: any) => s + (t.amount || 0), 0) / orders.length;
-      ans += `Rata-rata belanja: ${fmt(Math.round(avg))}`;
+  // ─── WASTE ───
+  if (q.includes('waste') || q.includes('sampah') || q.includes('mubazir') || q.includes('loss') || q.includes('terbuang') || q.includes('efisien')) {
+    if (wasteLogs.length === 0) {
+      let ans = '✅ **ZERO WASTE** — Tidak ada waste tercatat.\n\n';
+      ans += 'Produksi sangat efisien! Pertahankan.\n\n';
+      ans += '💡 Tips: Tetap catat waste kecil sekalipun untuk analisis jangka panjang.';
+      return ans;
+    }
+    let ans = `🗑️ **ANALISIS WASTE LENGKAP**\n\n`;
+    ans += `💰 Total kerugian waste: **${fmt(autoAnalysis.totalWaste)}**\n`;
+    ans += `📋 Jumlah catatan: ${wasteLogs.length} kejadian\n`;
+    ans += `📊 Rata-rata per kejadian: ${fmt(Math.round(autoAnalysis.totalWaste / wasteLogs.length))}\n\n`;
+    ans += '**📍 RINCIAN PER LOKASI:**\n';
+    if (Object.keys(autoAnalysis.wasteByLocation || {}).length > 0) {
+      Object.entries(autoAnalysis.wasteByLocation || {})
+        .sort(([, a]: any, [, b]: any) => b - a)
+        .forEach(([loc, val]: any) => {
+          ans += `• ${loc}: ${fmt(val)} — ${Math.round((val / autoAnalysis.totalWaste) * 100)}% dari total\n`;
+        });
+    }
+    ans += '\n**💡 STRATEGI REDUKSI WASTE:**\n';
+    ans += '1. Produksi berdasarkan data penjualan (jangan over-produksi)\n';
+    ans += '2. Terapkan FEFO (First Expiry First Out) untuk bahan baku\n';
+    ans += '3. Olah waste jadi produk diskon (misal: roti kemarin → roti panggang)\n';
+    ans += '4. Donasi waste layak konsumsi → branding CSR positif\n';
+    if (autoAnalysis.totalWaste > 0 && autoAnalysis.totalRevenue > 0) {
+      const wasteRatio = (autoAnalysis.totalWaste / autoAnalysis.totalRevenue) * 100;
+      ans += `\n📊 Rasio waste/revenue: ${wasteRatio.toFixed(1)}%`;
+      if (wasteRatio > 5) ans += ' — 🔴 MELEBIHI BATAS (target <5%)';
+      else ans += ' — ✅ Dalam batas wajar';
     }
     return ans;
   }
 
-  // Falling back to general analysis
-  let ans = '📋 **JAWABAN OTOMATIS**\n\n';
-  ans += `Sistem membaca ${bahanBaku.length} bahan baku, ${productHpp.length} resep, `;
-  ans += `${wasteLogs.length} catatan waste, ${cabangList.length} cabang.\n\n`;
-  ans += '**Coba tanya spesifik:**\n';
+  // ─── REVENUE / OMSET ───
+  if (q.includes('revenue') || q.includes('omzet') || q.includes('penjualan') || q.includes('pendapatan') || q.includes('berapa') || q.includes('total') || q.includes('keuangan') || q.includes('bisnis')) {
+    let ans = '📈 **LAPORAN KEUANGAN LENGKAP**\n\n';
+    ans += `💰 **Total Revenue:** ${fmt(autoAnalysis.totalRevenue)}\n`;
+    ans += `🛒 **Total Transaksi:** ${autoAnalysis.totalOrders}\n`;
+    ans += `🏪 **Cabang Aktif:** ${autoAnalysis.totalBranches}\n`;
+    ans += `🗑️ **Waste Terkini:** ${fmt(autoAnalysis.totalWaste)}\n`;
+    ans += `🚚 **SO Pending:** ${autoAnalysis.pendingSO}\n`;
+    ans += `📦 **Bahan Stok Rendah:** ${autoAnalysis.lowStockBahan.length} item\n`;
+    ans += `📝 **Total Menu:** ${productHpp.length} produk\n`;
+    ans += `⚙️ **Bahan Baku:** ${bahanBaku.length} item\n\n`;
+    if (autoAnalysis.totalRevenue > 0) {
+      const avgPerTx = autoAnalysis.totalRevenue / Math.max(1, autoAnalysis.totalOrders);
+      ans += `📊 Rata-rata per transaksi: ${fmt(Math.round(avgPerTx))}\n`;
+    }
+    ans += '\n💡 **SARAN:** Pantau tren penjualan mingguan. Jika turun >20% dalam seminggu, segera evaluasi promo dan kualitas produk.';
+    return ans;
+  }
+
+  // ─── CABANG ───
+  if (q.includes('cabang') || q.includes('outlet') || q.includes('toko') || q.includes('gerai')) {
+    const active = cabangList.filter(c => c.isActive);
+    let ans = `🏪 **INFORMASI CABANG**\n\n`;
+    ans += `Total cabang: ${cabangList.length}\n`;
+    ans += `Cabang aktif: ${active.length}\n`;
+    if (!active.length) {
+      ans += '\n❌ Belum ada cabang aktif.\n';
+      ans += '💡 Aktifkan cabang di Data Pusat → Kelola Cabang.';
+      return ans;
+    }
+    ans += '\n**Daftar Cabang Aktif:**\n';
+    active.forEach(c => {
+      ans += `• **${c.nama}** — @${c.username}\n`;
+      if (c.alamat) ans += `  📍 ${c.alamat}\n`;
+      if (c.noTelp) ans += `  📞 ${c.noTelp}\n`;
+    });
+    ans += `\n🚚 Permintaan SO pending: **${autoAnalysis.pendingSO}** — perlu disetujui`;
+    if (autoAnalysis.pendingSO > 0) {
+      ans += '\n💡 Segera proses SO di Data Pusat → Surat Order agar stok cabang tidak kosong.';
+    }
+    return ans;
+  }
+
+  // ─── MENU / RESEP ───
+  if (q.includes('resep') || q.includes('menu') || q.includes('produk') || q.includes('makanan') || q.includes('roti') || q.includes('minuman') || q.includes('kue')) {
+    if (productHpp.length === 0) return '📝 **Belum ada produk.**\n\n💡 Buat resep dulu di Formulasi Resep — mulai dengan produk best seller potensial seperti Roti Sobek atau Sourdough.';
+    let ans = `📝 **KATALOG MENU (${productHpp.length} produk)**\n\n`;
+    
+    // Kelompokkan per kategori
+    const byCategory: Record<string, typeof productHpp> = {};
+    productHpp.forEach(p => {
+      const cat = p.kategori || 'Lainnya';
+      if (!byCategory[cat]) byCategory[cat] = [];
+      byCategory[cat].push(p);
+    });
+    
+    Object.entries(byCategory).forEach(([cat, products]) => {
+      ans += `**📂 ${cat}** — ${products.length} produk\n`;
+      products.forEach(p => {
+        const calc = calculatedProducts.find(c => c.namaProduk === p.namaProduk);
+        ans += `  • ${p.namaProduk}`;
+        if (calc) {
+          ans += ` — HPP ${fmt(calc.hppPerPorsi)} | Jual ${fmt(calc.hargaJualPerPorsi)} | Margin ${calc.marginPersen.toFixed(1)}%`;
+        }
+        ans += '\n';
+      });
+    });
+    
+    ans += '\n💡 **SARAN:**\n';
+    const lowMargin = calculatedProducts.filter(p => p.marginPersen < 20);
+    if (lowMargin.length > 0) {
+      ans += `🔴 ${lowMargin.length} produk margin rendah — review harga\n`;
+    }
+    ans += '📸 Upload foto semua produk untuk Web Store — produk dengan foto 40% lebih laku!\n';
+    ans += '🏷️ Tambah varian ukuran untuk naikkan rata-rata transaksi';
+    return ans;
+  }
+
+  // ─── PELANGGAN ───
+  if (q.includes('pelanggan') || q.includes('customer') || q.includes('pembeli') || q.includes('konsumen') || q.includes('market')) {
+    const orders = revenueData.transactions || [];
+    const uniqueCustomers = new Set(orders.map((t: any) => t.customerName || 'Pelanggan').filter(Boolean)).size;
+    let ans = '👥 **ANALISIS PELANGGAN**\n\n';
+    ans += `👤 Total pelanggan unik: **${uniqueCustomers}**\n`;
+    ans += `🛒 Total transaksi: **${orders.length}**\n`;
+    if (orders.length > 0 && uniqueCustomers > 0) {
+      const avg = orders.reduce((s: number, t: any) => s + (t.amount || 0), 0) / orders.length;
+      const avgPerCustomer = orders.reduce((s: number, t: any) => s + (t.amount || 0), 0) / uniqueCustomers;
+      ans += `💰 Rata-rata per transaksi: ${fmt(Math.round(avg))}\n`;
+      ans += `💵 Rata-rata per pelanggan: ${fmt(Math.round(avgPerCustomer))}\n`;
+      ans += `🔄 Frekuensi beli rata-rata: ${(orders.length / uniqueCustomers).toFixed(1)}x\n\n`;
+      ans += '**💡 STRATEGI RETAIL:**\n';
+      ans += '• **Loyalty program**: Diskon 10% tiap pembelian ke-5\n';
+      ans += '• **Reaktivasi**: Hubungi pelanggan yang tidak beli >30 hari\n';
+      ans += '• **Upsell**: Tawarkan topping/add-on saat checkout\n';
+      ans += '• **Bundle**: Produk + minuman dengan harga spesial';
+    } else {
+      ans += '\n📊 Belum cukup data. Mulai transaksi POS untuk analisis lebih dalam.';
+    }
+    return ans;
+  }
+
+  // ─── DETEKSI PROAKTIF: Cek & report otomatis ───
+  // Jika user tidak bertanya spesifik, berikan analisis kesehatan bisnis
+  const issues: string[] = [];
+  const goodNews: string[] = [];
+
+  // Deteksi revenue rendah
+  if (autoAnalysis.totalRevenue === 0) {
+    issues.push('🔴 **Belum ada transaksi POS** — mulai catat penjualan!');
+  } else if (autoAnalysis.totalOrders < 10) {
+    issues.push('🟡 **Transaksi masih sedikit** (<10) — perbanyak promosi dan catat penjualan rutin.');
+  }
+
+  // Deteksi margin rendah
+  const lowMarginCount = calculatedProducts.filter(p => p.marginPersen < 20).length;
+  if (lowMarginCount > 0) {
+    issues.push(`🔴 **${lowMarginCount} produk margin rendah** (<20%) — review harga jual atau efisiensi bahan baku.`);
+  }
+
+  // Deteksi waste tinggi
+  if (autoAnalysis.totalWaste > 0 && autoAnalysis.totalRevenue > 0) {
+    const wasteRatio = (autoAnalysis.totalWaste / autoAnalysis.totalRevenue) * 100;
+    if (wasteRatio > 5) {
+      issues.push(`🔴 **Waste tinggi** (${wasteRatio.toFixed(1)}% dari revenue) — target maksimal 5%. Optimasi produksi!`);
+    } else if (wasteRatio > 2) {
+      goodNews.push(`✅ Waste terkendali (${wasteRatio.toFixed(1)}% dari revenue) — masih dalam batas wajar.`);
+    }
+  }
+
+  // Deteksi stok rendah
+  if (autoAnalysis.lowStockBahan.length > 0) {
+    issues.push(`🟡 **${autoAnalysis.lowStockBahan.length} bahan stok rendah** — segera order: ${autoAnalysis.lowStockBahan.slice(0, 3).join(', ')}${autoAnalysis.lowStockBahan.length > 3 ? '...' : ''}`);
+  }
+
+  // Deteksi SO pending
+  if (autoAnalysis.pendingSO > 0) {
+    issues.push(`🟡 **${autoAnalysis.pendingSO} Surat Order pending** — setujui di Data Pusat agar cabang tidak kekurangan stok.`);
+  }
+
+  // Good news
+  if (calculatedProducts.length > 0 && lowMarginCount === 0) {
+    goodNews.push('✅ **Semua produk margin sehat** — tidak ada yang di bawah 20%.');
+  }
+  if (autoAnalysis.topProducts.length > 0) {
+    goodNews.push(`🏆 **Best seller**: ${autoAnalysis.topProducts[0].name} — ${fmt(autoAnalysis.topProducts[0].revenue)}`);
+  }
+  if (bahanBaku.length > 0 && autoAnalysis.lowStockBahan.length === 0) {
+    goodNews.push('✅ **Stok semua bahan aman** — tidak ada yang perlu di-order segera.');
+  }
+  if (wasteLogs.length === 0) {
+    goodNews.push('✅ **Zero waste** — produksi sangat efisien!');
+  }
+
+  // Bangun jawaban
+  let ans = '📋 **ANALISIS KESEHATAN BISNIS — OTOMATIS**\n\n';
+  
+  ans += `**📊 SISTEM MEMBACA:** ${bahanBaku.length} bahan, ${productHpp.length} resep, ${cabangList.length} cabang, ${autoAnalysis.totalOrders} transaksi\n\n`;
+
+  if (issues.length > 0) {
+    ans += '**🔴 MASALAH TERDETEKSI:**\n';
+    issues.forEach(i => { ans += `${i}\n`; });
+    ans += '\n';
+  }
+
+  if (goodNews.length > 0) {
+    ans += '**✅ KABAR BAIK:**\n';
+    goodNews.forEach(g => { ans += `${g}\n`; });
+    ans += '\n';
+  }
+
+  if (issues.length === 0 && goodNews.length === 0) {
+    ans += '📝 Belum cukup data untuk analisis mendalam. Mulai isi data bisnis Anda!\n\n';
+  }
+
+  ans += '**💡 REKOMENDASI UMUM:**\n';
+  if (autoAnalysis.totalRevenue > 0) {
+    ans += '• Update foto produk di Web Store — tampilan visual naikkan minat beli\n';
+  }
+  ans += '• Bundling produk margin tinggi + rendah untuk optimasi profit\n';
+  ans += '• Catat transaksi POS rutin untuk analisis tren penjualan\n';
+  ans += '• Lakukan stok opname mingguan untuk cegah waste\n';
+  ans += '• Promo bundling dan diskon terbatas untuk dorong repeat order\n\n';
+
+  ans += '**🔍 Coba tanya spesifik:**\n';
   ans += '• "Apa produk terlaris?"\n';
-  ans += '• "Stok apa yang habis?"\n';
-  ans += '• "Berapa total revenue?"\n';
   ans += '• "Produk dengan margin rendah"\n';
-  ans += '• "Info cabang"\n';
-  ans += '• "Data waste / sampah"';
+  ans += '• "Stok apa yang habis?"\n';
+  ans += '• "Data waste"\n';
+  ans += '• "Info pelanggan"\n';
+  ans += '• "Rekomendasi strategi marketing"';
   return ans;
 }
 

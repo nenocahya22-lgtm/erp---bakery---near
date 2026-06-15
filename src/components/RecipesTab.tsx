@@ -157,8 +157,6 @@ export default function RecipesTab({
   // ─── VARIAN STATE ───
   const [showVariantPanel, setShowVariantPanel] = useState(false);
   const [newVariantName, setNewVariantName] = useState('');
-  const [newVariantPorsi, setNewVariantPorsi] = useState('1');
-  const [newVariantHarga, setNewVariantHarga] = useState('');
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
   const [editingVariantIngredients, setEditingVariantIngredients] = useState<{ namaBahan: string; takaran: number }[]>([]);
   const [selectedVariantIngBahan, setSelectedVariantIngBahan] = useState('');
@@ -371,6 +369,9 @@ export default function RecipesTab({
       alert(`Produk dengan nama "${newProductName}" sudah ada!`);
       return;
     }
+
+    // Konfirmasi sebelum menyimpan
+    if (!window.confirm(`Buat resep baru "${newProductName.trim()}"?`)) return;
 
     const nextKode = `PRD-${String(productHpp.length + 1).padStart(3, '0')}`;
     const newProduct: ProductHpp = {
@@ -862,31 +863,32 @@ export default function RecipesTab({
                   </div>
                 ) : (
                   <div className="border border-gray-100 rounded-xl overflow-hidden">
+                    <div className="overflow-x-auto">
                     <table className="w-full border-collapse text-left text-xs sm:text-sm">
                       <thead>
                         <tr className="border-b border-gray-150 bg-slate-900 text-[10px] font-bold uppercase text-white font-mono">
-                          <th className="px-4 py-3">Nama Bahan</th>
-                          <th className="px-4 py-3 text-right">Takaran (Qty)</th>
-                          <th className="px-4 py-3 text-center">Satuan</th>
-                          <th className="px-4 py-3 text-right">Harga Satuan</th>
-                          <th className="px-4 py-3 text-right">Subtotal Biaya</th>
-                          <th className="px-4 py-3 text-center">Aksi</th>
+                          <th className="px-2 sm:px-4 py-3 whitespace-nowrap">Nama Bahan</th>
+                          <th className="px-2 sm:px-4 py-3 text-right whitespace-nowrap">Takaran</th>
+                          <th className="px-2 sm:px-4 py-3 text-center whitespace-nowrap">Satuan</th>
+                          <th className="px-2 sm:px-4 py-3 text-right whitespace-nowrap">Harga</th>
+                          <th className="px-2 sm:px-4 py-3 text-right whitespace-nowrap">Subtotal</th>
+                          <th className="px-2 sm:px-4 py-3 text-center whitespace-nowrap">Aksi</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 text-gray-700 font-sans">
                         {calculatedIngredients.map((ing, idx) => (
                           <tr key={idx} className="hover:bg-emerald-50/15">
-                            <td className="px-4 py-3 font-semibold text-gray-905">
+                            <td className="px-2 sm:px-4 py-3 font-semibold text-gray-905">
                               {ing.namaBahan}
                               {ing.notFound && (
                                 <span className="block text-[10px] text-red-500 font-normal mt-0.5">
-                                  ⚠️ Bahan tidak terdaftar di Tab Bahan Baku! (Rp 0)
+                                  ⚠️ Bahan tidak terdaftar!
                                 </span>
                               )}
                             </td>
                             
                             {/* Inline editable column for ingredient takaran (qty) */}
-                            <td className="px-4 py-2 text-right font-mono text-gray-900">
+                            <td className="px-2 sm:px-4 py-2 text-right font-mono text-gray-900 whitespace-nowrap">
                               {editingBahanName === ing.namaBahan ? (
                                 <div className="inline-flex items-center gap-1.5 justify-end">
                                   <input
@@ -925,16 +927,16 @@ export default function RecipesTab({
                               )}
                             </td>
                             {/* ─── NEW: Separate Satuan Column ─── */}
-                            <td className="px-4 py-3 text-center font-bold text-gray-600 text-xs">
+                            <td className="px-2 sm:px-4 py-3 text-center font-bold text-gray-600 text-xs whitespace-nowrap">
                               {ing.satuan}
                             </td>
-                            <td className="px-4 py-3 text-right font-mono text-gray-500 text-xs">
-                              {formatCurrency(ing.unitPrice)} / {ing.satuan}
+                            <td className="px-2 sm:px-4 py-3 text-right font-mono text-gray-500 text-xs whitespace-nowrap">
+                              {formatCurrency(ing.unitPrice)}/{ing.satuan}
                             </td>
-                            <td className="px-4 py-3 text-right text-emerald-800 font-bold font-mono">
+                            <td className="px-2 sm:px-4 py-3 text-right text-emerald-800 font-bold font-mono whitespace-nowrap">
                               {formatCurrency(ing.itemCost)}
                             </td>
-                            <td className="px-4 py-2 text-center">
+                            <td className="px-2 sm:px-4 py-2 text-center whitespace-nowrap">
                               <button
                                 onClick={() => handleRemoveIngredientFromActive(ing.namaBahan)}
                                 className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 cursor-pointer"
@@ -946,6 +948,7 @@ export default function RecipesTab({
                         ))}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1102,25 +1105,16 @@ export default function RecipesTab({
                         />
                       </div>
                       <div>
-                        <label className="text-[9px] font-bold text-gray-500 block mb-0.5">Porsi</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={newVariantPorsi}
-                          onChange={e => setNewVariantPorsi(e.target.value)}
-                          className="w-full text-xs border border-gray-200 rounded-lg p-2 font-mono"
-                        />
+                        <label className="text-[9px] font-bold text-gray-500 block mb-0.5">Porsi <span className="text-blue-500 font-normal normal-case">otomatis dr resep</span></label>
+                        <div className="w-full border border-gray-200 bg-purple-50 rounded-lg p-2 font-mono text-purple-800 font-bold text-sm text-center">
+                          {activeRecipePorsi} porsi
+                        </div>
                       </div>
                       <div>
-                        <label className="text-[9px] font-bold text-gray-500 block mb-0.5">Harga Jual</label>
-                        <input
-                          type="number"
-                          min="0"
-                          placeholder="Otomatis dari bahan"
-                          value={newVariantHarga}
-                          onChange={e => setNewVariantHarga(e.target.value)}
-                          className="w-full text-xs border border-gray-200 rounded-lg p-2 font-mono"
-                        />
+                        <label className="text-[9px] font-bold text-gray-500 block mb-0.5">Harga Jual <span className="text-blue-500 font-normal normal-case">otomatis dr HPP</span></label>
+                        <div className="w-full border border-gray-200 bg-purple-50 rounded-lg p-2 font-mono text-purple-800 font-bold text-sm text-center">
+                          {formatCurrency(totalIngredientsCost / activeRecipePorsi)} / porsi
+                        </div>
                       </div>
                     </div>
                     <div className="flex justify-end">
@@ -1128,18 +1122,15 @@ export default function RecipesTab({
                         onClick={() => {
                           const name = newVariantName.trim();
                           if (!name) return;
-                          const porsi = parseInt(newVariantPorsi) || 1;
-                          const harga = parseInt(newVariantHarga) || 0;
+                          const hppPerPorsi = totalIngredientsCost / activeRecipePorsi;
                           onAddVariant?.(activeProduct.namaProduk, {
                             id: `var-${Date.now()}`,
                             name,
-                            porsi,
-                            hargaJual: harga,
+                            porsi: activeRecipePorsi,
+                            hargaJual: hppPerPorsi,
                             active: true,
                           });
                           setNewVariantName('');
-                          setNewVariantPorsi('1');
-                          setNewVariantHarga('');
                           setShowVariantPanel(false);
                         }}
                         className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer"

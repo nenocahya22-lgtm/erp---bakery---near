@@ -27,7 +27,6 @@ import {
   deleteDoc,
 } from 'firebase/firestore';
 import { WebStoreConfig, PaymentMethod, BahanBaku, ProductHpp, DetailResep, CalculationResult, Cabang } from '../types';
-import { getSavedRecipeImage } from './image-generator';
 
 // Firebase config untuk project Web Store (near-bakery-store)
 // — database yang SAMA digunakan oleh aplikasi Web Store (storenear)
@@ -215,12 +214,14 @@ export async function syncProductsToFirestore(
       displayImage = wsProductImages[calc.namaProduk.toLowerCase().trim()] || '';
     }
 
-    // Ambil gambar dari ERP image storage (RecipesTab) jika belum ada di Firestore
+    // Ambil gambar dari ERP image storage (RecipesTab) jika sudah di-save user
+    // — hanya pakai gambar yang eksplisit di-generate/di-upload oleh user
+    // — jangan pakai fallback Unsplash otomatis dari getSavedRecipeImage
     if (!displayImage) {
-      const savedImage = getSavedRecipeImage(calc.namaProduk);
-      if (savedImage && !savedImage.includes('unsplash.com/photo-1546069901')) {
-        // Only use if it's a custom saved image, not the generic fallback
-        displayImage = savedImage;
+      const savedKey = `recipe_img_${calc.namaProduk.toLowerCase().trim()}`;
+      const explicitlySaved = localStorage.getItem(savedKey);
+      if (explicitlySaved) {
+        displayImage = explicitlySaved;
       }
     }
 
@@ -277,7 +278,22 @@ export async function syncProductsToFirestore(
   }
 
   if (synced > 0) {
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch (commitErr: any) {
+      console.error('[Sync Error] Batch commit gagal:', commitErr);
+      console.error('[Sync Error] Kode:', commitErr.code);
+      console.error('[Sync Error] Pesan:', commitErr.message);
+      // Lempar ulang dengan pesan yang lebih jelas
+      if (commitErr.code === 'permission-denied') {
+        throw new Error('Izin Firestore ditolak. Periksa Firebase Rules atau pastikan Anonymous Auth aktif.');
+      } else if (commitErr.code === 'unavailable') {
+        throw new Error('Firestore tidak dapat dijangkau. Periksa koneksi internet Anda.');
+      } else if (commitErr.code === 'not-found') {
+        throw new Error('Project Firestore tidak ditemukan. Periksa konfigurasi VITE_WEBSTORE_* di .env.');
+      }
+      throw commitErr; // throw asli jika bukan kode yang dikenal
+    }
   }
 
   // ─── SYNC KATEGORI ke collection terpisah agar web store bisa baca ───
