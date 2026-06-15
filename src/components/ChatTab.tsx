@@ -12,7 +12,7 @@ import {
   getDoc,
   setDoc,
 } from 'firebase/firestore';
-import { MessageSquare, Send, Trash2, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { MessageSquare, Send, Trash2, RefreshCw, Plus, X } from 'lucide-react';
 
 interface ChatRoom {
   id: string;
@@ -49,6 +49,13 @@ export default function ChatTab() {
   const [replyText, setReplyText] = useState('');
   const [loading, setLoading] = useState(true);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  
+  // ─── New Chat Modal ───
+  const [showNewChat, setShowNewChat] = useState(false);
+  const [newBuyerName, setNewBuyerName] = useState('');
+  const [newBuyerEmail, setNewBuyerEmail] = useState('');
+  const [newMessage, setNewMessage] = useState('');
+  const [creatingChat, setCreatingChat] = useState(false);
 
   // Listen to all chat rooms
   useEffect(() => {
@@ -142,6 +149,57 @@ export default function ChatTab() {
     }
   };
 
+  const handleCreateChat = async () => {
+    const name = newBuyerName.trim();
+    const email = newBuyerEmail.trim();
+    const msg = newMessage.trim();
+    if (!name || !email) return;
+    // Cegah duplikat — cek apakah sudah ada room dengan email ini
+    const existingRoom = chatRooms.find(r =>
+      r.buyerEmail.toLowerCase().trim() === email.toLowerCase().trim()
+    );
+    if (existingRoom) {
+      setActiveChatId(existingRoom.id);
+      setShowNewChat(false);
+      setNewBuyerName('');
+      setNewBuyerEmail('');
+      setNewMessage('');
+      return;
+    }
+    setCreatingChat(true);
+    try {
+      const buyerId = email.toLowerCase().replace(/[^a-z0-9@.]/g, '-');
+      const chatRef = doc(collection(db, 'chats'));
+      await setDoc(chatRef, {
+        buyerId,
+        buyerName: name,
+        buyerEmail: email,
+        lastMessage: msg || 'Seller memulai percakapan',
+        lastMessageTime: serverTimestamp(),
+        unreadByBuyer: msg ? true : false,
+        unreadBySeller: false,
+        createdAt: serverTimestamp(),
+      });
+      if (msg) {
+        await addDoc(collection(db, 'chats', chatRef.id, 'messages'), {
+          senderId: 'admin-erp',
+          senderRole: 'seller',
+          message: msg,
+          createdAt: serverTimestamp(),
+        });
+      }
+      setActiveChatId(chatRef.id);
+      setShowNewChat(false);
+      setNewBuyerName('');
+      setNewBuyerEmail('');
+      setNewMessage('');
+    } catch (e) {
+      console.warn('Failed to create chat:', e);
+    } finally {
+      setCreatingChat(false);
+    }
+  };
+
   const handleDeleteRoom = async (roomId: string) => {
     if (!window.confirm('Hapus seluruh percakapan ini?')) return;
     try {
@@ -173,6 +231,13 @@ export default function ChatTab() {
             </p>
           </div>
         </div>
+        <button
+          onClick={() => setShowNewChat(true)}
+          className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Buat Chat Baru
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -308,6 +373,68 @@ export default function ChatTab() {
           )}
         </div>
       </div>
+
+      {/* ─── NEW CHAT MODAL ─── */}
+      {showNewChat && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-5 w-full max-w-md space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black text-gray-800">Buat Chat Baru</h3>
+              <button
+                onClick={() => setShowNewChat(false)}
+                className="p-1 hover:bg-gray-100 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-500">
+              Kirim pesan pertama ke pelanggan. Chat room akan muncul di Web Store pelanggan.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 block">Nama Pelanggan</label>
+                <input
+                  className="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-200 bg-white"
+                  placeholder="Nama pelanggan..."
+                  value={newBuyerName}
+                  onChange={e => setNewBuyerName(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 block">Email Pelanggan</label>
+                <input
+                  className="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-200 bg-white"
+                  placeholder="email@pelanggan.com"
+                  type="email"
+                  value={newBuyerEmail}
+                  onChange={e => setNewBuyerEmail(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 block">Pesan Awal <span className="font-normal text-gray-400">(opsional)</span></label>
+                <textarea
+                  className="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-200 bg-white resize-none h-20"
+                  placeholder="Tulis pesan pertama..."
+                  value={newMessage}
+                  onChange={e => setNewMessage(e.target.value)}
+                />
+              </div>
+              <button
+                onClick={handleCreateChat}
+                disabled={!newBuyerName.trim() || !newBuyerEmail.trim() || creatingChat}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-200 text-white text-xs font-bold rounded-xl transition-all cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {creatingChat ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <MessageSquare className="w-4 h-4" />
+                )}
+                {creatingChat ? 'Membuat...' : 'Buat & Kirim Pesan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
