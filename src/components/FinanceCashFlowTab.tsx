@@ -28,6 +28,10 @@ export default function FinanceCashFlowTab({ calculatedProducts, wasteTotalLoss,
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
+  // ─── CABANG FILTER ───
+  const cabangList = safeGetLocalStorage<any[]>('cabang_list_data', []);
+  const [selectedCabang, setSelectedCabang] = useState('semua');
+
   // Baca data revenue REAL dari localStorage
   const getRevenueData = (): RevenueTracker =>
     safeGetLocalStorage<RevenueTracker>('revenue_tracker_data', { transactions: [], dailyTotals: {} });
@@ -67,21 +71,32 @@ export default function FinanceCashFlowTab({ calculatedProducts, wasteTotalLoss,
     setOpexItems(prev => prev.map(item => item.id === id ? { ...item, amount } : item));
   };
 
-  // Hitung revenue dari data real
+  // Hitung revenue dari data real — filter per cabang
   const today = new Date().toISOString().substring(0, 10);
   const todayRevenue = revenueData.dailyTotals[today]?.total || 0;
 
-  // Revenue bulan ini (30 hari ke belakang)
   const monthAgo = new Date();
   monthAgo.setDate(monthAgo.getDate() - 30);
   const monthStart = monthAgo.toISOString().substring(0, 10);
-  const monthlyRevenue = Object.entries(revenueData.dailyTotals)
-    .filter(([date]) => date >= monthStart)
-    .reduce((sum, [, data]) => sum + (data as { total: number }).total, 0);
 
-  // Volume penjualan dari transaksi real
-  const monthlyTransactions = revenueData.transactions.filter(tx => tx.date >= monthStart);
-  const monthlySalesQty = monthlyTransactions.reduce((sum, tx) => sum + tx.qty, 0);
+  // Filter transaksi per cabang
+  const filteredTx = revenueData.transactions.filter((tx: any) => {
+    if (selectedCabang === 'semua') return tx.date >= monthStart;
+    const txCabang = (tx.source || '').toLowerCase().trim();
+    return tx.date >= monthStart && txCabang.includes(selectedCabang.toLowerCase().trim());
+  });
+
+  // Daily totals filtered by cabang
+  const filteredDailyTotals: Record<string, { total: number; sources: Record<string, number> }> = {};
+  filteredTx.forEach((tx: any) => {
+    if (!filteredDailyTotals[tx.date]) filteredDailyTotals[tx.date] = { total: 0, sources: {} };
+    filteredDailyTotals[tx.date].total += tx.amount;
+    if (!filteredDailyTotals[tx.date].sources[tx.source]) filteredDailyTotals[tx.date].sources[tx.source] = 0;
+    filteredDailyTotals[tx.date].sources[tx.source] += tx.amount;
+  });
+
+  const monthlyRevenue = filteredTx.reduce((sum, tx) => sum + tx.amount, 0);
+  const monthlySalesQty = filteredTx.reduce((sum, tx) => sum + tx.qty, 0);
 
   // Rata-rata HPP dan harga jual dari calculatedProducts
   const totalProducts = calculatedProducts.length;
@@ -91,7 +106,7 @@ export default function FinanceCashFlowTab({ calculatedProducts, wasteTotalLoss,
     ? calculatedProducts.reduce((sum, p) => sum + p.hppPerPorsi, 0) / totalProducts : 0;
 
   // Hitung COGS dari revenue real (bukan dari simulatedMonthlySales)
-  const actualCOGS = monthlyTransactions.reduce((sum, tx) => {
+  const actualCOGS = filteredTx.reduce((sum, tx) => {
     const product = calculatedProducts.find(p =>
       p.namaProduk.toLowerCase().trim() === tx.product.toLowerCase().trim()
     );
@@ -109,13 +124,28 @@ export default function FinanceCashFlowTab({ calculatedProducts, wasteTotalLoss,
 
   return (
     <div className="space-y-6">
-      {/* HEADER */}
+      {/* HEADER with CABANG FILTER */}
       <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2.5">
-            <CircleDollarSign className="w-6 h-6 text-emerald-600" /> Arus Kas (Cash Flow)
-          </h2>
-          <p className="text-xs text-gray-500 mt-1">Pantau arus kas masuk/keluar — data <strong>real dari transaksi POS & penjualan</strong>.</p>
+        <div className="flex items-center gap-4 flex-wrap">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2.5">
+              <CircleDollarSign className="w-6 h-6 text-emerald-600" /> Arus Kas (Cash Flow)
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">Pantau arus kas masuk/keluar — filter per cabang untuk detail masing-masing.</p>
+          </div>
+          <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-150">
+            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider px-1.5">Cabang</span>
+            <select
+              value={selectedCabang}
+              onChange={e => setSelectedCabang(e.target.value)}
+              className="text-xs font-bold border-0 bg-white rounded-lg p-1.5 outline-none focus:ring-2 focus:ring-emerald-400"
+            >
+              <option value="semua">🌐 Semua Cabang</option>
+              {cabangList.filter((c: any) => c.isActive).map((c: any) => (
+                <option key={c.id} value={c.nama}>{c.nama}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <button onClick={() => setRevenueData(getRevenueData())}
           className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1 shrink-0">
@@ -123,12 +153,12 @@ export default function FinanceCashFlowTab({ calculatedProducts, wasteTotalLoss,
         </button>
       </div>
 
-      {/* RINGKASAN REAL-TIME */}
+      {/* RINGKASAN REAL-TIME per Cabang */}
       <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-2xl p-5 shadow-sm text-white">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-100">Revenue Real-time</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-100">Revenue Real-time {selectedCabang !== 'semua' ? `(@${selectedCabang})` : ''}</span>
               <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />
             </div>
             <div className="text-3xl font-black mt-1 font-mono tracking-tight">
@@ -141,7 +171,7 @@ export default function FinanceCashFlowTab({ calculatedProducts, wasteTotalLoss,
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-right">
             <span className="text-[9px] uppercase font-bold text-emerald-200 block mb-0.5">Bulan Ini</span>
             <span className="text-lg font-black font-mono">{formatCurrency(monthlyRevenue)}</span>
-            <span className="text-[10px] text-emerald-200 block">{monthlyTransactions.length} transaksi</span>
+            <span className="text-[10px] text-emerald-200 block">{filteredTx.length} transaksi</span>
           </div>
         </div>
       </div>
@@ -258,13 +288,13 @@ export default function FinanceCashFlowTab({ calculatedProducts, wasteTotalLoss,
       <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
         <div className="p-4 border-b border-gray-100 flex justify-between items-center">
           <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
-            <ShoppingCart className="w-4 h-4 text-emerald-600" /> Daftar Transaksi (30hr)
+            <ShoppingCart className="w-4 h-4 text-emerald-600" /> Daftar Transaksi (30hr) {selectedCabang !== 'semua' ? `(@${selectedCabang})` : ''}
           </h3>
-          <span className="text-[10px] text-gray-400 font-mono">{monthlyTransactions.length} transaksi</span>
+          <span className="text-[10px] text-gray-400 font-mono">{filteredTx.length} transaksi</span>
         </div>
-        {monthlyTransactions.length === 0 ? (
+        {filteredTx.length === 0 ? (
           <div className="p-6 text-center text-xs text-gray-400">
-            Belum ada transaksi dalam 30 hari terakhir.
+            Belum ada transaksi {selectedCabang !== 'semua' ? `cabang ${selectedCabang}` : ''} dalam 30 hari terakhir.
           </div>
         ) : (
           <div className="max-h-[300px] overflow-y-auto">
@@ -280,7 +310,7 @@ export default function FinanceCashFlowTab({ calculatedProducts, wasteTotalLoss,
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {monthlyTransactions.slice().reverse().map(tx => (
+                {filteredTx.slice().reverse().map(tx => (
                   <tr key={tx.id} className="hover:bg-gray-50/50">
                     <td className="px-4 py-2.5 font-mono text-gray-500 text-[9px]">{tx.date}</td>
                     <td className="px-4 py-2.5 font-semibold text-gray-900">{tx.product}</td>

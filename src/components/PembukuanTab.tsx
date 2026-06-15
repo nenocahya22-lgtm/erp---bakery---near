@@ -18,9 +18,14 @@ export default function PembukuanTab({ calculatedProducts, bahanBaku, wasteTotal
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
+  // ─── CABANG FILTER ───
+  const cabangList = safeGetLocalStorage<any[]>('cabang_list_data', []);
+  const [selectedCabang, setSelectedCabang] = useState('semua');
+
   const getRevenueData = () => {
     return safeGetLocalStorage<{ transactions: any[]; dailyTotals: Record<string, number> }>('revenue_tracker_data', { transactions: [], dailyTotals: {} });
   };
+  const branchTx = safeGetLocalStorage<any[]>('branch_transactions_data', []);
 
   const [revenueData, setRevenueData] = useState(getRevenueData);
   useEffect(() => {
@@ -28,33 +33,45 @@ export default function PembukuanTab({ calculatedProducts, bahanBaku, wasteTotal
     return () => clearInterval(interval);
   }, []);
 
-  // Hitung dari data real
+  // Filter data berdasarkan cabang
   const monthAgo = new Date();
   monthAgo.setDate(monthAgo.getDate() - 30);
   const monthStart = monthAgo.toISOString().substring(0, 10);
-  const monthlyTransactions = revenueData.transactions.filter((tx: any) => tx.date >= monthStart);
-  const monthlyRevenue = monthlyTransactions.reduce((sum: number, tx: any) => sum + tx.amount, 0);
-  const monthlyQty = monthlyTransactions.reduce((sum: number, tx: any) => sum + tx.qty, 0);
+
+  const filteredTx = revenueData.transactions.filter((tx: any) => {
+    if (selectedCabang === 'semua') return tx.date >= monthStart;
+    const txCabang = (tx.source || '').toLowerCase().trim();
+    const selected = selectedCabang.toLowerCase().trim();
+    return tx.date >= monthStart && txCabang.includes(selected);
+  });
+  const monthlyRevenue = filteredTx.reduce((sum: number, tx: any) => sum + tx.amount, 0);
+  const monthlyQty = filteredTx.reduce((sum: number, tx: any) => sum + tx.qty, 0);
+
+  // Filter waste per cabang (jika ada data waste by location)
+  const wasteByLocation = safeGetLocalStorage<Record<string, number>>('waste_by_location_data', {});
+  const filteredWaste = selectedCabang === 'semua'
+    ? wasteTotalLoss
+    : (wasteByLocation[selectedCabang] || 0);
+
+  // Filter branch transactions per cabang
+  const filteredBranchTx = selectedCabang === 'semua'
+    ? branchTx
+    : branchTx.filter((tx: any) => (tx.cabangId || '').toLowerCase().trim() === selectedCabang.toLowerCase().trim());
 
   // HPP real dari transaksi
   const avgHpp = calculatedProducts.length > 0
     ? calculatedProducts.reduce((s, p) => s + p.hppPerPorsi, 0) / calculatedProducts.length : 0;
 
-  const actualCOGS = monthlyTransactions.reduce((sum: number, tx: any) => {
+  const actualCOGS = filteredTx.reduce((sum: number, tx: any) => {
     const prod = calculatedProducts.find(p => p.namaProduk.toLowerCase().trim() === tx.product.toLowerCase().trim());
     return sum + (prod ? prod.hppPerPorsi * tx.qty : avgHpp * tx.qty);
   }, 0);
 
-  // Data cabang
-  const cabangList = safeGetLocalStorage<any[]>('cabang_list_data', []);
-  const branchTx = safeGetLocalStorage<any[]>('branch_transactions_data', []);
-
   // Laba bersih
-  const totalOPEX = 0; // user sets in cash flow module
-  const netIncome = monthlyRevenue - actualCOGS - wasteTotalLoss - rdTotalCost;
+  const netIncome = monthlyRevenue - actualCOGS - filteredWaste - rdTotalCost;
   const marginPct = monthlyRevenue > 0 ? (netIncome / monthlyRevenue) * 100 : 0;
 
-  // Data stok
+  // Data stok (global — stok adalah pusat)
   const totalBahan = bahanBaku.length;
   const totalStokValue = bahanBaku.reduce((s, b) => s + (b.isiKemasan * b.hargaSatuan), 0);
   const stokKritis = bahanBaku.filter(b => b.isiKemasan < 50).length;
@@ -145,13 +162,28 @@ export default function PembukuanTab({ calculatedProducts, bahanBaku, wasteTotal
 
   return (
     <div className="space-y-6">
-      {/* HEADER */}
-      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex justify-between items-start">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <BookOpen className="w-6 h-6 text-emerald-600" /> Pembukuan
-          </h2>
-          <p className="text-xs text-gray-500 mt-1">Ringkasan seluruh data bisnis — penjualan, stok, waste, cabang — dalam satu panel.</p>
+      {/* HEADER with CABANG FILTER */}
+      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <BookOpen className="w-6 h-6 text-emerald-600" /> Pembukuan
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">Ringkasan data bisnis — filter per cabang untuk lihat detail masing-masing.</p>
+          </div>
+          <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-150">
+            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider px-1.5">Cabang</span>
+            <select
+              value={selectedCabang}
+              onChange={e => setSelectedCabang(e.target.value)}
+              className="text-xs font-bold border-0 bg-white rounded-lg p-1.5 outline-none focus:ring-2 focus:ring-emerald-400"
+            >
+              <option value="semua">🌐 Semua Cabang (Global)</option>
+              {cabangList.filter((c: any) => c.isActive).map((c: any) => (
+                <option key={c.id} value={c.nama}>{c.nama}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="flex gap-2">
           <button onClick={handlePrint}
@@ -165,18 +197,18 @@ export default function PembukuanTab({ calculatedProducts, bahanBaku, wasteTotal
         </div>
       </div>
 
-      {/* RINGKASAN KEUANGAN */}
+      {/* RINGKASAN KEUANGAN per Cabang */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
         <div className="p-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
           <h3 className="text-sm font-bold uppercase tracking-wider flex items-center gap-1.5">
-            <DollarSign className="w-4 h-4" /> Ringkasan Keuangan — 30 Hari Terakhir
+            <DollarSign className="w-4 h-4" /> Ringkasan Keuangan — 30 Hari {selectedCabang !== 'semua' ? `(@${selectedCabang})` : '(Semua Cabang)'}
           </h3>
         </div>
         <div className="p-5 grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="space-y-1">
             <span className="text-[10px] uppercase font-bold text-gray-400">Revenue</span>
             <p className="text-xl font-black font-mono text-gray-900">{formatCurrency(monthlyRevenue)}</p>
-            <p className="text-[10px] text-gray-400">{monthlyTransactions.length} transaksi</p>
+            <p className="text-[10px] text-gray-400">{filteredTx.length} transaksi</p>
           </div>
           <div className="space-y-1">
             <span className="text-[10px] uppercase font-bold text-gray-400">HPP Bahan</span>
@@ -185,7 +217,7 @@ export default function PembukuanTab({ calculatedProducts, bahanBaku, wasteTotal
           </div>
           <div className="space-y-1">
             <span className="text-[10px] uppercase font-bold text-gray-400">Waste</span>
-            <p className="text-xl font-black font-mono text-amber-600">{formatCurrency(wasteTotalLoss)}</p>
+            <p className="text-xl font-black font-mono text-amber-600">{formatCurrency(filteredWaste)}</p>
             <p className="text-[10px] text-gray-400">+ R&D: {formatCurrency(rdTotalCost)}</p>
           </div>
           <div className="space-y-1">
@@ -279,13 +311,13 @@ export default function PembukuanTab({ calculatedProducts, bahanBaku, wasteTotal
             {monthlyRevenue === 0 && (
               <div className="p-2 bg-blue-50 rounded-lg border border-blue-100 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-blue-500" />
-                <span className="text-blue-700">Belum ada transaksi bulan ini</span>
+                <span className="text-blue-700">Belum ada transaksi {selectedCabang !== 'semua' ? `cabang ${selectedCabang}` : ''} bulan ini</span>
               </div>
             )}
             {cabangList.length > 0 && (
               <div className="p-2 bg-emerald-50 rounded-lg border border-emerald-100 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="text-emerald-700">{cabangList.length} cabang aktif — {branchTx.length} transaksi cabang</span>
+                <span className="text-emerald-700">{cabangList.filter((c: any) => c.isActive).length} cabang aktif — {filteredBranchTx.length} transaksi cabang {selectedCabang !== 'semua' ? `(${selectedCabang})` : ''}</span>
               </div>
             )}
             {avgMargin < 20 && totalProduk > 0 && (

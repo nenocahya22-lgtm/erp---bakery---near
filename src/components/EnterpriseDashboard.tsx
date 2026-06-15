@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CalculationResult, BahanBaku } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
-import { TrendingUp, DollarSign, BarChart3, FileDown, RefreshCw } from 'lucide-react';
+import { TrendingUp, DollarSign, BarChart3, FileDown, RefreshCw, Plus, Trash2 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import {
@@ -21,11 +21,48 @@ interface EnterpriseDashboardProps {
 }
 
 export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDashboardProps) {
-  const [laborMonthlyCost, setLaborMonthlyCost] = useState(0);
-  const [electricityMonthlyCost, setElectricityMonthlyCost] = useState(0);
-  const [packagingCostPerPiece, setPackagingCostPerPiece] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+
+  // ─── CABANG FILTER ───
+  const cabangList = safeGetLocalStorage<any[]>('cabang_list_data', []);
+  const [selectedCabang, setSelectedCabang] = useState('semua');
+
+  // ─── BIAYA DINAMIS (seperti OPEX di Arus Kas) ───
+  const [expenseItems, setExpenseItems] = useState<{ id: string; label: string; amount: number }[]>(() =>
+    safeGetLocalStorage<{ id: string; label: string; amount: number }[]>('pl_expense_items_data', [
+      { id: 'exp-gaji', label: 'Gaji Staff', amount: 0 },
+      { id: 'exp-listrik', label: 'Listrik & Oven', amount: 0 },
+      { id: 'exp-kemasan', label: 'Kemasan', amount: 0 },
+      { id: 'exp-sewa', label: 'Sewa Tempat', amount: 0 },
+      { id: 'exp-air', label: 'Air & PDAM', amount: 0 },
+      { id: 'exp-internet', label: 'Internet & Telepon', amount: 0 },
+      { id: 'exp-transport', label: 'Transportasi', amount: 0 },
+      { id: 'exp-promosi', label: 'Promosi & Marketing', amount: 0 },
+      { id: 'exp-perawatan', label: 'Perawatan Alat', amount: 0 },
+    ])
+  );
+  const [newExpLabel, setNewExpLabel] = useState('');
+  const [newExpAmount, setNewExpAmount] = useState('');
+
+  useEffect(() => { localStorage.setItem('pl_expense_items_data', JSON.stringify(expenseItems)); }, [expenseItems]);
+
+  const addExpense = () => {
+    if (!newExpLabel.trim() || !newExpAmount) return;
+    setExpenseItems(prev => [...prev, { id: `exp-${Date.now()}`, label: newExpLabel.trim(), amount: parseInt(newExpAmount) || 0 }]);
+    setNewExpLabel('');
+    setNewExpAmount('');
+  };
+
+  const deleteExpense = (id: string) => {
+    if (window.confirm('Hapus item biaya ini?')) {
+      setExpenseItems(prev => prev.filter(item => item.id !== id));
+    }
+  };
+
+  const updateExpense = (id: string, amount: number) => {
+    setExpenseItems(prev => prev.map(item => item.id === id ? { ...item, amount } : item));
+  };
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
@@ -40,15 +77,17 @@ export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDa
     return () => clearInterval(interval);
   }, []);
 
-  // Hitung revenue real-time
-  const today = new Date().toISOString().substring(0, 10);
-  const todayRevenue = revenueData.dailyTotals[today]?.total || 0;
+  // Filter transaksi per cabang
   const monthAgo = new Date();
   monthAgo.setDate(monthAgo.getDate() - 30);
   const monthStart = monthAgo.toISOString().substring(0, 10);
-  const monthlyTransactions = revenueData.transactions.filter((tx: any) => tx.date >= monthStart);
-  const monthlyRevenue = monthlyTransactions.reduce((sum: number, tx: any) => sum + tx.amount, 0);
-  const monthlyQty = monthlyTransactions.reduce((sum: number, tx: any) => sum + tx.qty, 0);
+  const filteredTx = revenueData.transactions.filter((tx: any) => {
+    if (selectedCabang === 'semua') return tx.date >= monthStart;
+    const txCabang = (tx.source || '').toLowerCase().trim();
+    return tx.date >= monthStart && txCabang.includes(selectedCabang.toLowerCase().trim());
+  });
+  const monthlyRevenue = filteredTx.reduce((sum: number, tx: any) => sum + tx.amount, 0);
+  const monthlyQty = filteredTx.reduce((sum: number, tx: any) => sum + tx.qty, 0);
 
   // Data dari calculatedProducts untuk referensi
   const avgMargin = calculatedProducts.length > 0
@@ -62,24 +101,28 @@ export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDa
     : 0;
 
   // Estimasi dari data real
-  const rawMaterialMonthlyCost = monthlyTransactions.reduce((sum: number, tx: any) => {
+  const rawMaterialCost = filteredTx.reduce((sum: number, tx: any) => {
     const prod = calculatedProducts.find(p => p.namaProduk.toLowerCase().trim() === tx.product.toLowerCase().trim());
     return sum + (prod ? prod.hppPerPorsi * tx.qty : avgHpp * tx.qty);
   }, 0);
-  const packagingMonthlyCost = packagingCostPerPiece * monthlyQty;
-  const totalOperatingCosts = laborMonthlyCost + electricityMonthlyCost;
-  const grossMonthlyProfit = Math.max(0, monthlyRevenue - rawMaterialMonthlyCost - packagingMonthlyCost);
-  const netMonthlyIncome = grossMonthlyProfit - totalOperatingCosts;
+  const totalExpenses = expenseItems.reduce((sum, item) => sum + item.amount, 0);
+  const grossProfit = Math.max(0, monthlyRevenue - rawMaterialCost);
+  const netIncome = grossProfit - totalExpenses;
 
-  // Chart data dari transaksi real per bulan (6 bulan terakhir)
+  // Chart data dari transaksi real per bulan (6 bulan terakhir) — filter per cabang
   const getMonthlyData = () => {
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
     const startDate = sixMonthsAgo.toISOString().substring(0, 7);
     
     const monthMap: Record<string, { revenue: number; cogs: number }> = {};
-    revenueData.transactions.forEach((tx: any) => {
-      const month = tx.date?.substring(0, 7) || today.substring(0, 7);
+    const targetTx = selectedCabang === 'semua' ? revenueData.transactions : filteredTx;
+    targetTx.forEach((tx: any) => {
+      if (selectedCabang !== 'semua') {
+        const txCabang = (tx.source || '').toLowerCase().trim();
+        if (!txCabang.includes(selectedCabang.toLowerCase().trim())) return;
+      }
+      const month = tx.date?.substring(0, 7) || new Date().toISOString().substring(0, 7);
       if (month >= startDate) {
         if (!monthMap[month]) monthMap[month] = { revenue: 0, cogs: 0 };
         monthMap[month].revenue += tx.amount || 0;
@@ -90,12 +133,11 @@ export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDa
 
     const months = Object.keys(monthMap).sort();
     if (months.length === 0) {
-      // Fallback: show current month with real data
       return [{
         name: new Date().toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }),
         'Pendapatan (Revenue)': Math.round(monthlyRevenue) || 0,
-        'HPP Terpadu (COGS)': Math.round(rawMaterialMonthlyCost) || 0,
-        'Laba Kotor (Gross Profit)': Math.max(0, Math.round(monthlyRevenue - rawMaterialMonthlyCost)) || 0,
+        'HPP Terpadu (COGS)': Math.round(rawMaterialCost) || 0,
+        'Laba Kotor (Gross Profit)': Math.max(0, Math.round(monthlyRevenue - rawMaterialCost)) || 0,
       }];
     }
 
@@ -152,9 +194,11 @@ export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDa
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(8.5);
       doc.text(`Volume Jual Real: ${monthlyQty} pcs`, 12, 36);
-      doc.text(`Gaji: ${formatCurrency(laborMonthlyCost)}`, 110, 36);
-      doc.text(`Listrik: ${formatCurrency(electricityMonthlyCost)}`, 110, 41);
-      doc.text(`Kemasan: ${formatCurrency(packagingCostPerPiece)}/pcs`, 110, 46);
+      let yOffset = 36;
+      expenseItems.filter(e => e.amount > 0).forEach(item => {
+        doc.text(`${item.label}: ${formatCurrency(item.amount)}`, 110, yOffset);
+        yOffset += 5;
+      });
 
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(9.5);
@@ -175,11 +219,11 @@ export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDa
       doc.setTextColor(16, 185, 129);
       doc.text(formatCurrency(monthlyRevenue), 15, 72);
       doc.setTextColor(239, 68, 68);
-      doc.text(formatCurrency(rawMaterialMonthlyCost + packagingMonthlyCost), 62, 72);
+      doc.text(formatCurrency(rawMaterialCost), 62, 72);
       doc.setTextColor(55, 65, 81);
-      doc.text(formatCurrency(totalOperatingCosts), 112, 72);
-      doc.setTextColor(netMonthlyIncome >= 0 ? 16 : 239, netMonthlyIncome >= 0 ? 185 : 68, netMonthlyIncome >= 0 ? 129 : 68);
-      doc.text(formatCurrency(netMonthlyIncome), 158, 72);
+      doc.text(formatCurrency(totalExpenses), 112, 72);
+      doc.setTextColor(netIncome >= 0 ? 16 : 239, netIncome >= 0 ? 185 : 68, netIncome >= 0 ? 129 : 68);
+      doc.text(formatCurrency(netIncome), 158, 72);
 
       const chartCard = document.getElementById('monthly-trend-analysis-card');
       if (chartCard) {
@@ -211,11 +255,28 @@ export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDa
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100">
-        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <TrendingUp className="w-6 h-6 text-emerald-600" /> Laporan P&L (Laba Rugi)
-        </h2>
-        <p className="text-xs text-gray-500 mt-1">Analisis laporan Laba Rugi real-time, grafik tren, dan ekspor PDF/CSV.</p>
+      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <TrendingUp className="w-6 h-6 text-emerald-600" /> Laporan P&L (Laba Rugi)
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">Analisis Laba Rugi real-time, grafik tren, dan ekspor PDF/CSV per cabang.</p>
+          </div>
+          <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-150">
+            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider px-1.5">Cabang</span>
+            <select
+              value={selectedCabang}
+              onChange={e => setSelectedCabang(e.target.value)}
+              className="text-xs font-bold border-0 bg-white rounded-lg p-1.5 outline-none focus:ring-2 focus:ring-emerald-400"
+            >
+              <option value="semua">🌐 Semua Cabang</option>
+              {cabangList.filter((c: any) => c.isActive).map((c: any) => (
+                <option key={c.id} value={c.nama}>{c.nama}</option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* CHART */}
@@ -273,31 +334,45 @@ export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDa
           <DollarSign className="w-5 h-5 text-emerald-600" /> Laporan Laba Rugi Bulanan
         </h3>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-semibold text-gray-700">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs font-semibold text-gray-700">
           <div>
-            <div>
-              <span className="text-[10px] uppercase font-bold text-gray-400 mb-1 block">Revenue Bulan Ini</span>
-              <span className="block text-lg font-black font-mono text-emerald-700">{formatCurrency(monthlyRevenue)}</span>
-              <span className="text-[9px] text-gray-400">{monthlyQty} pcs terjual</span>
+            <span className="text-[10px] uppercase font-bold text-gray-400 mb-1 block">Revenue {selectedCabang !== 'semua' ? `(@${selectedCabang})` : ''}</span>
+            <span className="block text-lg font-black font-mono text-emerald-700">{formatCurrency(monthlyRevenue)}</span>
+            <span className="text-[9px] text-gray-400">{monthlyQty} pcs terjual</span>
+          </div>
+          <div className="md:col-span-3">
+            <span className="text-[10px] uppercase font-bold text-gray-400 mb-1 block">Biaya Operasional <span className="text-blue-500 font-normal normal-case">tambah/edit/hapus sendiri</span></span>
+            <div className="space-y-1.5">
+              {expenseItems.map(item => (
+                <div key={item.id} className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-lg border border-gray-150">
+                  <span className="text-[10px] font-bold text-gray-600 w-28 shrink-0">{item.label}</span>
+                  <div className="relative flex-1 max-w-[160px]">
+                    <span className="absolute inset-y-0 left-0 pl-1.5 flex items-center text-gray-400 text-[9px]">Rp</span>
+                    <input type="number" value={item.amount}
+                      onChange={(e) => updateExpense(item.id, parseInt(e.target.value) || 0)}
+                      className="w-full pl-7 pr-1.5 py-1 border border-gray-200 rounded-lg font-mono font-bold text-xs" />
+                  </div>
+                  <button onClick={() => deleteExpense(item.id)}
+                    className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer shrink-0">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+              {/* Form tambah biaya baru */}
+              <div className="flex items-center gap-2 bg-emerald-50 p-1.5 rounded-lg border border-emerald-100">
+                <input type="text" value={newExpLabel} onChange={e => setNewExpLabel(e.target.value)}
+                  placeholder="Nama biaya..." className="flex-1 border border-emerald-200 rounded-lg p-1.5 text-xs" />
+                <div className="relative w-24">
+                  <span className="absolute inset-y-0 left-0 pl-1.5 flex items-center text-gray-400 text-[9px]">Rp</span>
+                  <input type="number" value={newExpAmount} onChange={e => setNewExpAmount(e.target.value)}
+                    className="w-full pl-7 pr-1.5 py-1 border border-emerald-200 rounded-lg font-mono font-bold text-xs" />
+                </div>
+                <button onClick={addExpense} disabled={!newExpLabel.trim() || !newExpAmount}
+                  className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-[10px] font-bold rounded-lg transition cursor-pointer disabled:cursor-not-allowed flex items-center gap-1">
+                  <Plus className="w-3 h-3" /> Tambah
+                </button>
+              </div>
             </div>
-          </div>
-          <div>
-            <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Gaji Staff</label>
-            <input type="number" value={laborMonthlyCost}
-              onChange={(e) => setLaborMonthlyCost(parseInt(e.target.value) || 0)}
-              className="w-full bg-white border border-gray-200 rounded p-1.5 font-bold font-mono" />
-          </div>
-          <div>
-            <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Listrik & Oven</label>
-            <input type="number" value={electricityMonthlyCost}
-              onChange={(e) => setElectricityMonthlyCost(parseInt(e.target.value) || 0)}
-              className="w-full bg-white border border-gray-200 rounded p-1.5 font-bold font-mono" />
-          </div>
-          <div>
-            <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Kemasan/pcs</label>
-            <input type="number" value={packagingCostPerPiece}
-              onChange={(e) => setPackagingCostPerPiece(parseInt(e.target.value) || 0)}
-              className="w-full bg-white border border-gray-200 rounded p-1.5 font-bold font-mono" />
           </div>
         </div>
 
@@ -308,32 +383,26 @@ export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDa
           </div>
           <div className="divide-y divide-gray-100 px-3 py-1 bg-white font-medium">
             <div className="py-2.5 flex justify-between">
-              <span>Omzet Pendapatan (Revenue Real)</span>
+              <span>📈 Omzet Pendapatan (Revenue Real)</span>
               <span className="font-mono font-bold">{formatCurrency(monthlyRevenue)}</span>
             </div>
             <div className="py-2.5 flex justify-between text-red-600">
               <span>(-) HPP Bahan Baku</span>
-              <span className="font-mono font-bold">-{formatCurrency(rawMaterialMonthlyCost)}</span>
-            </div>
-            <div className="py-2.5 flex justify-between text-red-600">
-              <span>(-) Kemasan</span>
-              <span className="font-mono font-bold">-{formatCurrency(packagingMonthlyCost)}</span>
+              <span className="font-mono font-bold">-{formatCurrency(rawMaterialCost)}</span>
             </div>
             <div className="py-2.5 flex justify-between text-blue-700 bg-gray-50 px-2 rounded font-bold">
-              <span>Laba Kotor (Gross Profit)</span>
-              <span className="font-mono">{formatCurrency(grossMonthlyProfit)}</span>
+              <span>📊 Laba Kotor (Gross Profit)</span>
+              <span className="font-mono">{formatCurrency(grossProfit)}</span>
             </div>
-            <div className="py-2.5 flex justify-between text-red-600">
-              <span>(-) Gaji Staff</span>
-              <span className="font-mono font-bold">-{formatCurrency(laborMonthlyCost)}</span>
-            </div>
-            <div className="py-2.5 flex justify-between text-red-600">
-              <span>(-) Listrik & Oven</span>
-              <span className="font-mono font-bold">-{formatCurrency(electricityMonthlyCost)}</span>
-            </div>
-            <div className={`py-3 flex justify-between border-t-2 font-extrabold text-base ${netMonthlyIncome >= 0 ? 'text-emerald-800 bg-emerald-50 border-emerald-200' : 'text-red-700 bg-red-50 border-red-200'}`}>
-              <span>LABA BERSIH (Net Income)</span>
-              <span className="font-mono">{formatCurrency(netMonthlyIncome)}</span>
+            {expenseItems.filter(e => e.amount > 0).map(item => (
+              <div key={item.id} className="py-2.5 flex justify-between text-red-600">
+                <span>(-) {item.label}</span>
+                <span className="font-mono font-bold">-{formatCurrency(item.amount)}</span>
+              </div>
+            ))}
+            <div className={`py-3 flex justify-between border-t-2 font-extrabold text-base ${netIncome >= 0 ? 'text-emerald-800 bg-emerald-50 border-emerald-200' : 'text-red-700 bg-red-50 border-red-200'}`}>
+              <span>💰 LABA BERSIH (Net Income)</span>
+              <span className="font-mono">{formatCurrency(netIncome)}</span>
             </div>
           </div>
         </div>
