@@ -26,7 +26,7 @@ import HargaHppTab from './components/HargaHppTab';
 
 // Advanced ERP Modules
 import EnterpriseDashboard from './components/EnterpriseDashboard';
-import FinanceCashFlowTab from './components/FinanceCashFlowTab';
+
 import WasteControlTab from './components/WasteControlTab';
 import RdSandboxTab, { RDExperiment } from './components/RdSandboxTab';
 import SmartKitchenTab from './components/SmartKitchenTab';
@@ -46,7 +46,7 @@ import BakerPercentageTab from './components/BakerPercentageTab';
 import BepTab from './components/BepTab';
 import DoughTemperatureTab from './components/DoughTemperatureTab';
 import BackupSystemTab from './components/BackupSystemTab';
-import PembukuanTab from './components/PembukuanTab';
+import LaporanKeuanganTab from './components/LaporanKeuanganTab';
 import WebStoreManagerTab from './components/WebStoreManagerTab';
 import ChatTab from './components/ChatTab';
 import ToppingsTab from './components/ToppingsTab';
@@ -271,7 +271,6 @@ export default function App() {
     | 'recipes'
     | 'hpp'
     | 'erp_bi'
-    | 'erp_cash_flow'
     | 'erp_waste'
     | 'erp_rd'
     | 'erp_bom'
@@ -290,7 +289,7 @@ export default function App() {
     | 'erp_backup'
     | 'erp_production_center'
     | 'erp_rekap_bahan'
-    | 'erp_pembukuan'
+    | 'erp_laporan_keuangan'
     | 'erp_toppings'
     | 'erp_webstore'
   >('dashboard');
@@ -1780,13 +1779,7 @@ export default function App() {
             {activeTab === 'erp_bi' && (
               <EnterpriseDashboard calculatedProducts={calculatedProducts} bahanBaku={bahanBaku} />
             )}
-            {activeTab === 'erp_cash_flow' && (
-              <FinanceCashFlowTab 
-                calculatedProducts={calculatedProducts} 
-                wasteTotalLoss={wasteLogs.reduce((acc, curr) => acc + curr.lossValue, 0)} 
-                rdTotalCost={rdExperiments.reduce((acc, curr) => acc + curr.components.reduce((sum, c) => sum + (c.takaran * c.unitPrice), 0) + curr.estOverhead, 0)} 
-              />
-            )}
+
             {activeTab === 'erp_waste' && (
               <WasteControlTab 
                 bahanBaku={bahanBaku} 
@@ -1890,6 +1883,14 @@ export default function App() {
               <DoughTemperatureTab />
             )}
 
+            {activeTab === 'erp_laporan_keuangan' && (
+              <LaporanKeuanganTab
+                calculatedProducts={calculatedProducts}
+                bahanBaku={bahanBaku}
+                wasteTotalLoss={wasteTotalLoss}
+                rdTotalCost={rdTotalCost}
+              />
+            )}
             {activeTab === 'erp_backup' && (
               <BackupSystemTab
                 bahanBaku={bahanBaku}
@@ -1932,14 +1933,7 @@ export default function App() {
             {activeTab === 'erp_chat' && (
               <ChatTab />
             )}
-            {activeTab === 'erp_pembukuan' && (
-              <PembukuanTab
-                calculatedProducts={calculatedProducts}
-                bahanBaku={bahanBaku}
-                wasteTotalLoss={wasteTotalLoss}
-                rdTotalCost={rdTotalCost}
-              />
-            )}
+
           </div>
         </main>
 
@@ -2099,7 +2093,7 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
           <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">① Ringkasan & Dashboard</span>
           {sidebarBtn('dashboard', <LineChart className="w-4 h-4" />, '👋 Ringkasan')}
           {sidebarBtn('erp_bi', <TrendingUp className="w-4 h-4" />, '📊 Laporan P&L')}
-          {sidebarBtn('erp_pembukuan', <Layers className="w-4 h-4" />, '📒 Pembukuan')}
+          {sidebarBtn('erp_laporan_keuangan', <BarChart3 className="w-4 h-4" />, '📊 Laporan Keuangan')}
         </div>
         <div className="space-y-1">
           <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">② Master Data</span>
@@ -2123,7 +2117,7 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
         </div>
         <div className="space-y-1">
           <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑤ Keuangan</span>
-          {sidebarBtn('erp_cash_flow', <Coins className="w-4 h-4" />, '💵 Arus Kas')}
+
           {sidebarBtn('erp_anggaran_alokasi', <PieChart className="w-4 h-4" />, '💰 Anggaran & Alokasi')}
           {sidebarBtn('erp_bep', <BarChart3 className="w-4 h-4" />, '🧮 BEP & Balance')}
           {sidebarBtn('hpp', <TrendingUp className="w-4 h-4" />, '📈 Harga & HPP')}
