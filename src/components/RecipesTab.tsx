@@ -1327,6 +1327,24 @@ export default function RecipesTab({
                 )}
               </div>
 
+              {/* ─── TOMBOL SELESAI ─── */}
+              <div className="px-6 pb-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Pastikan porsi terakhir tersimpan
+                    handleUpdatePorsi(activeRecipePorsi);
+                    showToastLocal('✅ Resep berhasil disimpan!', 'success');
+                    // Kembali ke pemilihan kategori (tutup panel editing)
+                    setIsEditingProductDetails(false);
+                    setShowVariantPanel(false);
+                  }}
+                  className="w-full py-3.5 text-sm font-black bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white rounded-xl shadow-md cursor-pointer active:scale-[0.98] transition-all flex items-center justify-center gap-2 uppercase tracking-wider"
+                >
+                  ✅ Selesai — Simpan Resep
+                </button>
+              </div>
+
             </div>
           </div>
         )}
