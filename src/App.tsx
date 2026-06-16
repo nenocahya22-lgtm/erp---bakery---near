@@ -382,8 +382,9 @@ export default function App() {
     const cabangId = 'pusat';
     try {
       showToast('⏳ Sinkronisasi produk & kategori ke Web Store...', 'info');
+      const publishedProducts = productHpp.filter(p => p.status !== 'draft');
       const count = await syncProductsToFirestore(
-        calculatedProducts, productHpp, detailResep, bahanBaku, cabangId
+        calculatedProducts, publishedProducts, detailResep, bahanBaku, cabangId
       );
       showToast(`✅ ${count} produk + kategori berhasil disinkronisasi! Web Store akan update.`, 'success');
     } catch (err: any) {
@@ -740,11 +741,12 @@ export default function App() {
     // Auto-sync ke Firestore agar produk langsung muncul di Web Store
     setTimeout(() => {
       const updatedCalc = calculateAllProducts(bahanBakuRef.current, [...productHppRef.current, p], detailResepRef.current);
-      syncProductsToFirestore(updatedCalc, [...productHppRef.current, p], detailResepRef.current, bahanBakuRef.current, 'pusat').then(count => {
-        showToast(`Resep "${p.namaProduk}" diformulasikan! ${count} produk tersinkron ke Web Store.`, 'success');
-      }).catch((err) => {
-        console.warn('Auto-sync after recipe creation failed:', err);
-      });
+      const allProducts = [...productHppRef.current, p].filter(pr => pr.status !== 'draft');
+      if (allProducts.length > 0) {
+        syncProductsToFirestore(updatedCalc, allProducts, detailResepRef.current, bahanBakuRef.current, 'pusat').catch((err) => {
+          console.warn('Auto-sync after recipe creation failed:', err);
+        });
+      }
     }, 1000);
     showToast(`Resep Produk "${p.namaProduk}" diformulasikan!`, 'success');
   };
@@ -752,13 +754,14 @@ export default function App() {
   const handleUpdateProductIngredients = (
     productName: string,
     updatedDetails: DetailResep[],
-    porsiJual: number
+    porsiJual: number,
+    status?: 'draft' | 'published'
   ) => {
-    // Update portions size
+    // Update portions size + status jika diberikan
     setProductHpp((prev) =>
       prev.map((p) =>
         p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
-          ? { ...p, porsiJual }
+          ? { ...p, porsiJual, ...(status ? { status } : {}) }
           : p
       )
     );
@@ -770,7 +773,17 @@ export default function App() {
     ]);
 
     setHasUnsavedChanges(true);
-    showToast(`Bahan resep "${productName}" diperbarui!`, 'success');
+    if (status === 'published') {
+      showToast(`✅ Resep "${productName}" diterbitkan! Kini tersedia di semua modul.`, 'success');
+      // Sync ke Firestore agar muncul di Web Store
+      setTimeout(() => {
+        const publishedAll = productHppRef.current.filter(pr => pr.status !== 'draft');
+        const updatedCalc = calculateAllProducts(bahanBakuRef.current, publishedAll, detailResepRef.current);
+        syncProductsToFirestore(updatedCalc, publishedAll, detailResepRef.current, bahanBakuRef.current, 'pusat').catch(console.warn);
+      }, 500);
+    } else {
+      showToast(`Bahan resep "${productName}" diperbarui!`, 'success');
+    }
   };
 
   const handleDeleteProduct = (productName: string) => {
@@ -1276,8 +1289,9 @@ export default function App() {
       // Sync produk ke Firestore (gunakan refs untuk data terbaru)
       if (currentCalc.length > 0) {
         setTimeout(() => {
-          const updatedCalc = calculateAllProducts(bahanBakuRef.current, productHppRef.current, detailResepRef.current);
-          syncProductsToFirestore(updatedCalc, productHppRef.current, detailResepRef.current, bahanBakuRef.current, 'pusat').catch(console.warn);
+          const published = productHppRef.current.filter(pr => pr.status !== 'draft');
+          const updatedCalc = calculateAllProducts(bahanBakuRef.current, published, detailResepRef.current);
+          syncProductsToFirestore(updatedCalc, published, detailResepRef.current, bahanBakuRef.current, 'pusat').catch(console.warn);
         }, 2000);
       }
 
@@ -1835,7 +1849,11 @@ export default function App() {
             {activeTab === 'erp_online' && (
               <PesananOnlineTab
                 calculatedProducts={calculatedProducts}
+                productHpp={productHpp}
+                detailResep={detailResep}
+                bahanBaku={bahanBaku}
                 onCompletePOSSale={handleCompletePOSSale}
+                onProductionComplete={handleProductionComplete}
               />
             )}
             {activeTab === 'erp_crm' && (

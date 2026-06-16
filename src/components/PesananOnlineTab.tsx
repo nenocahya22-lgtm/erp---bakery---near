@@ -1,15 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, ShieldCheck, ShoppingCart, AlertTriangle, CheckCircle2, Globe, RefreshCw } from 'lucide-react';
-import { CalculationResult } from '../types';
+import { Layers, ShieldCheck, ShoppingCart, AlertTriangle, CheckCircle2, Globe, RefreshCw, Package, ChevronDown, ChevronRight, Clock } from 'lucide-react';
+import { CalculationResult, BahanBaku, DetailResep, ProductHpp } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
 import { listenNewOrders, getAllOrders, WebStoreOrder, updateOrderStatus } from '../lib/firestore-bridge';
 
 interface PesananOnlineTabProps {
   calculatedProducts: CalculationResult[];
+  productHpp?: ProductHpp[];
+  detailResep?: DetailResep[];
+  bahanBaku?: BahanBaku[];
   onCompletePOSSale: (productName: string, qty: number, totalRevenue: number, source?: string) => void;
+  onProductionComplete?: (productName: string, batchQty: number) => void;
 }
 
-export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale }: PesananOnlineTabProps) {
+export default function PesananOnlineTab({
+  calculatedProducts, productHpp = [], detailResep = [], bahanBaku = [],
+  onCompletePOSSale, onProductionComplete
+}: PesananOnlineTabProps) {
 
   // ─── WEB STORE BRIDGE — Real-time dari Firestore ───
   const [webStoreStatus, setWebStoreStatus] = useState<'disconnected' | 'connecting' | 'connected'>(
@@ -17,6 +24,12 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
   );
   const [firestoreOrders, setFirestoreOrders] = useState<WebStoreOrder[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+
+  // Expand order production panel
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+
+  // Production batch input per order
+  const [prodBatch, setProdBatch] = useState<Record<string, Record<string, number>>>({});
 
   // Load initial orders & listen for new ones
   useEffect(() => {
@@ -88,6 +101,77 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
     }
   };
 
+  // ─── PRODUCTION & STOCK INTEGRATED FUNCTIONS ───
+
+  /** Hitung kebutuhan bahan baku per order item */
+  const calcIngredientsNeeded = (itemName: string, qty: number) => {
+    const product = productHpp.find(p => 
+      p.namaProduk.toLowerCase().trim() === itemName.toLowerCase().trim()
+    );
+    const resepItems = detailResep.filter(r =>
+      r.namaProduk.toLowerCase().trim() === itemName.toLowerCase().trim()
+    );
+    if (resepItems.length === 0) return [];
+
+    const porsiJual = product?.porsiJual || 1;
+    return resepItems.map(r => {
+      const needed = (r.takaran / porsiJual) * qty;
+      const bahan = bahanBaku.find(b => 
+        b.nama.toLowerCase().trim() === r.namaBahan.toLowerCase().trim()
+      );
+      const stock = bahan?.isiKemasan || 0;
+      const satuan = bahan?.satuan || 'gr';
+      return {
+        namaBahan: r.namaBahan,
+        needed: Math.round(needed * 10) / 10,
+        stock,
+        satuan,
+        sufficient: stock >= needed,
+        low: stock > 0 && stock < needed,
+        outOfStock: stock <= 0,
+      };
+    });
+  };
+
+  /** Hitung status stok untuk seluruh order */
+  const calcOrderStockStatus = (order: WebStoreOrder) => {
+    let allSufficient = true;
+    let anyLow = false;
+    let anyOut = false;
+    let totalBahan = 0;
+    
+    order.items.forEach(item => {
+      const ingredients = calcIngredientsNeeded(item.name, item.quantity);
+      totalBahan += ingredients.length;
+      ingredients.forEach(ing => {
+        if (!ing.sufficient) allSufficient = false;
+        if (ing.low) anyLow = true;
+        if (ing.outOfStock) anyOut = true;
+      });
+    });
+
+    if (totalBahan === 0) return { status: 'no_recipe', label: 'Belum ada resep', color: 'text-gray-400', bg: 'bg-gray-50' };
+    if (anyOut) return { status: 'out_of_stock', label: 'Stok habis!', color: 'text-red-700', bg: 'bg-red-50' };
+    if (!allSufficient) return { status: 'low_stock', label: 'Stok tidak cukup', color: 'text-amber-700', bg: 'bg-amber-50' };
+    return { status: 'sufficient', label: 'Stok cukup', color: 'text-emerald-700', bg: 'bg-emerald-50' };
+  };
+
+  /** Catat produksi untuk satu produk dalam order — stok otomatis dipotong via onProductionComplete */
+  const handleProduceItem = (orderId: string, itemName: string, itemQty: number) => {
+    const batch = prodBatch[orderId]?.[itemName] || itemQty;
+    onProductionComplete?.(itemName, batch);
+    showLocalToast(`🏭 Produksi ${batch}x "${itemName}" dicatat! Stok bahan baku dipotong.`, 'success');
+  };
+
+  /** Catat semua produksi sekaligus untuk satu order */
+  const handleProduceAll = (order: WebStoreOrder) => {
+    order.items.forEach(item => {
+      const batch = prodBatch[order.id]?.[item.name] || item.quantity;
+      onProductionComplete?.(item.name, batch);
+    });
+    showLocalToast(`✅ Semua item dalam pesanan #${order.id.slice(-8)} sudah diproduksi! Stok bahan baku dipotong.`, 'success');
+  };
+
   // Local toast
   const [localToast, setLocalToast] = useState<{ msg: string; type: string } | null>(null);
   const showLocalToast = (msg: string, type: string) => {
@@ -96,6 +180,7 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
   };
 
   return (
+
     <div className="space-y-6">
       {localToast && (
         <div className={`px-4 py-2.5 rounded-xl text-xs font-bold text-center ${
@@ -106,14 +191,14 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
       {/* HEADER */}
       <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100">
         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <Layers className="w-6 h-6 text-emerald-600" /> Pesanan Online & Web Store Bridge
+          <Layers className="w-6 h-6 text-emerald-600" /> Pesanan Online & Workflow Produksi
         </h2>
         <p className="text-xs text-gray-500 mt-1">
-          Integrasi pesanan dari Web Store (storenear) secara real-time via Firestore.
+          Kelola pesanan, produksi, dan stok dalam satu panel — tanpa pindah tab.
         </p>
       </div>
 
-      {/* ─── WEB STORE BRIDGE — REAL-TIME DARI FIRESTORE ─── */}
+      {/* ─── WEB STORE BRIDGE ─── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
         <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-emerald-50">
           <div className="flex items-start justify-between">
@@ -121,7 +206,7 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
               <Globe className="w-6 h-6 text-indigo-600" />
               <div>
                 <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                  🌐 Pesanan Web Store (Firestore Real-time)
+                  🌐 Workflow Terintegrasi: Pesanan → Produksi → Stok
                   {webStoreStatus === 'connected' && (
                     <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-bold rounded-lg flex items-center gap-1">
                       <CheckCircle2 className="w-2.5 h-2.5" /> Terhubung
@@ -129,8 +214,8 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
                   )}
                 </h3>
                 <p className="text-[10px] text-gray-500">
-                  Pesanan dari Web Store (storenear) langsung masuk secara real-time dari Firestore.
-                  Stok bahan baku otomatis terpotong saat pesanan dikonfirmasi (lunas/diproses).
+                  Dari konfirmasi pembayaran hingga catat produksi & cek stok — semua di sini.
+                  Klik order untuk lihat kebutuhan bahan & stok.
                 </p>
               </div>
             </div>
@@ -143,17 +228,19 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-[10px] text-emerald-800 flex items-start gap-2">
               <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
-                <strong>Firestore Terhubung!</strong> Pesanan dari Web Store muncul secara real-time.
-                Gunakan tombol aksi di bawah untuk mengonfirmasi pembayaran.
-                Stok bahan baku OTOMATIS terpotong saat status → Diproses/Lunas).
+                <strong>Firestore Terhubung!</strong> Setelah konfirmasi bayar, klik order untuk:
+                <ul className="list-disc ml-4 mt-1 space-y-0.5">
+                  <li>Lihat kebutuhan bahan baku per produk</li>
+                  <li>Cek ketersediaan stok (🟢 cukup / 🟡 menipis / 🔴 habis)</li>
+                  <li>Catat produksi langsung — stok otomatis terpotong</li>
+                </ul>
               </div>
             </div>
           ) : (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-[10px] text-blue-800 flex items-start gap-2">
               <Globe className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
-                <strong>Belum terhubung ke Firestore.</strong> Configurasi Firebase diperlukan untuk menerima pesanan real-time.
-                Pastikan aplikasi Web Store sudah aktif dan terhubung ke Firebase project yang sama.
+                <strong>Belum terhubung ke Firestore.</strong> Konfigurasi Firebase diperlukan untuk menerima pesanan real-time.
               </div>
             </div>
           )}
@@ -170,7 +257,7 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
             </span>
           </div>
 
-          {/* Daftar Pesanan dari Firestore */}
+          {/* Daftar Pesanan + Production Panel */}
           {firestoreOrders.length > 0 && (
             <div className="border-t border-gray-100 pt-4">
               <div className="flex items-center justify-between mb-3">
@@ -178,11 +265,16 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
                   <ShoppingCart className="w-3.5 h-3.5 text-indigo-600" /> Pesanan Web Store ({firestoreOrders.length})
                 </h4>
               </div>
-              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              <div className="space-y-3 max-h-[600px] overflow-y-auto">
                 {firestoreOrders.map(o => (
-                  <div key={o.id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-100 rounded-xl">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                  <div key={o.id} className="bg-gray-50 border border-gray-100 rounded-xl overflow-hidden">
+                    {/* ORDER HEADER — always visible */}
+                    <div className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-100/50 transition"
+                      onClick={() => setExpandedOrderId(expandedOrderId === o.id ? null : o.id)}>
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <span className="text-gray-400 transition-transform duration-200">
+                          {expandedOrderId === o.id ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        </span>
                         <span className="font-mono text-[9px] text-gray-400">#{o.id.slice(-8)}</span>
                         <span className="text-xs font-bold text-gray-900 truncate">{o.userName}</span>
                         <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap ${
@@ -196,50 +288,217 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
                             o.paymentStatus === 'Lunas' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
                           }`}>{o.paymentStatus}</span>
                         )}
+                        {/* Stock status badge */}
+                        {o.status === 'Diproses' && (
+                          <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold ${
+                            calcOrderStockStatus(o).bg + ' ' + calcOrderStockStatus(o).color
+                          }`}>
+                            {calcOrderStockStatus(o).label}
+                          </span>
+                        )}
                       </div>
-                      <p className="text-[10px] text-gray-600 mt-0.5 truncate">
-                        {o.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}
-                      </p>
-                      {o.paymentMethod && (
-                        <p className="text-[9px] text-gray-400 mt-0.5">
-                          💳 {o.paymentMethod} | {o.userEmail}
-                        </p>
-                      )}
+                      <div className="text-right shrink-0 ml-3 flex items-center gap-3">
+                        <div>
+                          <span className="font-mono font-bold text-emerald-700 text-xs block">
+                            {formatCurrency(o.totalAmount)}
+                          </span>
+                          <span className="text-[9px] text-gray-400">
+                            {o.items.reduce((s, i) => s + i.quantity, 0)} items
+                          </span>
+                        </div>
+                        {/* Action buttons */}
+                        <div className="flex flex-col gap-1">
+                          {(o.status === 'Menunggu Pembayaran' || o.status === 'Belum Bayar') && (
+                            <button onClick={(e) => { e.stopPropagation(); handleUpdateOrderStatus(o.id, 'Diproses', 'Lunas'); }}
+                              className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold rounded transition cursor-pointer whitespace-nowrap">
+                              Konfirmasi Bayar
+                            </button>
+                          )}
+                          {(o.status === 'Menunggu Pembayaran' || o.status === 'Belum Bayar') && (
+                            <button onClick={(e) => { e.stopPropagation(); handleUpdateOrderStatus(o.id, 'Dibatalkan'); }}
+                              className="px-2 py-1 bg-red-500 hover:bg-red-600 text-white text-[9px] font-bold rounded transition cursor-pointer whitespace-nowrap">
+                              Batalkan
+                            </button>
+                          )}
+                          {o.status === 'Diproses' && (
+                            <button onClick={(e) => { e.stopPropagation(); handleUpdateOrderStatus(o.id, 'Dikirim'); }}
+                              className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-bold rounded transition cursor-pointer whitespace-nowrap">
+                              Kirim
+                            </button>
+                          )}
+                          {o.status === 'Dikirim' && (
+                            <button onClick={(e) => { e.stopPropagation(); handleUpdateOrderStatus(o.id, 'Selesai'); }}
+                              className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[9px] font-bold rounded transition cursor-pointer whitespace-nowrap">
+                              Selesai
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-right shrink-0 ml-3">
-                      <span className="font-mono font-bold text-emerald-700 text-xs block">
-                        {formatCurrency(o.totalAmount)}
-                      </span>
-                      <span className="text-[9px] text-gray-400">
-                        {o.items.reduce((s, i) => s + i.quantity, 0)} items
-                      </span>
-                    </div>
-                    <div className="flex flex-col gap-1 ml-2">
-                      {(o.status === 'Menunggu Pembayaran' || o.status === 'Belum Bayar') && (
-                        <button onClick={() => handleUpdateOrderStatus(o.id, 'Diproses', 'Lunas')}
-                          className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold rounded transition cursor-pointer whitespace-nowrap">
-                          Konfirmasi Bayar
-                        </button>
-                      )}
-                      {(o.status === 'Menunggu Pembayaran' || o.status === 'Belum Bayar') && (
-                        <button onClick={() => handleUpdateOrderStatus(o.id, 'Dibatalkan')}
-                          className="px-2 py-1 bg-red-500 hover:bg-red-600 text-white text-[9px] font-bold rounded transition cursor-pointer whitespace-nowrap">
-                          Batalkan
-                        </button>
-                      )}
-                      {o.status === 'Diproses' && (
-                        <button onClick={() => handleUpdateOrderStatus(o.id, 'Dikirim')}
-                          className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-bold rounded transition cursor-pointer whitespace-nowrap">
-                          Kirim
-                        </button>
-                      )}
-                      {o.status === 'Dikirim' && (
-                        <button onClick={() => handleUpdateOrderStatus(o.id, 'Selesai')}
-                          className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[9px] font-bold rounded transition cursor-pointer whitespace-nowrap">
-                          Selesai
-                        </button>
-                      )}
-                    </div>
+
+                    {/* ─── EXPANDED PRODUCTION & STOCK PANEL ─── */}
+                    {expandedOrderId === o.id && o.status === 'Diproses' && (
+                      <div className="border-t border-gray-200 bg-white">
+                        <div className="p-4 space-y-4">
+                          {/* Production items breakdown */}
+                          <div className="space-y-3">
+                            <h5 className="text-[10px] uppercase font-bold text-gray-500 tracking-wider flex items-center gap-1.5">
+                              <Package className="w-3 h-3 text-emerald-600" /> Kebutuhan Bahan & Stok
+                            </h5>
+                            
+                            {o.items.map((item, idx) => {
+                              const ingredients = calcIngredientsNeeded(item.name, item.quantity);
+                              const defaultBatch = prodBatch[o.id]?.[item.name] ?? item.quantity;
+                              return (
+                                <div key={idx} className="border border-gray-100 rounded-xl overflow-hidden">
+                                  {/* Item header */}
+                                  <div className="bg-gray-50 p-3 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-bold text-gray-900">{item.name}</span>
+                                      <span className="text-[9px] text-gray-400 font-mono">×{item.quantity}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      {/* Stock status */}
+                                      {ingredients.length > 0 && (() => {
+                                        const allOk = ingredients.every(i => i.sufficient);
+                                        const someLow = ingredients.some(i => i.low);
+                                        const someOut = ingredients.some(i => i.outOfStock);
+                                        return (
+                                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${
+                                            someOut ? 'bg-red-100 text-red-700' :
+                                            !allOk ? 'bg-amber-100 text-amber-700' :
+                                            'bg-emerald-100 text-emerald-700'
+                                          }`}>
+                                            {someOut ? '🔴 Stok habis' : !allOk ? '🟡 Stok menipis' : '🟢 Stok cukup'}
+                                          </span>
+                                        );
+                                      })()}
+                                      {/* Batch qty input */}
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-[9px] text-gray-400 font-mono">Batch:</span>
+                                        <input type="number" min="1" value={defaultBatch}
+                                          onChange={e => {
+                                            const v = parseInt(e.target.value) || item.quantity;
+                                            setProdBatch(prev => ({
+                                              ...prev,
+                                              [o.id]: { ...(prev[o.id] || {}), [item.name]: Math.max(1, v) }
+                                            }));
+                                          }}
+                                          className="w-14 border border-gray-200 rounded-lg p-1 text-[10px] font-mono font-bold text-center"
+                                          onClick={e => e.stopPropagation()} />
+                                      </div>
+                                      {/* Produce button */}
+                                      <button onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleProduceItem(o.id, item.name, defaultBatch);
+                                      }}
+                                        className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1">
+                                        <Clock className="w-3 h-3" /> Produksi
+                                      </button>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Ingredients list */}
+                                  <div className="divide-y divide-gray-50">
+                                    {ingredients.length === 0 ? (
+                                      <div className="p-3 text-[10px] text-gray-400 text-center">
+                                        ⚠️ Resep untuk "{item.name}" belum ada. Buat resep dulu di tab Formulasi Resep.
+                                      </div>
+                                    ) : (
+                                      ingredients.map((ing, i) => (
+                                        <div key={i} className="px-3 py-2 flex items-center justify-between text-[10px]">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-gray-600">{ing.namaBahan}</span>
+                                            <span className="font-mono font-bold">{ing.needed} {ing.satuan}</span>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            {/* Stock bar */}
+                                            <div className="flex items-center gap-1">
+                                              <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                                <div className={`h-full rounded-full ${
+                                                  ing.outOfStock ? 'bg-red-400' :
+                                                  ing.low ? 'bg-amber-400' : 'bg-emerald-400'
+                                                }`} style={{
+                                                  width: `${Math.min(100, ing.stock > 0 ? (ing.needed / ing.stock) * 100 : 0)}%`
+                                                }} />
+                                              </div>
+                                              <span className={`font-mono font-bold ${
+                                                ing.outOfStock ? 'text-red-600' :
+                                                ing.low ? 'text-amber-600' : 'text-emerald-600'
+                                              }`}>
+                                                {ing.stock} {ing.satuan}
+                                              </span>
+                                            </div>
+                                            <span className={`text-[8px] ${
+                                              ing.outOfStock ? 'text-red-500' :
+                                              ing.low ? 'text-amber-500' : 'text-emerald-500'
+                                            }`}>
+                                              {ing.outOfStock ? '🔴' : ing.low ? '🟡' : '🟢'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Produce All button & summary */}
+                          {o.items.length > 0 && (() => {
+                            const stockStatus = calcOrderStockStatus(o);
+                            const allHaveRecipes = o.items.every(item => {
+                              const resep = detailResep.filter(r =>
+                                r.namaProduk.toLowerCase().trim() === item.name.toLowerCase().trim()
+                              );
+                              return resep.length > 0;
+                            });
+                            return (
+                              <div className={`p-3 rounded-xl border text-xs ${
+                                stockStatus.bg} ${stockStatus.color} border-gray-100 flex items-center justify-between`}>
+                                <div className="flex items-center gap-2">
+                                  <Package className="w-4 h-4" />
+                                  <span>
+                                    {!allHaveRecipes ? '⚠️ Beberapa produk belum punya resep' :
+                                     stockStatus.status === 'sufficient' ? '✅ Semua bahan tersedia, siap produksi!' :
+                                     stockStatus.status === 'low_stock' ? '🟡 Stok beberapa bahan menipis — produksi tetap bisa dicatat' :
+                                     stockStatus.status === 'out_of_stock' ? '🔴 Ada bahan yang stoknya habis' :
+                                     '⚠️ Resep belum lengkap'}
+                                  </span>
+                                </div>
+                                {allHaveRecipes && (
+                                  <button onClick={(e) => { e.stopPropagation(); handleProduceAll(o); }}
+                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1">
+                                    <Clock className="w-3 h-3" /> Produksi Semua
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
+
+                          {/* Order details */}
+                          <div className="text-[9px] text-gray-400 pt-2 border-t border-gray-50 space-y-1">
+                            {o.paymentMethod && <p>💳 Pembayaran: {o.paymentMethod}</p>}
+                            {o.userEmail && <p>📧 Email: {o.userEmail}</p>}
+                            {o.shippingAddress && (
+                              <p>📍 Alamat: {o.shippingAddress.address}, {o.shippingAddress.city}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Empty state for non-Diproses orders when expanded */}
+                    {expandedOrderId === o.id && o.status !== 'Diproses' && (
+                      <div className="border-t border-gray-200 bg-white p-4 text-center text-[10px] text-gray-400">
+                        {o.status === 'Selesai' || o.status === 'Dikirim' ? 
+                          '✅ Pesanan sudah selesai diproses.' :
+                         o.status === 'Dibatalkan' ?
+                          '❌ Pesanan dibatalkan.' :
+                          'Konfirmasi pembayaran terlebih dahulu untuk memulai produksi.'}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -260,16 +519,16 @@ export default function PesananOnlineTab({ calculatedProducts, onCompletePOSSale
             </div>
           )}
 
-          {/* Dokumentasi Integrasi */}
+          {/* Dokumentasi Workflow */}
           <div className="bg-slate-900 text-slate-200 p-4 rounded-xl border border-slate-800 text-[10px] space-y-2">
-            <p className="font-bold text-white flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Cara Kerja Integrasi Web Store (Firestore):</p>
+            <p className="font-bold text-white flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Workflow Terpadu — 1 Panel untuk Semua:</p>
             <ol className="list-decimal ml-4 space-y-1 text-slate-400">
-              <li>Web Store dan ERP menggunakan Firebase project yang SAMA</li>
-              <li>Setiap checkout di Web Store → order tersimpan di Firestore collection <code className="bg-slate-800 px-1 rounded text-emerald-300">orders</code></li>
-              <li>ERP mendengarkan (listen) perubahan collection orders secara real-time</li>
-              <li>Saat order baru masuk → muncul notifikasi + tercatat di revenue tracker</li>
-              <li>Saat Owner konfirmasi status menjadi <strong className="text-white">Diproses / Lunas</strong> → stok bahan baku OTOMATIS terpotong</li>
-              <li>Stok hanya dipotong setelah Owner konfirmasi — AMAN dari pembatalan</li>
+              <li>Pesanan masuk real-time dari Web Store via Firestore</li>
+              <li>Klik <strong className="text-white">Konfirmasi Bayar</strong> → status jadi Diproses</li>
+              <li>Klik card pesanan → lihat kebutuhan bahan & <strong className="text-white">stok real-time</strong> 🟢🟡🔴</li>
+              <li>Atur jumlah batch, klik <strong className="text-white">Produksi</strong> → stok otomatis terpotong</li>
+              <li>Status otomatis berlanjut ke Kirim → Selesai</li>
+              <li>Semua tanpa pindah tab! 🔥</li>
             </ol>
           </div>
         </div>
