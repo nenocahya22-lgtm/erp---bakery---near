@@ -1,83 +1,30 @@
-import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
-import { googleSignIn } from './lib/firebase';
-import { extractSpreadsheetId,
-  loadProjectDataFromSheets,
-  createAndInitializeTemplates,
-  saveProjectDataToSheets,
-  saveRevenueToSheets,
-  loadRevenueFromSheets,
-  enqueueFailedSync,
-} from './lib/sheets';
-import { calculateAllProducts } from './lib/calculations';
-import { safeGetLocalStorage } from './lib/safe-json';
-import { listenNewOrders, listenNotifications, syncProductsToFirestore, listenNewChats, listenOrderStatusChanges, getFirestoreCategories } from './lib/firestore-bridge';
-import { saveAllToFirestore } from './lib/erp-firestore-sync';
-import { IoTDevice } from './types';
-
-import OwnerLogin from './components/OwnerLogin';
-import { ConfirmModal } from './components/ConfirmModal';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useConfirmModal } from './hooks/useConfirmModal';
-const RecipesTab = lazy(() => import('./components/RecipesTab'));
-const HargaHppTab = lazy(() => import('./components/HargaHppTab'));
+import { ConfirmModal } from './components/ConfirmModal';
+import OwnerLogin from './components/OwnerLogin';
+import BranchLogin from './components/BranchLogin';
+import SmartKitchenTab from './components/SmartKitchenTab';
+import WasteControlTab from './components/WasteControlTab';
+import ToppingsTab from './components/ToppingsTab';
+import PesananOnlineTab from './components/PesananOnlineTab';
+import ProductionCenterTab from './components/ProductionCenterTab';
+import BranchDashboard from './components/BranchDashboard';
+
+// Lazy-loaded wrappers
 const KeuanganDashboard = lazy(() => import('./components/KeuanganDashboard'));
 const InventarisTab = lazy(() => import('./components/InventarisTab'));
-
-import WasteControlTab from './components/WasteControlTab';
-import RdSandboxTab from './components/RdSandboxTab';
-import SmartKitchenTab from './components/SmartKitchenTab';
-const ComplianceSafetyTab = lazy(() => import('./components/ComplianceSafetyTab'));
-
-import PosKasirTab from './components/PosKasirTab';
-import PesananOnlineTab from './components/PesananOnlineTab';
-import CrmMarketingTab from './components/CrmMarketingTab';
-import BomTab from './components/BomTab';
-const FefoExpiryTab = lazy(() => import('./components/FefoExpiryTab'));
-
-import AnggaranAlokasiTab from './components/AnggaranAlokasiTab';
-import BepTab from './components/BepTab';
-import BackupSystemTab from './components/BackupSystemTab';
-const WebStoreManagerTab = lazy(() => import('./components/WebStoreManagerTab'));
-import ChatTab from './components/ChatTab';
-import ToppingsTab from './components/ToppingsTab';
-
-const ProductionCenterTab = lazy(() => import('./components/ProductionCenterTab'));
-
-import BranchLogin from './components/BranchLogin';
-const BranchDashboard = lazy(() => import('./components/BranchDashboard'));
-
-const DataPusatTab = lazy(() => import('./components/DataPusatTab'));
+const LogistikDashboard = lazy(() => import('./components/LogistikDashboard'));
+const ProduksiDashboard = lazy(() => import('./components/ProduksiDashboard'));
+const PenjualanDashboard = lazy(() => import('./components/PenjualanDashboard'));
+const StrategiDashboard = lazy(() => import('./components/StrategiDashboard'));
+const SistemDashboard = lazy(() => import('./components/SistemDashboard'));
 
 import {
-  AlertTriangle,
-  CheckCircle2,
-  X,
-  FileSpreadsheet,
-  Globe,
-  Layers,
-  Sparkles,
-  RefreshCw,
-  FolderTree,
-  TrendingUp,
-  Package,
-  Cpu,
-  ShieldAlert,
-  LineChart,
-  Users,
-  ShoppingCart,
-  Coins,
-  FlaskConical,
-  LogOut,
-  Menu,
-  ClipboardList,
-  Percent,
-  BarChart3,
-  Thermometer,
-  PanelRightClose,
-  PanelRightOpen,
-  PieChart,
-  Cloud,
-  Building2,
-  MessageSquare,
+  AlertTriangle, CheckCircle2, X, FileSpreadsheet, Globe, Layers, Sparkles,
+  RefreshCw, FolderTree, TrendingUp, Package, Cpu, ShieldAlert, LineChart,
+  Users, ShoppingCart, Coins, FlaskConical, LogOut, Menu, ClipboardList,
+  Percent, BarChart3, Thermometer, PanelRightClose, PanelRightOpen, PieChart,
+  Cloud, Building2, MessageSquare, Settings,
 } from 'lucide-react';
 
 import { useAuth } from './hooks/useAuth';
@@ -161,26 +108,14 @@ export default function App() {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Tabs layout
+  // Tabs layout — 5 merged dashboard groups
   const [activeTab, setActiveTab] = useState<
     | 'keuangan'
-    | 'inventaris'
-    | 'recipes'
-    | 'hpp'
-    | 'erp_waste'
-    | 'erp_rd'
-    | 'erp_bom'
-    | 'erp_fefo_expiry'
-    | 'erp_pos'
-    | 'erp_online'
-    | 'erp_crm'
-    | 'erp_anggaran_alokasi'
-    | 'erp_iot'
-    | 'erp_compliance'
-    | 'erp_backup'
-    | 'erp_production_center'
-    | 'erp_toppings'
-    | 'erp_webstore'
+    | 'logistik'
+    | 'produksi'
+    | 'penjualan'
+    | 'strategi'
+    | 'sistem'
   >('keuangan');
 
   // Mobile sidebar state
@@ -885,8 +820,89 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 scrollbar-thin">
           <div className="pb-16">
             <Suspense fallback={<div className="flex items-center justify-center py-20"><RefreshCw className="w-8 h-8 animate-spin text-emerald-500" /></div>}>
-            {activeTab === 'inventaris' && (
-              <InventarisTab
+            {activeTab === 'penjualan' && (
+              <PenjualanDashboard
+                calculatedProducts={calculatedProducts}
+                bahanBaku={bahanBaku}
+                productHpp={productHpp}
+                detailResep={detailResep}
+                toppings={toppings}
+                onCompletePOSSale={handleCompletePOSSale}
+                onProductionComplete={handleProductionComplete}
+                onAddTopping={handleAddTopping}
+                onDeleteTopping={handleDeleteTopping}
+                wasteLogs={wasteLogs}
+                cabangList={cabangList}
+                suratOrders={suratOrders}
+              />
+            )}
+            {activeTab === 'produksi' && (
+              <ProduksiDashboard
+                bahanBaku={bahanBaku}
+                productHpp={productHpp}
+                detailResep={detailResep}
+                calculatedProducts={calculatedProducts}
+                rdExperiments={rdExperiments}
+                onAddProduct={handleAddProduct}
+                onUpdateProductIngredients={handleUpdateProductIngredients}
+                onDeleteProduct={handleDeleteProduct}
+                onAddVariant={handleAddVariant}
+                onUpdateVariant={handleUpdateVariant}
+                onDeleteVariant={handleDeleteVariant}
+                onAddRD={handleAddRD}
+                onDeleteRD={handleDeleteRD}
+                onProductionComplete={handleProductionComplete}
+              />
+            )}
+            {activeTab === 'logistik' && (
+              <LogistikDashboard
+                bahanBaku={bahanBaku}
+                onAddMaterial={handleAddMaterial}
+                onEditMaterial={handleEditMaterial}
+                onDeleteMaterial={handleDeleteMaterial}
+                cabangList={cabangList}
+                onAddCabang={handleAddCabang}
+                onEditCabang={handleEditCabang}
+                onDeleteCabang={handleDeleteCabang}
+                suratOrders={suratOrders}
+                onAddSuratOrder={handleAddSuratOrder}
+                onUpdateSuratOrder={handleUpdateSuratOrder}
+                onReturSuratOrder={handleReturSuratOrder}
+                cabangStok={cabangStok}
+                branchTransactions={branchTransactions}
+                wasteLogs={wasteLogs}
+                writeOffLogs={writeOffLogs}
+                opnameDrafts={opnameDrafts}
+                onApproveOpname={handleApproveOpname}
+                onRejectOpname={handleRejectOpname}
+                productHpp={productHpp}
+                calculatedProducts={calculatedProducts}
+                onAddWasteLog={handleAddWasteLog}
+                onDeleteWasteLog={handleDeleteWasteLog}
+                onAddWriteOff={handleAddWriteOff}
+                onDeleteWriteOff={handleDeleteWriteOff}
+                showConfirm={showConfirm}
+              />
+            )}
+            {activeTab === 'strategi' && (
+              <StrategiDashboard
+                calculatedProducts={calculatedProducts}
+                bahanBaku={bahanBaku}
+                productHpp={productHpp}
+                detailResep={detailResep}
+                cabangList={cabangList}
+                branchTransactions={branchTransactions}
+                wasteTotalLoss={wasteTotalLoss}
+                rdTotalCost={rdTotalCost}
+                onWipeAllData={handleWipeAllData}
+                onSyncToFirestore={handleSyncToFirestore}
+                onUpdateProductPricing={handleUpdateProductPricing}
+                onDeleteProduct={handleDeleteProduct}
+                onEditMaterial={handleEditMaterial}
+              />
+            )}
+            {activeTab === 'sistem' && (
+              <SistemDashboard
                 bahanBaku={bahanBaku}
                 onAddMaterial={handleAddMaterial}
                 onEditMaterial={handleEditMaterial}
@@ -905,6 +921,10 @@ export default function App() {
                 opnameDrafts={opnameDrafts}
                 onApproveOpname={handleApproveOpname}
                 onRejectOpname={handleRejectOpname}
+                productHpp={productHpp}
+                calculatedProducts={calculatedProducts}
+                detailResep={detailResep}
+                showConfirm={showConfirm}
               />
             )}
             {activeTab === 'keuangan' && (
@@ -918,152 +938,6 @@ export default function App() {
                 onWipeAllData={handleWipeAllData}
                 onSyncToFirestore={handleSyncToFirestore}
               />
-            )}
-            {activeTab === 'recipes' && (
-              <RecipesTab
-                bahanBaku={bahanBaku}
-                productHpp={productHpp}
-                detailResep={detailResep}
-                calculatedProducts={calculatedProducts}
-                onAddProduct={handleAddProduct}
-                onUpdateProductIngredients={handleUpdateProductIngredients}
-                onDeleteProduct={handleDeleteProduct}
-                onAddVariant={handleAddVariant}
-                onUpdateVariant={handleUpdateVariant}
-                onDeleteVariant={handleDeleteVariant}
-              />
-            )}
-            {activeTab === 'hpp' && (
-              <HargaHppTab
-                bahanBaku={bahanBaku}
-                calculatedProducts={calculatedProducts}
-                detailResep={detailResep}
-                onUpdateProductPricing={handleUpdateProductPricing}
-                onDeleteProduct={handleDeleteProduct}
-                onEditMaterial={handleEditMaterial}
-              />
-            )}
-            {activeTab === 'erp_waste' && (
-              <WasteControlTab
-                bahanBaku={bahanBaku}
-                wasteLogs={wasteLogs}
-                onAddWasteLog={handleAddWasteLog}
-                onDeleteWasteLog={handleDeleteWasteLog}
-                calculatedProducts={calculatedProducts}
-                writeOffLogs={writeOffLogs}
-                onAddWriteOff={handleAddWriteOff}
-                onDeleteWriteOff={handleDeleteWriteOff}
-              />
-            )}
-            {activeTab === 'erp_rd' && (
-              <RdSandboxTab
-                bahanBaku={bahanBaku}
-                rdExperiments={rdExperiments}
-                onAddRD={handleAddRD}
-                onDeleteRD={handleDeleteRD}
-              />
-            )}
-            {activeTab === 'erp_bom' && (
-              <BomTab productHpp={productHpp} calculatedProducts={calculatedProducts} />
-            )}
-            {activeTab === 'erp_production_center' && (
-              <ProductionCenterTab
-                productHpp={productHpp}
-                detailResep={detailResep}
-                calculatedProducts={calculatedProducts}
-                bahanBaku={bahanBaku}
-                onProductionComplete={handleProductionComplete}
-              />
-            )}
-            {activeTab === 'erp_fefo_expiry' && (
-              <FefoExpiryTab bahanBaku={bahanBaku} productHpp={productHpp} detailResep={detailResep} onAddWasteLog={handleAddWasteLog} cabangList={cabangList} suratOrders={suratOrders} cabangStok={cabangStok} />
-            )}
-            {activeTab === 'erp_pos' && (
-              <PosKasirTab
-                calculatedProducts={calculatedProducts}
-                onCompletePOSSale={handleCompletePOSSale}
-                toppings={toppings}
-                detailResep={detailResep}
-              />
-            )}
-            {activeTab === 'erp_online' && (
-              <PesananOnlineTab
-                calculatedProducts={calculatedProducts}
-                productHpp={productHpp}
-                detailResep={detailResep}
-                bahanBaku={bahanBaku}
-                onCompletePOSSale={handleCompletePOSSale}
-                onProductionComplete={handleProductionComplete}
-              />
-            )}
-            {activeTab === 'erp_crm' && (
-              <CrmMarketingTab
-                calculatedProducts={calculatedProducts}
-                bahanBaku={bahanBaku}
-                productHpp={productHpp}
-                detailResep={detailResep}
-                wasteLogs={wasteLogs}
-                cabangList={cabangList}
-                suratOrders={suratOrders}
-              />
-            )}
-            {activeTab === 'erp_anggaran_alokasi' && (
-              <AnggaranAlokasiTab
-                calculatedProducts={calculatedProducts}
-                bahanBaku={bahanBaku}
-                wasteTotalLoss={wasteTotalLoss}
-                rdTotalCost={rdTotalCost}
-              />
-            )}
-            {activeTab === 'erp_iot' && (
-              <SmartKitchenTab />
-            )}
-            {activeTab === 'erp_compliance' && (
-              <ComplianceSafetyTab productHpp={productHpp} onAddWasteLog={handleAddWasteLog} cabangList={cabangList} />
-            )}
-            {activeTab === 'erp_bep' && (
-              <BepTab calculatedProducts={calculatedProducts} />
-            )}
-            {activeTab === 'erp_backup' && (
-              <BackupSystemTab
-                bahanBaku={bahanBaku}
-                productHpp={productHpp}
-                detailResep={detailResep}
-                calculatedProducts={calculatedProducts}
-              />
-            )}
-            {activeTab === 'erp_toppings' && (
-              <ToppingsTab
-                toppings={toppings}
-                productHpp={productHpp}
-                bahanBaku={bahanBaku}
-                onAddTopping={handleAddTopping}
-                onDeleteTopping={handleDeleteTopping}
-              />
-            )}
-            {activeTab === 'erp_webstore' && (
-              <WebStoreManagerTab
-                productHpp={productHpp}
-                calculatedProducts={calculatedProducts}
-                bahanBaku={bahanBaku}
-                detailResep={detailResep}
-                cabangList={cabangList}
-                onImportProduct={(product) => {
-                  const exists = productHpp.some(
-                    p => p.namaProduk.toLowerCase().trim() === product.namaProduk.toLowerCase().trim()
-                  );
-                  if (exists) {
-                    showToast(`Produk "${product.namaProduk}" sudah ada di ERP!`, 'error');
-                    return;
-                  }
-                  setProductHpp(prev => [...prev, product]);
-                  setHasUnsavedChanges(true);
-                  showToast(`✅ "${product.namaProduk}" berhasil diimpor dari Web Store! Atur resep di tab Formulasi Resep.`, 'success');
-                }}
-              />
-            )}
-            {activeTab === 'erp_chat' && (
-              <ChatTab />
             )}
 
           </Suspense>
@@ -1220,44 +1094,25 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
 
       <nav className="flex-1 overflow-y-auto p-4 space-y-5 select-none scrollbar-thin">
         <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">① Dashboard Keuangan</span>
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">💰 PENJUALAN</span>
+          {sidebarBtn('penjualan', <ShoppingCart className="w-4 h-4" />, '💰 POS · Online · CRM · Chat')}
+        </div>
+        <div className="space-y-1">
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">🧪 PRODUKSI</span>
+          {sidebarBtn('produksi', <ClipboardList className="w-4 h-4" />, '🧪 Resep · R&D · Kitchen · BOM')}
+        </div>
+        <div className="space-y-1">
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">📦 LOGISTIK</span>
+          {sidebarBtn('logistik', <Package className="w-4 h-4" />, '📦 Data Pusat · Stok · Expiry · Waste')}
+        </div>
+        <div className="space-y-1">
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">📈 STRATEGI</span>
+          {sidebarBtn('strategi', <BarChart3 className="w-4 h-4" />, '📈 Ringkasan · HPP · Anggaran · BEP')}
+        </div>
+        <div className="space-y-1">
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⚙️ SISTEM</span>
+          {sidebarBtn('sistem', <Settings className="w-4 h-4" />, '⚙️ Data Pusat · Web Store · Backup')}
           {sidebarBtn('keuangan', <LineChart className="w-4 h-4" />, '📊 Dashboard Keuangan')}
-        </div>
-        <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">② Inventaris & Resep</span>
-          {sidebarBtn('inventaris', <Building2 className="w-4 h-4" />, '📦 Inventaris')}
-          {sidebarBtn('recipes', <FolderTree className="w-4 h-4" />, '📝 Formulasi Resep + Harga')}
-          {sidebarBtn('erp_toppings', <Coins className="w-4 h-4" />, '🧩 Add-on & Topping')}
-        </div>
-        <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">③ Dapur Produksi</span>
-          {sidebarBtn('erp_production_center', <ClipboardList className="w-4 h-4" />, '🏭 Production Center')}
-          {sidebarBtn('erp_bom', <Layers className="w-4 h-4" />, '🔧 BOM & Yield')}
-          {sidebarBtn('erp_fefo_expiry', <ShieldAlert className="w-4 h-4" />, '📋 FEFO & Expiry')}
-          {sidebarBtn('erp_waste', <X className="w-4 h-4" />, '🗑️ Manajemen Waste')}
-        </div>
-        <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">④ Kasir & Penjualan</span>
-          {sidebarBtn('erp_pos', <ShoppingCart className="w-4 h-4" />, '🛒 POS Kasir')}
-          {sidebarBtn('erp_online', <Users className="w-4 h-4" />, '📱 Pesanan Online')}
-          {sidebarBtn('erp_crm', <TrendingUp className="w-4 h-4" />, '📈 CRM Marketing')}
-        </div>
-        <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑤ Keuangan & Analisis</span>
-          {sidebarBtn('erp_anggaran_alokasi', <PieChart className="w-4 h-4" />, '💰 Anggaran & Alokasi')}
-          {sidebarBtn('erp_bep', <BarChart3 className="w-4 h-4" />, '🧮 BEP & Balance')}
-          {sidebarBtn('erp_rd', <FlaskConical className="w-4 h-4" />, '🔬 Sandbox R&D')}
-        </div>
-        <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑥ Operasional</span>
-          {sidebarBtn('erp_compliance', <ShieldAlert className="w-4 h-4" />, '🧊 Recall Pangan')}
-          {sidebarBtn('erp_iot', <Cpu className="w-4 h-4" />, '🤖 Smart IoT')}
-          {sidebarBtn('erp_webstore', <Globe className="w-4 h-4" />, '🌐 Web Store')}
-          {sidebarBtn('erp_chat', <MessageSquare className="w-4 h-4" />, '💬 Chat Pembeli')}
-        </div>
-        <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑦ Sistem</span>
-          {sidebarBtn('erp_backup', <Cloud className="w-4 h-4" />, '💾 Backup & Restore')}
         </div>
       </nav>
 

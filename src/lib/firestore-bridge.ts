@@ -7,8 +7,8 @@
  */
 
 
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously } from 'firebase/auth';
+import { app, auth } from './firebase';
+import { signInAnonymously } from 'firebase/auth';
 import {
   getFirestore,
   collection,
@@ -32,22 +32,11 @@ import { WebStoreConfig, PaymentMethod, BahanBaku, ProductHpp, DetailResep, Calc
 // Firebase config untuk project Web Store (near-bakery-store)
 // — database yang SAMA digunakan oleh aplikasi Web Store (storenear)
 // — Semua data ERP + Web Store disatukan di project yang sama
-// Konfigurasi dari environment variables (VITE_* untuk client-side)
-const webStoreFirebaseConfig = {
-  projectId: import.meta.env.VITE_WEBSTORE_PROJECT_ID || '',
-  appId: import.meta.env.VITE_WEBSTORE_APP_ID || '',
-  apiKey: import.meta.env.VITE_WEBSTORE_API_KEY || '',
-  authDomain: import.meta.env.VITE_WEBSTORE_AUTH_DOMAIN || '',
-  storageBucket: import.meta.env.VITE_WEBSTORE_STORAGE_BUCKET || '',
-  messagingSenderId: import.meta.env.VITE_WEBSTORE_MESSAGING_SENDER_ID || '',
-};
 
-// Inisialisasi Firebase untuk Firestore (project Web Store)
-// CATATAN: Jika env vars kosong (misal di Vercel tanpa env vars),
-// Firebase akan menggunakan config kosong — app tetap render & error
-// akan muncul sebagai warning, bukan blank screen.
+// Inisialisasi Firestore dari project Firebase utama (near-bakery-store)
+// ERP dan Web Store menggunakan project yang SAMA, jadi tidak perlu
+// membuat Firebase App terpisah.
 const _firestoreDbId = (import.meta.env.VITE_WEBSTORE_DATABASE_ID || '').trim();
-const app = initializeApp(webStoreFirebaseConfig, 'erp-bridge');
 const _useNamedDb = _firestoreDbId.length > 0;
 export const db = _useNamedDb
   ? getFirestore(app, _firestoreDbId)
@@ -55,12 +44,12 @@ export const db = _useNamedDb
 
 // Anonymous Auth — ERP perlu login anonim ke Firebase agar Firestore Rules
 // yang require `request.auth != null` (seperti collection chats) bisa diakses.
-// Project quick-codex-1cf5x dari AI Studio, kita tidak bisa edit Rules-nya,
-// jadi ERP login anonim untuk memenuhi syarat auth.
-const _auth = getAuth(app);
-signInAnonymously(_auth).catch((err) => {
-  console.warn('⚠️ Anonymous auth skipped (chats may not load):', err.message);
-});
+// ERP login anonim untuk memenuhi syarat auth saat user belum login Google.
+if (!auth.currentUser) {
+  signInAnonymously(auth).catch((err) => {
+    console.warn('⚠️ Anonymous auth skipped (chats may not load):', err.message);
+  });
+}
 
 // ============================================================================
 // WEB STORE CONFIG — simpan & baca konfigurasi web store dari Firestore

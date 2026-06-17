@@ -16,6 +16,8 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 
+export { app, auth };
+
 const provider = new GoogleAuthProvider();
 // Request the Google Sheets scope
 provider.addScope('https://www.googleapis.com/auth/spreadsheets');
