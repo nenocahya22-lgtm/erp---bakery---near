@@ -261,10 +261,10 @@ export async function syncProductsToFirestore(
       id: productId,
       name: calc.namaProduk,
       description,
-      price: Math.round(calc.hargaJualPerPorsi),
+      price: Math.round(product.hargaJual),
       variants: webVariants,
       discountPercent: discountPercent > 0 ? discountPercent : undefined,
-      originalPrice: discountPercent > 0 ? Math.round(calc.hargaJualPerPorsi) : undefined,
+      originalPrice: discountPercent > 0 ? Math.round(product.hargaJual) : undefined,
       // stock: tidak dikirim — Open PO system, pelanggan tidak perlu lihat stok
       imageUrl: displayImage,
       category: kategori,

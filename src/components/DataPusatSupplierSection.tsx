@@ -93,7 +93,7 @@ export default function DataPusatSupplierSection({ bahanBaku, onEditMaterial, sh
   };
 
   const handleDeletePO = (id: string) => {
-    showConfirm({ title: "Hapus PO", message: "Hapus PO ini?", confirmLabel: "Hapus", cancelLabel: "Batal", variant: "danger", onConfirm: () => setPurchaseOrders(prev => prev.filter(p => p.id !== id));
+    showConfirm({ title: "Hapus PO", message: "Hapus PO ini?", confirmLabel: "Hapus", cancelLabel: "Batal", variant: "danger", onConfirm: () => setPurchaseOrders(prev => prev.filter(p => p.id !== id)), onCancel: () => {} });
   };
 
   const cetakLaporanHtml = (judul: string, headers: string[], rows: string[][], footer?: string): string => {

@@ -16,6 +16,7 @@ import { IoTDevice } from './types';
 
 import OwnerLogin from './components/OwnerLogin';
 import { ConfirmModal } from './components/ConfirmModal';
+import { useConfirmModal } from './hooks/useConfirmModal';
 const RecipesTab = lazy(() => import('./components/RecipesTab'));
 const HargaHppTab = lazy(() => import('./components/HargaHppTab'));
 const KeuanganDashboard = lazy(() => import('./components/KeuanganDashboard'));
@@ -98,6 +99,8 @@ export default function App() {
     handleBranchLogout,
   } = useAuth();
 
+  const { confirmState, setConfirmState, showConfirm } = useConfirmModal();
+
   const {
     bahanBaku, setBahanBaku,
     productHpp, setProductHpp,
@@ -133,7 +136,7 @@ export default function App() {
     handleProductionComplete, handleBranchProductionComplete,
     handleSyncStokOpname,
     handleAddOpnameDraft, handleApproveOpname, handleRejectOpname,
-  } = useERPData();
+  } = useERPData(showConfirm);
 
   useFirestoreSync({
     isOwnerAuthenticated,
@@ -1281,7 +1284,7 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
             <FileSpreadsheet className="w-3.5 h-3.5" /> HUBUNGKAN GOOGLE SHEETS
           </button>
         )}
-t	<ConfirmModal />
+<ConfirmModal state={confirmState} setState={setConfirmState} />
       </div>
     </>
   );

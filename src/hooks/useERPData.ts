@@ -9,16 +9,7 @@ import type {
 } from '../types';
 import type { RDExperiment } from '../components/RdSandboxTab';
 
-  title: string;
-  message: string;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  variant?: 'danger' | 'warning' | 'info' | 'default';
-  onConfirm: () => void;
-  onCancel?: () => void;
-}): void;
-
-export function useERPData() {
+export function useERPData(showConfirm?: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void) {
   const [bahanBaku, setBahanBaku] = useState<BahanBaku[]>(() =>
     safeGetLocalStorage<BahanBaku[]>('bahan_baku_data', [])
   );
