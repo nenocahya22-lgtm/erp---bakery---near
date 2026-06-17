@@ -29,6 +29,7 @@ export interface ProductHpp {
   kategori?: string; // e.g. 'Roti', 'Cake', 'Cookies', 'Coffee', 'Lainnya'
   wastePercent?: number; // Waste/shrinkage % (default 0). Example: 5 berarti 5% shrinkage
   variants?: ProductVariant[]; // Varian ukuran untuk produk ini
+  status?: 'draft' | 'published'; // draft = masih diedit, published = siap produksi
 }
 
 export interface ProductTopping {
@@ -346,6 +347,11 @@ export interface WebStoreConfig {
   footerCopyright: string;
   footerLinks: string[];
   checkoutFooterText: string;
+
+  // Made-to-Order (Pre-Order) Mode — pengganti stok display
+  madeToOrder: boolean;
+  preOrderLabel: string;
+  preOrderBadge: string;
   
   // Timestamp
   lastUpdated: string;
@@ -516,6 +522,9 @@ export const createDefaultWebStoreConfig = (products: { namaProduk: string; kate
   footerCopyright: '© 2026 Near Bakery & Co. — Artisan Bakery Premium',
   footerLinks: ['Menu', 'Rewards', 'Gift Cards'],
   checkoutFooterText: 'Near Bakery & Co. — Kualitas Terjamin',
+  madeToOrder: true,
+  preOrderLabel: 'Pre-Order — Produksi Setiap Hari',
+  preOrderBadge: 'MADE-TO-ORDER',
   lastUpdated: new Date().toISOString(),
 });
 

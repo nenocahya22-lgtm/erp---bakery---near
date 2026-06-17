@@ -4,6 +4,28 @@ import { CalculationResult, BahanBaku, DetailResep, ProductHpp } from '../types'
 import { safeGetLocalStorage } from '../lib/safe-json';
 import { listenNewOrders, getAllOrders, WebStoreOrder, updateOrderStatus } from '../lib/firestore-bridge';
 
+/** Catat baking log ke localStorage ProductionCenterTab agar tidak dobel entry */
+function recordBakingLog(productName: string, batchQty: number) {
+  const existing = safeGetLocalStorage<{
+    id: string; date: string; productName: string; batchQty: number;
+    doughTemp: number; ovenTemp: number; startTime: string; endTime: string;
+    notes: string;
+  }[]>('production_baking_logs', []);
+  const log = {
+    id: `bl-online-${Date.now()}`,
+    date: new Date().toISOString().substring(0, 10),
+    productName,
+    batchQty,
+    doughTemp: 0,
+    ovenTemp: 0,
+    startTime: '',
+    endTime: '',
+    notes: 'Dari pesanan online',
+  };
+  const updated = [log, ...existing].slice(0, 100);
+  localStorage.setItem('production_baking_logs', JSON.stringify(updated));
+}
+
 interface PesananOnlineTabProps {
   calculatedProducts: CalculationResult[];
   productHpp?: ProductHpp[];
@@ -160,6 +182,7 @@ export default function PesananOnlineTab({
   const handleProduceItem = (orderId: string, itemName: string, itemQty: number) => {
     const batch = prodBatch[orderId]?.[itemName] || itemQty;
     onProductionComplete?.(itemName, batch);
+    recordBakingLog(itemName, batch);
     showLocalToast(`🏭 Produksi ${batch}x "${itemName}" dicatat! Stok bahan baku dipotong.`, 'success');
   };
 
@@ -168,6 +191,7 @@ export default function PesananOnlineTab({
     order.items.forEach(item => {
       const batch = prodBatch[order.id]?.[item.name] || item.quantity;
       onProductionComplete?.(item.name, batch);
+      recordBakingLog(item.name, batch);
     });
     showLocalToast(`✅ Semua item dalam pesanan #${order.id.slice(-8)} sudah diproduksi! Stok bahan baku dipotong.`, 'success');
   };

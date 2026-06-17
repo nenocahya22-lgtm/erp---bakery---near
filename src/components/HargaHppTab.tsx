@@ -325,9 +325,21 @@ function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDelete
   const suggestedPricePerPortion = activeResult ? activeResult.hppPerPorsi / (1 - targetMargin / 100) : 0;
   const suggestedPriceTotal = activeResult ? suggestedPricePerPortion * activeResult.porsiJual : 0;
 
-  const handleApplySuggestedPrice = () => {
+  const handleApplySuggestedPrice = async () => {
     if (!activeResult) return;
-    if (window.confirm(`Terapkan harga jual ${formatCurrency(suggestedPriceTotal)} untuk "${activeResult.namaProduk}"?`)) {
+    const confirmed_330 = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: `Terapkan harga jual ${formatCurrency(suggestedPriceTotal)} untuk "${activeResult.namaProduk}"?`,
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (confirmed_330) {
+
       onUpdateProductPricing(activeResult.namaProduk, suggestedPriceTotal);
     }
   };
@@ -377,8 +389,20 @@ function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDelete
                       onChange={(e) => setGlobalTargetMargin(parseInt(e.target.value))}
                       className="w-full accent-emerald-600" />
                   </div>
-                  <button onClick={() => {
-                    if (window.confirm(`Terapkan margin ${globalTargetMargin}% ke SEMUA produk (${calculatedProducts.length} produk)?`)) {
+                  <button onClick={async () => {
+                    const confirmed_381 = await new Promise<boolean>((resolve) => {
+                      showConfirm({
+                        title: 'Konfirmasi',
+                        message: `Terapkan margin ${globalTargetMargin}% ke SEMUA produk (${calculatedProducts.length} produk)?`,
+                        confirmLabel: 'Ya',
+                        cancelLabel: 'Batal',
+                        variant: 'warning',
+                        onConfirm: () => resolve(true),
+                        onCancel: () => resolve(false),
+                      });
+                    });
+                    if (confirmed_381) {
+
                       calculatedProducts.forEach(p => {
                         const recommended = p.hppPerPorsi / (1 - globalTargetMargin / 100);
                         onUpdateProductPricing(p.namaProduk, Math.round(recommended * p.porsiJual));
@@ -499,7 +523,7 @@ function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDelete
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <button onClick={(e) => { e.stopPropagation(); if (window.confirm(`Hapus produk "${p.namaProduk}"?`)) onDeleteProduct(p.namaProduk); }}
+                        <button onClick={(e) => { e.stopPropagation(); showConfirm({ title: "Hapus Produk", message: `Hapus produk "${p.namaProduk}"?`, confirmLabel: "Hapus", cancelLabel: "Batal", variant: "danger", onConfirm: () => onDeleteProduct(p.namaProduk), }); }}
                           className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-100 transition cursor-pointer">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -623,9 +647,20 @@ function SubstitusiSection({ bahanBaku, detailResep, calculatedProducts, formatC
     if (bahan) setSubstituteSatuan(bahan.satuan);
   }, [subOriginalBahan, bahanBaku]);
 
-  const handleApplySubstitution = () => {
+  const handleApplySubstitution = async () => {
     if (!subOriginal || substituteUnitPrice <= 0) return;
-    if (!window.confirm(`Terapkan perubahan harga untuk "${subOriginal.nama}"?\n\nHarga Satuan: ${formatCurrency(oldSatuanPrice)} → ${formatCurrency(newSatuanPrice)}\nKemasan: ${subOriginal.isiKemasan} ${subOriginal.satuan} → ${substitutePackQty} ${substituteSatuan}\n\n${subAffected.length} produk akan terdampak.`)) return;
+    const confirmed_628 = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: `Terapkan perubahan harga untuk "${subOriginal.nama}"?\n\nHarga Satuan: ${formatCurrency(oldSatuanPrice)} → ${formatCurrency(newSatuanPrice)}\nKemasan: ${subOriginal.isiKemasan} ${subOriginal.satuan} → ${substitutePackQty} ${substituteSatuan}\n\n${subAffected.length} produk akan terdampak.`,
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!confirmed_628) return;
 
     if (onEditMaterial) {
       const updated: BahanBaku = {

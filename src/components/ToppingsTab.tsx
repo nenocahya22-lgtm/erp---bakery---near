@@ -133,7 +133,7 @@ export default function ToppingsTab({ toppings, productHpp, bahanBaku, onAddTopp
           Total Nilai: {formatCurrency(totalToppingValue)}
         </span>
         <span className="text-gray-300">|</span>
-        <span>{productHpp.length} Produk dapat dikaitkan</span>
+        <span>{productHpp.filter(p => p.status !== 'draft').length} Produk dapat dikaitkan</span>
       </div>
 
       {/* FILTER + SEARCH */}
@@ -154,7 +154,7 @@ export default function ToppingsTab({ toppings, productHpp, bahanBaku, onAddTopp
           className="px-3 py-2 text-xs border border-gray-200 rounded-xl bg-white font-medium"
         >
           <option value="semua">Semua Produk</option>
-          {productHpp.map(p => (
+          {productHpp.filter(p => p.status !== 'draft').map(p => (
             <option key={p.namaProduk} value={p.namaProduk}>{p.namaProduk}</option>
           ))}
         </select>
@@ -201,7 +201,7 @@ export default function ToppingsTab({ toppings, productHpp, bahanBaku, onAddTopp
                       <span className="font-bold text-indigo-700">🌐 Semua Produk (global)</span>
                     </label>
                     <div className="border-t border-gray-100" />
-                    {productHpp.map(p => {
+                    {productHpp.filter(p => p.status !== 'draft').map(p => {
                       const checked = selectedProdukList.includes(p.namaProduk);
                       return (
                         <label key={p.namaProduk} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-indigo-50 cursor-pointer text-xs">
@@ -332,7 +332,7 @@ export default function ToppingsTab({ toppings, productHpp, bahanBaku, onAddTopp
                   <td className="px-4 py-3 text-center">
                     <button
                       onClick={() => {
-                        if (window.confirm(`Hapus topping "${t.namaTopping}"?`)) onDeleteTopping(t.id);
+                        showConfirm({ title: "Hapus Topping", message: `Hapus topping "${t.namaTopping}"?`, confirmLabel: "Hapus", cancelLabel: "Batal", variant: "danger", onConfirm: () => onDeleteTopping(t.id), });
                       }}
                       className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 cursor-pointer transition-colors"
                     >

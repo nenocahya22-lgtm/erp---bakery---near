@@ -110,7 +110,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
   const todayRevenue = todayOrders.reduce((sum, o) => sum + o.totalSum, 0);
   const completedOrders = todayOrders.filter(o => o.status === 'Completed');
 
-  const handleCreatePOSOrder = (e: React.FormEvent) => {
+  const handleCreatePOSOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProduct) { alert('Silakan pilih produk terlebih dahulu!'); return; }
 
@@ -119,12 +119,17 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
       r => r.namaProduk.toLowerCase().trim() === selectedProduct.toLowerCase().trim()
     );
     if (!hasRecipe) {
-      const confirmNoRecipe = window.confirm(
-        `⚠️ "${selectedProduct}" BELUM punya resep (BOM)!\n\n` +
-        `Stok bahan baku TIDAK akan terpotong secara otomatis.\n` +
-        `HPP dan laporan keuangan bisa menjadi tidak akurat.\n\n` +
-        `Tetap jual produk ini?`
-      );
+      const confirmNoRecipe = await new Promise<boolean>((resolve) => {
+        showConfirm({
+          title: 'Konfirmasi',
+          message: `⚠️ "${selectedProduct}" BELUM punya resep (BOM)!\n\nStok bahan baku TIDAK akan terpotong secara otomatis.\nHPP dan laporan keuangan bisa menjadi tidak akurat.\n\nTetap jual produk ini?`,
+          confirmLabel: 'Ya',
+          cancelLabel: 'Batal',
+          variant: 'warning',
+          onConfirm: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+      });
       if (!confirmNoRecipe) return;
     }
 
@@ -191,8 +196,19 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
     alert(`✅ End Shift — ${name}\n\nTotal Pendapatan: ${formatCurrency(log.totalRevenue)}\nTotal Transaksi: ${log.totalOrders}\n\nShift telah dicatat. Pesanan tetap tersimpan.`);
   };
 
-  const handleEndDay = () => {
-    if (!window.confirm('AKHIRI HARI? Semua transaksi hari ini akan diarsipkan. Stok tidak akan di-reset. Lanjutkan?')) return;
+  const handleEndDay = async () => {
+    const confirmed_195 = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: 'AKHIRI HARI? Semua transaksi hari ini akan diarsipkan. Stok tidak akan di-reset. Lanjutkan?',
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!confirmed_195) return;
     const todayActive = orders.filter(o => o.date === today);
     const log: ShiftLog = {
       id: `day-${Date.now()}`,

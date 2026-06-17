@@ -59,7 +59,7 @@ async function loadFromFirestore<T>(key: CollectionKey): Promise<T[] | null> {
     if (!snap.exists()) return null;
     const data = snap.data() as ErpDoc<T>;
     if (data.lastUpdated) {
-      lastSynced[key] = (data.lastUpdated as any).toMillis?.() || Date.now();
+      lastSynced[key] = data.lastUpdated.toMillis?.() || Date.now();
     }
     return data.items || [];
   } catch (err) {
@@ -79,7 +79,7 @@ function listenFirestore<T>(
       if (!snap.exists()) return;
 
       const data = snap.data() as ErpDoc<T>;
-      const remoteTime = (data.lastUpdated as any)?.toMillis?.() || 0;
+      const remoteTime = data.lastUpdated?.toMillis?.() || 0;
       const localTime = lastSynced[key] || 0;
 
       // Hanya terapkan jika remote data lebih baru dari cooldown lokal

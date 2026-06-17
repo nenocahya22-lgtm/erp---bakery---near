@@ -54,8 +54,20 @@ export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDa
     setNewExpAmount('');
   };
 
-  const deleteExpense = (id: string) => {
-    if (window.confirm('Hapus item biaya ini?')) {
+  const deleteExpense = async (id: string) => {
+    const confirmed_58 = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: 'Hapus item biaya ini?',
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (confirmed_58) {
+
       setExpenseItems(prev => prev.filter(item => item.id !== id));
     }
   };

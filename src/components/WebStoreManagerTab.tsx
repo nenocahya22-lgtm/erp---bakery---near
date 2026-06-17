@@ -70,7 +70,17 @@ const formatCurrency = (val: number) =>
 
 export default function WebStoreManagerTab({ productHpp, calculatedProducts, bahanBaku, detailResep, cabangList, onImportProduct }: Props) {
   const [config, setConfig] = useState<WebStoreConfig>(() => {
-    return safeGetLocalStorage<WebStoreConfig | null>(STORAGE_KEY, null) || createDefaultWebStoreConfig(productHpp);
+    const saved = safeGetLocalStorage<WebStoreConfig | null>(STORAGE_KEY, null);
+    if (saved) {
+      // Merge kategori dari shared store (single source of truth)
+      const shared = getSharedCategories();
+      if (shared.categories.length > 0) {
+        saved.categories = shared.categories;
+        saved.categoryIcons = shared.categoryIcons;
+      }
+      return saved;
+    }
+    return createDefaultWebStoreConfig(productHpp.filter(p => p.status !== 'draft'));
   });
 
   const [activeSection, setActiveSection] = useState<string>('identity');
@@ -224,6 +234,7 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
     setConfig(prev => {
       const existingNames = new Set(prev.products.map(p => p.productName));
       const newFromHpp = productHpp
+        .filter(p => p.status !== 'draft')
         .filter(p => !existingNames.has(p.namaProduk))
         .map(p => ({
           productName: p.namaProduk,
@@ -279,7 +290,7 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
     setIsSyncing(true);
     try {
       const cabangId = config.cabangId || 'pusat';
-      const count = await syncProductsToFirestore(calculatedProducts, productHpp, detailResep, bahanBaku, cabangId);
+      const count = await syncProductsToFirestore(calculatedProducts, productHpp.filter(p => p.status !== 'draft'), detailResep, bahanBaku, cabangId);
       setLastSynced(new Date().toLocaleTimeString('id-ID'));
       await fetchFirestoreProducts();
       showToast(`✅ ${count} produk + kategori berhasil disinkronisasi ke Firestore! Web Store akan update.`, 'success');
@@ -1172,6 +1183,32 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
             </div>
           </div>
 
+          {/* Made-to-Order Mode */}
+          <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 mb-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-black text-amber-900">🛵 Mode Made-to-Order</h4>
+                <p className="text-[10px] text-amber-700">Sembunyikan stok, tampilkan sebagai katalog pre-order</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" checked={config.madeToOrder} onChange={e => updateConfig({ madeToOrder: e.target.checked })} className="sr-only peer" />
+                <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-600"></div>
+              </label>
+            </div>
+            {config.madeToOrder && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[9px] font-bold text-amber-800 block mb-0.5">Label Pre-Order</label>
+                  <input className="text-xs p-2 border border-amber-300 rounded-lg w-full bg-white" value={config.preOrderLabel} onChange={e => updateConfig({ preOrderLabel: e.target.value })} placeholder="Pre-Order — Produksi Setiap Hari" />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold text-amber-800 block mb-0.5">Badge Produk</label>
+                  <input className="text-xs p-2 border border-amber-300 rounded-lg w-full bg-white" value={config.preOrderBadge} onChange={e => updateConfig({ preOrderBadge: e.target.value })} placeholder="MADE-TO-ORDER" />
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
             {config.products.map((p, idx) => (
               <div key={p.productName} className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
@@ -1769,11 +1806,17 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
               {/* Products */}
               <div className="p-4">
                 <h3 className="text-xs font-bold text-gray-800 mb-3">{config.productGridTitle || 'Pilihan Hari Ini'}</h3>
+                {config.madeToOrder && config.preOrderLabel && (
+                  <p className="text-[8px] text-amber-700 font-bold mb-2 -mt-2">{config.preOrderLabel}</p>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   {config.products.filter(p => p.active).slice(0, 4).map(p => (
                     <div key={p.productName} className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
-                      <div className="w-full h-20 rounded-lg bg-white border border-slate-100 flex items-center justify-center overflow-hidden">
+                      <div className="relative w-full h-20 rounded-lg bg-white border border-slate-100 flex items-center justify-center overflow-hidden">
                         {p.displayImage ? <img src={p.displayImage} alt={p.productName} className="w-full h-full object-cover" /> : <ShoppingBag className="w-6 h-6 text-slate-300" />}
+                        {config.madeToOrder && (
+                          <span className="absolute top-1 left-1 text-[6px] font-black uppercase bg-amber-600 text-white px-1 py-0.5 rounded-sm leading-tight">{config.preOrderBadge || 'MADE-TO-ORDER'}</span>
+                        )}
                       </div>
                       <p className="text-[10px] font-bold text-gray-800 mt-1.5 truncate">{p.productName}</p>
                       {(() => {

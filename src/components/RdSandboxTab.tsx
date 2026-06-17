@@ -296,7 +296,7 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
                   <h3 className="text-sm font-bold text-gray-900">{activeExp.projectName}</h3>
                   <p className="text-[10px] text-gray-500">Dibuat: {activeExp.dateCreated}</p>
                 </div>
-                <button onClick={() => { if (window.confirm(`Hapus "${activeExp.projectName}"?`)) onDeleteRD(activeExp.id); }}
+                <button onClick={() => { showConfirm({ title: "Hapus Project", message: `Hapus "${activeExp.projectName}"?`, confirmLabel: "Hapus", cancelLabel: "Batal", variant: "danger", onConfirm: () => onDeleteRD(activeExp.id), }); }}
                   className="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 cursor-pointer">
                   <Trash2 className="w-4 h-4" />
                 </button>

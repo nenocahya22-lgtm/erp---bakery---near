@@ -7,6 +7,7 @@ interface ComplianceSafetyTabProps {
   productHpp: ProductHpp[];
   onAddWasteLog?: (log: { id: string; bahanNama: string; qtyWasted: number; satuan: string; lossValue: number; location: string; reason: string; dateLogged: string }) => void;
   cabangList?: { id: string; nama: string }[];
+  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel: () => void }) => void;
 }
 
 interface BatchItem {
@@ -20,7 +21,7 @@ interface BatchItem {
   status: 'aman' | 'expired' | 'hampir_expired' | 'recall_temp';
 }
 
-export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangList = [] }: ComplianceSafetyTabProps) {
+export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangList = [], showConfirm }: ComplianceSafetyTabProps) {
   // ─── BATCH & EXPIRED TRACKING ───
   const [batchItems, setBatchItems] = useState<BatchItem[]>(() =>
     safeGetLocalStorage<BatchItem[]>('compliance_batch_items', [])
@@ -76,7 +77,7 @@ export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangL
   }, [batchItems]);
 
   // Auto waste expired items — sync with global waste system
-  const handleAutoWasteExpired = () => {
+  const handleAutoWasteExpired = async () => {
     const expired = batchItems.filter(item => {
       const expDate = new Date(item.expiredDate);
       const now = new Date();
@@ -88,9 +89,18 @@ export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangL
       return;
     }
 
-    if (!window.confirm(`Auto-waste ${expired.length} bahan yang sudah expired?\n\nBahan akan otomatis masuk ke log waste dengan keterangan "Expired - Recall Pangan".`)) {
-      return;
-    }
+    const confirmed = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: `Auto-waste ${expired.length} bahan yang sudah expired?\n\nBahan akan otomatis masuk ke log waste dengan keterangan "Expired - Recall Pangan".`,
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!confirmed) return;
 
     // Add to auto waste log
     const newWasteEntries = expired.map(item => ({
@@ -154,8 +164,19 @@ export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangL
     showLocalToast(`Batch ${newItem.batchCode} untuk ${newItem.bahanNama} terdaftar!`, 'success');
   };
 
-  const handleDeleteBatch = (id: string) => {
-    if (!window.confirm('Hapus batch ini?')) return;
+  const handleDeleteBatch = async (id: string) => {
+    const confirmed_158 = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: 'Hapus batch ini?',
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!confirmed_158) return;
     setBatchItems(prev => prev.filter(b => b.id !== id));
   };
 
@@ -614,10 +635,21 @@ export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangL
 
         <div className="flex flex-wrap gap-2">
           {recallTempCount > 0 && (
-            <button onClick={() => {
+            <button onClick={async () => {
               const flagged = batchItems.filter(b => b.status === 'recall_temp');
               if (flagged.length === 0) { alert('✅ Tidak ada batch recall suhu.'); return; }
-              if (!window.confirm(`Recall ${flagged.length} batch yang ditandai Recall Suhu?\n\nBatch akan dihapus dan masuk ke Auto Waste Log.`)) return;
+              const confirmed_620 = await new Promise<boolean>((resolve) => {
+                showConfirm({
+                  title: 'Konfirmasi',
+                  message: `Recall ${flagged.length} batch yang ditandai Recall Suhu?\n\nBatch akan dihapus dan masuk ke Auto Waste Log.`,
+                  confirmLabel: 'Ya',
+                  cancelLabel: 'Batal',
+                  variant: 'warning',
+                  onConfirm: () => resolve(true),
+                  onCancel: () => resolve(false),
+                });
+              });
+              if (!confirmed_620) return;
               const newWasteEntries = flagged.map(item => ({
                 batchId: item.id,
                 bahanNama: item.bahanNama,
@@ -633,13 +665,25 @@ export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangL
               <Thermometer className="w-3.5 h-3.5" /> Recall {recallTempCount} Batch Suhu
             </button>
           )}
-          <button onClick={() => {
+          <button onClick={async () => {
             const expired = batchItems.filter(b => getDaysLeft(b.expiredDate) <= 0);
             if (expired.length === 0) {
               alert('✅ Tidak ada batch expired yang perlu di-recall.');
               return;
             }
-            if (window.confirm(`Recall ${expired.length} batch expired?\n\nSemua batch expired akan ditandai untuk recall dan masuk ke Waste Log.`)) {
+            const confirmed_642 = await new Promise<boolean>((resolve) => {
+              showConfirm({
+                title: 'Konfirmasi',
+                message: `Recall ${expired.length} batch expired?\n\nSemua batch expired akan ditandai untuk recall dan masuk ke Waste Log.`,
+                confirmLabel: 'Ya',
+                cancelLabel: 'Batal',
+                variant: 'warning',
+                onConfirm: () => resolve(true),
+                onCancel: () => resolve(false),
+              });
+            });
+            if (confirmed_642) {
+
               const newWasteEntries = expired.map(item => ({
                 batchId: item.id,
                 bahanNama: item.bahanNama,
@@ -655,8 +699,20 @@ export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangL
             className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition cursor-pointer">
             <AlertTriangle className="w-3.5 h-3.5 inline mr-1" /> Recall Batch Expired
           </button>
-          <button onClick={() => {
-            if (window.confirm('Hapus semua Auto Waste Log?')) {
+          <button onClick={async () => {
+            const confirmed_659 = await new Promise<boolean>((resolve) => {
+              showConfirm({
+                title: 'Konfirmasi',
+                message: 'Hapus semua Auto Waste Log?',
+                confirmLabel: 'Ya',
+                cancelLabel: 'Batal',
+                variant: 'warning',
+                onConfirm: () => resolve(true),
+                onCancel: () => resolve(false),
+              });
+            });
+            if (confirmed_659) {
+
               setAutoWasteLog([]);
               showLocalToast('Waste log dihapus.', 'info');
             }

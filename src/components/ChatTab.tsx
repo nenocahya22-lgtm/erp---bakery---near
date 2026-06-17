@@ -201,7 +201,18 @@ export default function ChatTab() {
   };
 
   const handleDeleteRoom = async (roomId: string) => {
-    if (!window.confirm('Hapus seluruh percakapan ini?')) return;
+    const confirmed_204 = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: 'Hapus seluruh percakapan ini?',
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!confirmed_204) return;
     try {
       const msgsSnap = await getDoc(doc(db, 'chats', roomId));
       if (msgsSnap.exists()) {

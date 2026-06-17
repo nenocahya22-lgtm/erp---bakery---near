@@ -23,6 +23,7 @@ interface BranchDashboardProps {
   onUpdateSuratOrder: (id: string, so: SuratOrder) => void;
   onCompletePOSSale: (productName: string, soldQty: number, totalRevenue: number, source?: string, cabangId?: string) => void;
   onAddOpnameDraft: (cabangId: string, cabangNama: string, bahanNama: string, stokFisik: number, stokTeoritis: number, satuan: string, petugas: string) => void;
+  onProductionComplete: (productName: string, batchQty: number) => void;
   onLogout: () => void;
 }
 
@@ -30,7 +31,7 @@ export default function BranchDashboard({
   cabang, bahanBaku, suratOrders, productHpp, detailResep,
   calculatedProducts, wasteLogs, cabangStok, branchTransactions,
   onAddWasteLog, onDeleteWasteLog,
-  onAddSuratOrder, onUpdateSuratOrder, onCompletePOSSale, onAddOpnameDraft, onLogout,
+  onAddSuratOrder, onUpdateSuratOrder, onCompletePOSSale, onAddOpnameDraft, onProductionComplete, onLogout,
 }: BranchDashboardProps) {
   const [activeModul, setActiveModul] = useState<'pos' | 'minta' | 'so' | 'waste' | 'laporan' | 'planner' | 'prodcenter'>('pos');
 
@@ -59,6 +60,56 @@ export default function BranchDashboard({
   const [woProd, setWoProd] = useState('');
   const [woBatch, setWoBatch] = useState(1);
   const [woNotes, setWoNotes] = useState('');
+
+  // ─── BAKING LOG STATE ───
+  const [bakingLogs, setBakingLogs] = useState<{
+    id: string; date: string; productName: string; batchQty: number;
+    doughTemp: number; ovenTemp: number; startTime: string; endTime: string;
+    notes: string; cabangId?: string;
+  }[]>(() => {
+    return safeGetLocalStorage<{
+      id: string; date: string; productName: string; batchQty: number;
+      doughTemp: number; ovenTemp: number; startTime: string; endTime: string;
+      notes: string; cabangId?: string;
+    }[]>('production_baking_logs', []);
+  });
+  const [showBakingLogModal, setShowBakingLogModal] = useState(false);
+  const [blProduct, setBlProduct] = useState('');
+  const [blBatch, setBlBatch] = useState(1);
+  const [blDoughTemp, setBlDoughTemp] = useState('26');
+  const [blOvenTemp, setBlOvenTemp] = useState('180');
+  const [blStart, setBlStart] = useState(new Date().toTimeString().substring(0, 5));
+  const [blEnd, setBlEnd] = useState('');
+  const [blNotes, setBlNotes] = useState('');
+
+  const handleAddBakingLog = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!blProduct) return;
+    const log = {
+      id: `bl-${cabang.id}-${Date.now()}`,
+      date: new Date().toISOString().substring(0, 10),
+      productName: blProduct,
+      batchQty: blBatch,
+      doughTemp: parseFloat(blDoughTemp) || 0,
+      ovenTemp: parseFloat(blOvenTemp) || 0,
+      startTime: blStart,
+      endTime: blEnd,
+      notes: blNotes.trim(),
+      cabangId: cabang.id,
+    };
+    const updated = [log, ...bakingLogs].slice(0, 100);
+    setBakingLogs(updated);
+    localStorage.setItem('production_baking_logs', JSON.stringify(updated));
+    onProductionComplete(blProduct, blBatch);
+    setShowBakingLogModal(false);
+    setBlProduct('');
+    setBlBatch(1);
+    setBlDoughTemp('26');
+    setBlOvenTemp('180');
+    setBlStart(new Date().toTimeString().substring(0, 5));
+    setBlEnd('');
+    setBlNotes('');
+  };
 
   // ─── HELPERS ───
   const branchSOs = suratOrders.filter(s => s.cabangId === cabang.id);
@@ -488,7 +539,7 @@ export default function BranchDashboard({
               </h3>
               <p className="text-[10px] text-gray-400">Masukkan jumlah produksi yang direncanakan hari ini.</p>
               <div className="space-y-3">
-                {productHpp.map(p => (
+                {productHpp.filter(p => p.status !== 'draft').map(p => (
                   <div key={p.namaProduk} className="flex items-center gap-3">
                     <span className="text-xs font-semibold text-gray-700 flex-1 truncate">{p.namaProduk}</span>
                     <input type="number" min="0"
@@ -503,7 +554,7 @@ export default function BranchDashboard({
                     </select>
                   </div>
                 ))}
-                {productHpp.length === 0 && (
+                {productHpp.filter(p => p.status !== 'draft').length === 0 && (
                   <p className="text-xs text-gray-400 text-center py-4">Belum ada produk. Buat resep dulu.</p>
                 )}
               </div>
@@ -584,7 +635,7 @@ export default function BranchDashboard({
                 <Clock className="w-4 h-4 text-emerald-600" /> Jadwal Produksi Hari Ini
               </h3>
               <div className="space-y-2">
-                {productHpp.slice(0, 5).map(p => {
+                {productHpp.filter(p => p.status !== 'draft').slice(0, 5).map(p => {
                   const calcProd = calculatedProducts.find(c => c.namaProduk === p.namaProduk);
                   const margin = calcProd?.marginPersen || 0;
                   return (
@@ -598,7 +649,7 @@ export default function BranchDashboard({
                     </div>
                   );
                 })}
-                {productHpp.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Belum ada produk.</p>}
+                {productHpp.filter(p => p.status !== 'draft').length === 0 && <p className="text-xs text-gray-400 text-center py-4">Belum ada produk.</p>}
               </div>
             </div>
 
@@ -621,7 +672,7 @@ export default function BranchDashboard({
                     <select value={woProd} onChange={e => setWoProd(e.target.value)}
                       className="w-full border border-gray-200 rounded-lg p-2.5">
                       <option value="">-- Pilih Produk --</option>
-                      {productHpp.map(p => <option key={p.namaProduk} value={p.namaProduk}>{p.namaProduk}</option>)}
+                      {productHpp.filter(p => p.status !== 'draft').map(p => <option key={p.namaProduk} value={p.namaProduk}>{p.namaProduk}</option>)}
                     </select>
                     {woProd && (
                       <>
@@ -660,11 +711,110 @@ export default function BranchDashboard({
                         </button>
                       </>
                     )}
-                  </div>
-                );
-              })()}
+                    </div>
+                    );
+                  })()}
+                </div>
+
+            {/* Catat Produksi */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                  <Thermometer className="w-4 h-4 text-emerald-600" /> Catat Produksi
+                </h3>
+                <button onClick={() => setShowBakingLogModal(true)}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-xl transition cursor-pointer">
+                  + Catat Batch
+                </button>
+              </div>
+              {bakingLogs.filter(l => l.cabangId === cabang.id).length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-3">Belum ada catatan produksi.</p>
+              ) : (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {bakingLogs.filter(l => l.cabangId === cabang.id).slice(0, 10).map(log => (
+                    <div key={log.id} className="flex items-center justify-between p-2 border border-gray-100 rounded-lg">
+                      <div>
+                        <span className="text-xs font-semibold text-gray-900">{log.productName}</span>
+                        <span className="text-[10px] text-gray-400 ml-2">{log.batchQty}x</span>
+                      </div>
+                      <span className="text-[10px] text-gray-400 font-mono">{log.date} {log.startTime}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
+
+            {/* Modal Catat Produksi */}
+            {showBakingLogModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setShowBakingLogModal(false)}>
+                <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
+                  <h3 className="text-sm font-bold text-gray-900 mb-4">📝 Catat Batch Produksi</h3>
+                  <form onSubmit={handleAddBakingLog} className="space-y-3 text-xs">
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Produk</label>
+                      <select value={blProduct} onChange={e => setBlProduct(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg p-2.5" required>
+                        <option value="">-- Pilih Produk --</option>
+                        {productHpp.filter(p => p.status !== 'draft').map(p => <option key={p.namaProduk} value={p.namaProduk}>{p.namaProduk}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="flex-1">
+                        <label className="block font-semibold text-gray-700 mb-1">Batch Qty</label>
+                        <input type="number" min="0.5" step="0.5" value={blBatch}
+                          onChange={e => setBlBatch(parseFloat(e.target.value) || 1)}
+                          className="w-full border border-gray-200 rounded-lg p-2.5" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-gray-700 mb-1">Suhu Adonan (°C)</label>
+                        <input type="number" value={blDoughTemp}
+                          onChange={e => setBlDoughTemp(e.target.value)}
+                          className="w-full border border-gray-200 rounded-lg p-2.5" />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-gray-700 mb-1">Suhu Oven (°C)</label>
+                        <input type="number" value={blOvenTemp}
+                          onChange={e => setBlOvenTemp(e.target.value)}
+                          className="w-full border border-gray-200 rounded-lg p-2.5" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-gray-700 mb-1">Mulai</label>
+                        <input type="time" value={blStart}
+                          onChange={e => setBlStart(e.target.value)}
+                          className="w-full border border-gray-200 rounded-lg p-2.5" />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-gray-700 mb-1">Selesai</label>
+                        <input type="time" value={blEnd}
+                          onChange={e => setBlEnd(e.target.value)}
+                          className="w-full border border-gray-200 rounded-lg p-2.5" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Catatan</label>
+                      <textarea value={blNotes} onChange={e => setBlNotes(e.target.value)}
+                        placeholder="Suhu akhir, tekstur, dll..."
+                        className="w-full border border-gray-200 rounded-lg p-2.5 text-xs h-16 resize-none" />
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <button type="button" onClick={() => setShowBakingLogModal(false)}
+                        className="flex-1 px-3 py-2.5 border border-gray-200 text-gray-600 font-bold rounded-xl text-xs transition cursor-pointer">
+                        Batal
+                      </button>
+                      <button type="submit"
+                        className="flex-1 px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition cursor-pointer">
+                        ✅ Simpan Produksi
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+              </div>
         )}
 
         {/* ─── LAPORAN ─── */}
@@ -757,7 +907,7 @@ export default function BranchDashboard({
                       </div>
                       {so.status === 'dikirim' ? (
                         <button
-                          onClick={() => {
+                          onClick={async () => {
                             const newItems = so.items.map(item => {
                               const input = window.prompt(`Jumlah "${item.bahanNama}" yang diterima (dikirim: ${item.qty}):`, String(item.qty));
                               if (input === null) return null;
@@ -765,7 +915,19 @@ export default function BranchDashboard({
                               return { ...item, qtyTerima: Math.max(0, qtyTerima) };
                             });
                             if (newItems.some(i => i === null)) return;
-                            if (window.confirm('Konfirmasi penerimaan barang? Stok cabang akan bertambah sesuai jumlah yang diterima.')) {
+                            const confirmed_918 = await new Promise<boolean>((resolve) => {
+                              showConfirm({
+                                title: 'Konfirmasi',
+                                message: 'Konfirmasi penerimaan barang? Stok cabang akan bertambah sesuai jumlah yang diterima.',
+                                confirmLabel: 'Ya',
+                                cancelLabel: 'Batal',
+                                variant: 'warning',
+                                onConfirm: () => resolve(true),
+                                onCancel: () => resolve(false),
+                              });
+                            });
+                            if (confirmed_918) {
+
                               onUpdateSuratOrder(so.id, { ...so, status: 'diterima', items: newItems as typeof so.items });
                             }
                           }}

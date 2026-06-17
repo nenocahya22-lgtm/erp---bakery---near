@@ -62,7 +62,7 @@ export default function ProductionPlannerTab({ productHpp, detailResep, calculat
         <div className="lg:col-span-5 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
           <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-50 pb-2">Target Produksi Hari Ini</h3>
           <div className="space-y-3">
-            {productHpp.map(p => (
+            {productHpp.filter(p => p.status !== 'draft').map(p => (
               <div key={p.namaProduk} className="flex items-center gap-3">
                 <span className="text-xs font-semibold text-gray-700 flex-1 truncate">{p.namaProduk}</span>
                 <input type="number" min="0" value={targets[p.namaProduk] || ''}
@@ -76,12 +76,12 @@ export default function ProductionPlannerTab({ productHpp, detailResep, calculat
               </select>
               </div>
             ))}
-            {productHpp.length === 0 && (
+            {productHpp.filter(p => p.status !== 'draft').length === 0 && (
               <p className="text-xs text-gray-400 text-center py-4">Belum ada produk. Buat resep dulu.</p>
             )}
           </div>
 
-          {productHpp.length > 0 && (
+          {productHpp.filter(p => p.status !== 'draft').length > 0 && (
             <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-xs space-y-1">
               <div className="flex justify-between font-bold text-emerald-800">
                 <span>Total Produk Diproduksi:</span>

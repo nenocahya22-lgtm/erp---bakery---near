@@ -152,10 +152,21 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, detailResep = [],
     setBatches(prev => prev.filter(b => b.id !== id));
   };
 
-  const handleConvertToWaste = (batch: BatchLog) => {
+  const handleConvertToWaste = async (batch: BatchLog) => {
     if (!onAddWasteLog) return;
     const confirmMsg = `Konversi batch "${batch.batchNo}" (${batch.bahanNama} ${batch.qty} ${batch.satuan}) ke Waste?\n\nBatch ini akan dihapus dari daftar dan dicatat sebagai waste.`;
-    if (!window.confirm(confirmMsg)) return;
+    const confirmed_158 = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: confirmMsg,
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!confirmed_158) return;
 
     const wasteLog: WasteLog = {
       id: `waste-${Date.now()}`,
@@ -1103,11 +1114,22 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, detailResep = [],
                           )}
                         </div>
                         {isExpired && onAddWasteLog && (
-                          <button onClick={() => {
+                          <button onClick={async () => {
                             const cabangDetails = distributions.map(d => `  • ${d.cabang?.nama || 'Unknown'}: ${d.qty} ${batch.satuan} (${d.status})`).join('\n');
                             const totalDistQty = distributions.reduce((s,d) => s + d.qty, 0);
                             const recallMsg = `⚠️ RECALL batch "${batch.batchNo}" (${batch.bahanNama})\n\nBatch ini sudah expired dan terdistribusi ke:\n${cabangDetails}\n\nTOTAL: ${totalDistQty} ${batch.satuan}\n\nKonversi semua ke Waste?`;
-                            if (!window.confirm(recallMsg)) return;
+                            const confirmed_1110 = await new Promise<boolean>((resolve) => {
+                              showConfirm({
+                                title: 'Konfirmasi',
+                                message: recallMsg,
+                                confirmLabel: 'Ya',
+                                cancelLabel: 'Batal',
+                                variant: 'warning',
+                                onConfirm: () => resolve(true),
+                                onCancel: () => resolve(false),
+                              });
+                            });
+                            if (!confirmed_1110) return;
                             // Create waste log for each cabang distribution
                             distributions.forEach(d => {
                               if (d.qty <= 0) return;

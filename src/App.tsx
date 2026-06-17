@@ -1,10 +1,6 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { useState, useEffect, useRef } from 'react';
-import { googleSignIn } from './lib/firebase';import { extractSpreadsheetId,
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import { googleSignIn } from './lib/firebase';
+import { extractSpreadsheetId,
   loadProjectDataFromSheets,
   createAndInitializeTemplates,
   saveProjectDataToSheets,
@@ -15,49 +11,40 @@ import { googleSignIn } from './lib/firebase';import { extractSpreadsheetId,
 import { calculateAllProducts } from './lib/calculations';
 import { safeGetLocalStorage } from './lib/safe-json';
 import { listenNewOrders, listenNotifications, syncProductsToFirestore, listenNewChats, listenOrderStatusChanges, getFirestoreCategories } from './lib/firestore-bridge';
-import { loadAllFromFirestore, saveAllToFirestore, listenAllChanges, ErpSyncData } from './lib/erp-firestore-sync';
-import { BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, WasteLog, Cabang, SuratOrder, BranchStock, BranchTransaction, ProductTopping, IoTDevice, OpnameDraft } from './types';
+import { saveAllToFirestore } from './lib/erp-firestore-sync';
+import { IoTDevice } from './types';
 
 import OwnerLogin from './components/OwnerLogin';
-import DashboardTab from './components/DashboardTab';
-import MaterialsTab from './components/MaterialsTab';
-import RecipesTab from './components/RecipesTab';
-import HargaHppTab from './components/HargaHppTab';
-
-// Advanced ERP Modules
-import EnterpriseDashboard from './components/EnterpriseDashboard';
+import { ConfirmModal } from './components/ConfirmModal';
+const RecipesTab = lazy(() => import('./components/RecipesTab'));
+const HargaHppTab = lazy(() => import('./components/HargaHppTab'));
+const KeuanganDashboard = lazy(() => import('./components/KeuanganDashboard'));
+const InventarisTab = lazy(() => import('./components/InventarisTab'));
 
 import WasteControlTab from './components/WasteControlTab';
-import RdSandboxTab, { RDExperiment } from './components/RdSandboxTab';
+import RdSandboxTab from './components/RdSandboxTab';
 import SmartKitchenTab from './components/SmartKitchenTab';
-import ComplianceSafetyTab from './components/ComplianceSafetyTab';
+const ComplianceSafetyTab = lazy(() => import('./components/ComplianceSafetyTab'));
 
-// New focused modules (2026 restructuring)
 import PosKasirTab from './components/PosKasirTab';
 import PesananOnlineTab from './components/PesananOnlineTab';
 import CrmMarketingTab from './components/CrmMarketingTab';
 import BomTab from './components/BomTab';
-import FefoExpiryTab from './components/FefoExpiryTab';
+const FefoExpiryTab = lazy(() => import('./components/FefoExpiryTab'));
 
 import AnggaranAlokasiTab from './components/AnggaranAlokasiTab';
-import ProductionPlannerTab from './components/ProductionPlannerTab';
-import KitchenWorkOrderTab from './components/KitchenWorkOrderTab';
-import BakerPercentageTab from './components/BakerPercentageTab';
 import BepTab from './components/BepTab';
-import DoughTemperatureTab from './components/DoughTemperatureTab';
 import BackupSystemTab from './components/BackupSystemTab';
-import LaporanKeuanganTab from './components/LaporanKeuanganTab';
-import WebStoreManagerTab from './components/WebStoreManagerTab';
+const WebStoreManagerTab = lazy(() => import('./components/WebStoreManagerTab'));
 import ChatTab from './components/ChatTab';
 import ToppingsTab from './components/ToppingsTab';
 
-// Production Center
-import ProductionCenterTab from './components/ProductionCenterTab';
+const ProductionCenterTab = lazy(() => import('./components/ProductionCenterTab'));
 
-// Multi-Cabang System
-import DataPusatTab from './components/DataPusatTab';
 import BranchLogin from './components/BranchLogin';
-import BranchDashboard from './components/BranchDashboard';
+const BranchDashboard = lazy(() => import('./components/BranchDashboard'));
+
+const DataPusatTab = lazy(() => import('./components/DataPusatTab'));
 
 import {
   AlertTriangle,
@@ -92,46 +79,71 @@ import {
   MessageSquare,
 } from 'lucide-react';
 
+import { useAuth } from './hooks/useAuth';
+import { useERPData } from './hooks/useERPData';
+import { useFirestoreSync } from './hooks/useFirestoreSync';
+
 export default function App() {
-  // Owner authentication gate
-  // ─── OWNER AUTH — VERIFIKASI GANDA (localStorage + sessionStorage) ───
-  // Session storage di-clear saat browser ditutup, mencegah akses ilegal dari sesi lama
-  const [isOwnerAuthenticated, setIsOwnerAuthenticated] = useState(() => {
-    const localAuth = localStorage.getItem('owner_authenticated') === 'true';
-    const sessionAuth = sessionStorage.getItem('owner_authenticated') === 'true';
-    const sessionToken = localStorage.getItem('owner_session_token');
-    
-    // Verifikasi: localStorage + sessionStorage + token harus valid
-    if (localAuth && sessionAuth && sessionToken) {
-      return true;
-    }
-    
-    // Jika hanya localStorage yang ada (session hilang karena browser direstart)
-    if (localAuth && !sessionAuth) {
-      // Hapus auth — minta login ulang
-      localStorage.removeItem('owner_authenticated');
-      localStorage.removeItem('owner_authenticated_at');
-      localStorage.removeItem('owner_session_token');
-    }
-    
-    return false;
+  // ─── HOOKS ───
+  const {
+    isOwnerAuthenticated,
+    branchAuth,
+    showBranchLogin,
+    showOwnerLogin,
+    setShowBranchLogin,
+    setShowOwnerLogin,
+    handleOwnerLogin,
+    handleOwnerLogout,
+    handleBranchLogin,
+    handleBranchLogout,
+  } = useAuth();
+
+  const {
+    bahanBaku, setBahanBaku,
+    productHpp, setProductHpp,
+    detailResep, setDetailResep,
+    cabangList, setCabangList,
+    suratOrders, setSuratOrders,
+    wasteLogs, setWasteLogs,
+    writeOffLogs, setWriteOffLogs,
+    rdExperiments, setRdExperiments,
+    toppings, setToppings,
+    cabangStok, setCabangStok,
+    branchTransactions, setBranchTransactions,
+    opnameDrafts, setOpnameDrafts,
+    hasUnsavedChanges, setHasUnsavedChanges,
+    spreadsheetId, setSpreadsheetId,
+    spreadsheetTitle, setSpreadsheetTitle,
+    lastAutoSaved, setLastAutoSaved,
+    toasts, setToasts, showToast,
+    calculatedProducts,
+    wasteTotalLoss, rdTotalCost,
+    bahanBakuRef, productHppRef, detailResepRef, calculatedProductsRef,
+    autoDeductedProductsRef,
+    updateBranchStock, addBranchTransaction,
+    handleAddMaterial, handleEditMaterial, handleDeleteMaterial,
+    handleAddProduct, handleUpdateProductIngredients, handleDeleteProduct, handleUpdateProductPricing,
+    handleAddVariant, handleUpdateVariant, handleDeleteVariant,
+    handleAddCabang, handleEditCabang, handleDeleteCabang,
+    handleAddSuratOrder, handleUpdateSuratOrder, handleReturSuratOrder,
+    handleAddWasteLog, handleDeleteWasteLog, handleAddWriteOff, handleDeleteWriteOff,
+    handleAddRD, handleDeleteRD,
+    handleAddTopping, handleDeleteTopping,
+    handleCompletePOSSale,
+    handleProductionComplete, handleBranchProductionComplete,
+    handleSyncStokOpname,
+    handleAddOpnameDraft, handleApproveOpname, handleRejectOpname,
+  } = useERPData();
+
+  useFirestoreSync({
+    isOwnerAuthenticated,
+    branchAuth,
+    data: { bahanBaku, productHpp, detailResep, cabangList, suratOrders, wasteLogs, writeOffLogs, rdExperiments, toppings, cabangStok, branchTransactions },
+    setters: { setBahanBaku, setProductHpp, setDetailResep, setCabangList, setSuratOrders, setWasteLogs, setWriteOffLogs, setRdExperiments, setToppings, setCabangStok, setBranchTransactions },
+    showToast,
   });
 
-  const handleOwnerLogin = () => {
-    setIsOwnerAuthenticated(true);
-  };
-
-  const handleOwnerLogout = () => {
-    localStorage.removeItem('owner_authenticated');
-    localStorage.removeItem('owner_authenticated_at');
-    localStorage.removeItem('owner_session_token');
-    sessionStorage.removeItem('owner_authenticated');
-    sessionStorage.removeItem('owner_authenticated_at');
-    sessionStorage.removeItem('owner_session_id');
-    setIsOwnerAuthenticated(false);
-  };
-
-  // Set offline/localStorage mode by default — no Firebase auth needed
+  // Set offline/localStorage mode by default
   const [user] = useState<{displayName: string; email: string; uid: string}>({
     displayName: 'Owner',
     email: 'owner@bakery.id',
@@ -141,136 +153,17 @@ export default function App() {
 
   // Connection Sheet state
   const [spreadsheetUrl, setSpreadsheetUrl] = useState('');
-  const [spreadsheetId, setSpreadsheetId] = useState<string | null>(null);
-  const [spreadsheetTitle, setSpreadsheetTitle] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const [sheetTitles, setSheetTitles] = useState<string[]>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
-
-  // Core records state — persisted to localStorage for offline mode
-  // Menggunakan safeGetLocalStorage untuk mencegah crash jika localStorage corrupted
-  const [bahanBaku, setBahanBaku] = useState<BahanBaku[]>(() =>
-    safeGetLocalStorage<BahanBaku[]>('bahan_baku_data', [])
-  );
-  const [productHpp, setProductHpp] = useState<ProductHpp[]>(() =>
-    safeGetLocalStorage<ProductHpp[]>('product_hpp_data', [])
-  );
-  const [detailResep, setDetailResep] = useState<DetailResep[]>(() =>
-    safeGetLocalStorage<DetailResep[]>('detail_resep_data', [])
-  );
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [lastAutoSaved, setLastAutoSaved] = useState<Date | null>(null);
 
-  // ─── TOPPINGS GLOBAL STATE ───
-  const [toppings, setToppings] = useState<ProductTopping[]>(() =>
-    safeGetLocalStorage<ProductTopping[]>('toppings_data', [])
-  );
-
-  // ─── DEBOUNCED LOCALSTORAGE SAVE (500ms) — mencegah jank dari JSON.stringify sinkron ───
-  // Semua state array besar (>100 item) di-debounce agar tidak lag saat mengetik di form
-  // Menggunakan setTimeout + clearTimeout pattern untuk batch perubahan cepat jadi 1 write
-  useEffect(() => {
-    const timer = setTimeout(() => localStorage.setItem('toppings_data', JSON.stringify(toppings)), 500);
-    return () => clearTimeout(timer);
-  }, [toppings]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => localStorage.setItem('bahan_baku_data', JSON.stringify(bahanBaku)), 500);
-    return () => clearTimeout(timer);
-  }, [bahanBaku]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => localStorage.setItem('product_hpp_data', JSON.stringify(productHpp)), 500);
-    return () => clearTimeout(timer);
-  }, [productHpp]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => localStorage.setItem('detail_resep_data', JSON.stringify(detailResep)), 500);
-    return () => clearTimeout(timer);
-  }, [detailResep]);
-
-  const handleAddTopping = (t: ProductTopping) => {
-    setToppings(prev => [...prev, t]);
-  };
-
-  const handleDeleteTopping = (id: string) => {
-    setToppings(prev => prev.filter(t => t.id !== id));
-  };
-
-  // ─── MULTI-CABANG STATE ───
-  const [cabangList, setCabangList] = useState<Cabang[]>(() =>
-    safeGetLocalStorage<Cabang[]>('cabang_list_data', [])
-  );
-  const [suratOrders, setSuratOrders] = useState<SuratOrder[]>(() =>
-    safeGetLocalStorage<SuratOrder[]>('surat_orders_data', [])
-  );
-  const [branchAuth, setBranchAuth] = useState<{ id: string; nama: string } | null>(() =>
-    safeGetLocalStorage<{ id: string; nama: string } | null>('branch_authenticated', null)
-  );
-
-  useEffect(() => {
-    const timer = setTimeout(() => localStorage.setItem('cabang_list_data', JSON.stringify(cabangList)), 500);
-    return () => clearTimeout(timer);
-  }, [cabangList]);
-  // ─── BRANCH STOCK & TRANSACTION TRACKING ───
-  const [cabangStok, setCabangStok] = useState<BranchStock[]>(() =>
-    safeGetLocalStorage<BranchStock[]>('cabang_stok_data', [])
-  );
-  const [branchTransactions, setBranchTransactions] = useState<BranchTransaction[]>(() =>
-    safeGetLocalStorage<BranchTransaction[]>('branch_transactions_data', [])
-  );
-
-  useEffect(() => {
-    const timer = setTimeout(() => localStorage.setItem('surat_orders_data', JSON.stringify(suratOrders)), 500);
-    return () => clearTimeout(timer);
-  }, [suratOrders]);
-  useEffect(() => {
-    const timer = setTimeout(() => localStorage.setItem('cabang_stok_data', JSON.stringify(cabangStok)), 500);
-    return () => clearTimeout(timer);
-  }, [cabangStok]);
-  useEffect(() => {
-    const timer = setTimeout(() => localStorage.setItem('branch_transactions_data', JSON.stringify(branchTransactions)), 500);
-    return () => clearTimeout(timer);
-  }, [branchTransactions]);
-
-  // Helper: update branch stock teoritis
-  const updateBranchStock = (cabangId: string, bahanNama: string, qtyChange: number, satuan: string) => {
-    setCabangStok(prev => {
-      const existing = prev.find(s => s.cabangId === cabangId && s.bahanNama === bahanNama);
-      if (existing) {
-        return prev.map(s =>
-          s.cabangId === cabangId && s.bahanNama === bahanNama
-            ? { ...s, stokTeoritis: Math.max(0, s.stokTeoritis + qtyChange), lastUpdated: new Date().toISOString() }
-            : s
-        );
-      }
-      return [...prev, {
-        cabangId,
-        bahanNama,
-        stokTeoritis: Math.max(0, qtyChange),
-        stokFisik: 0,
-        satuan,
-        lastUpdated: new Date().toISOString(),
-      }];
-    });
-  };
-
-  const addBranchTransaction = (tx: Omit<BranchTransaction, 'id'>) => {
-    setBranchTransactions(prev => [{
-      ...tx,
-      id: `btx-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`
-    }, ...prev]);
-  };
-
-  // Tabs layout — satu modul satu fitur
+  // Tabs layout
   const [activeTab, setActiveTab] = useState<
-    | 'dashboard'
-    | 'data_pusat'
-    | 'materials'
+    | 'keuangan'
+    | 'inventaris'
     | 'recipes'
     | 'hpp'
-    | 'erp_bi'
     | 'erp_waste'
     | 'erp_rd'
     | 'erp_bom'
@@ -281,101 +174,14 @@ export default function App() {
     | 'erp_anggaran_alokasi'
     | 'erp_iot'
     | 'erp_compliance'
-    | 'erp_production_planner'
-    | 'erp_work_order'
-    | 'erp_baker_pct'
-    | 'erp_bep'
-    | 'erp_dough_temp'
     | 'erp_backup'
     | 'erp_production_center'
-    | 'erp_rekap_bahan'
-    | 'erp_laporan_keuangan'
     | 'erp_toppings'
     | 'erp_webstore'
-  >('dashboard');
+  >('keuangan');
 
-  // --- Lifted States with persistent syncing back to localStorage ---
-  const [rdExperiments, setRdExperiments] = useState<RDExperiment[]>(() =>
-    safeGetLocalStorage<RDExperiment[]>('rd_experiments_data', [])
-  );
-
-  const [wasteLogs, setWasteLogs] = useState<WasteLog[]>(() =>
-    safeGetLocalStorage<WasteLog[]>('waste_logs_data', [])
-  );
-
-  const [writeOffLogs, setWriteOffLogs] = useState<WriteOffLog[]>(() =>
-    safeGetLocalStorage<WriteOffLog[]>('writeoff_logs_data', [])
-  );
-
-  // State sync effects — debounced 500ms
-  useEffect(() => {
-    const timer = setTimeout(() => localStorage.setItem('rd_experiments_data', JSON.stringify(rdExperiments)), 500);
-    return () => clearTimeout(timer);
-  }, [rdExperiments]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => localStorage.setItem('waste_logs_data', JSON.stringify(wasteLogs)), 500);
-    return () => clearTimeout(timer);
-  }, [wasteLogs]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => localStorage.setItem('writeoff_logs_data', JSON.stringify(writeOffLogs)), 500);
-    return () => clearTimeout(timer);
-  }, [writeOffLogs]);
-
-  // Handlers for state updates
-  const handleAddRD = (exp: RDExperiment) => {
-    setRdExperiments((prev) => [exp, ...prev]);
-    // Deduct bahan baku untuk R&D — eksperimen menggunakan stok real dari gudang
-    if (exp.components.length > 0) {
-      setBahanBaku(prev => prev.map(b => {
-        const used = exp.components.find(c => c.bahanName === b.nama);
-        if (used) {
-          return { ...b, isiKemasan: Math.max(0, b.isiKemasan - used.takaran) };
-        }
-        return b;
-      }));
-    }
-    showToast(`🔬 Proyek Litbang "${exp.projectName}" berhasil! Bahan terpakai: ${exp.components.length} jenis.`, 'success');
-  };
-
-  const handleDeleteRD = (id: string) => {
-    setRdExperiments((prev) => prev.filter((e) => e.id !== id));
-    showToast('Proyek Litbang dihapus.', 'info');
-  };
-
-  const handleAddWasteLog = (log: WasteLog, cabangId?: string) => {
-    setWasteLogs((prev) => [log, ...prev]);
-    // If from branch, deduct branch stock
-    if (cabangId) {
-      updateBranchStock(cabangId, log.bahanNama, -log.qtyWasted, log.satuan);
-      addBranchTransaction({
-        cabangId,
-        tipe: 'waste',
-        bahanNama: log.bahanNama,
-        qty: log.qtyWasted,
-        satuan: log.satuan,
-        tanggal: new Date().toISOString(),
-        refId: log.id,
-      });
-    }
-    showToast(`Input Waste "${log.bahanNama}" berhasil dicatat!`, 'success');
-  };
-
-  const handleDeleteWasteLog = (id: string) => {
-    setWasteLogs((prev) => prev.filter((w) => w.id !== id));
-    showToast('Pencatatan Waste dihapus.', 'info');
-  };
-
-  const handleAddWriteOff = (log: WriteOffLog) => {
-    setWriteOffLogs((prev) => [log, ...prev]);
-    showToast(`Write-off "${log.namaProduk}" dicatat!`, 'success');
-  };
-
-  const handleDeleteWriteOff = (id: string) => {
-    setWriteOffLogs((prev) => prev.filter((w) => w.id !== id));
-    showToast('Write-off dihapus.', 'info');
-  };
+  // Mobile sidebar state
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // ─── SYNC KE FIRESTORE (dari Dashboard) ───
   const handleSyncToFirestore = async () => {
@@ -398,46 +204,29 @@ export default function App() {
     setRdExperiments([]);
     setWasteLogs([]);
     setWriteOffLogs([]);
-    
+
     localStorage.removeItem('rd_experiments_data');
     localStorage.removeItem('waste_logs_data');
     localStorage.removeItem('writeoff_logs_data');
     localStorage.removeItem('stock_levels_data');
     localStorage.removeItem('toppings_data');
     localStorage.removeItem('pos_orders_data');
-    localStorage.removeItem('stock_levels_data');
     localStorage.removeItem('bahan_baku_data');
     localStorage.removeItem('product_hpp_data');
     localStorage.removeItem('detail_resep_data');
-    
-    // Juga hapus data dari Firestore cloud
+
     saveAllToFirestore({
       bahanBaku: [], productHpp: [], detailResep: [],
       cabangList: [], suratOrders: [],
       wasteLogs: [], writeOffLogs: [], rdExperiments: [],
       toppings: [], cabangStok: [], branchTransactions: [],
     }).catch(() => {});
-    
+
     setHasUnsavedChanges(true);
     showToast('Sistem Near Bakery & Co berhasil diformat steril! Semua data contoh telah dibersihkan.', 'success');
   };
 
-  // Mobile sidebar state — closable on desktop too
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-
-  // Notifications toast state
-  const [toasts, setToasts] = useState<{ id: string; message: string; type: 'success' | 'error' | 'info' | 'warning' }[]>([]);
-
-  // Show a nicely styled sliding toast message
-  const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
-    const id = Math.random().toString(36).substring(2, 9);
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 5000);
-  };
-
-  // Auto-connect to Google Sheets if a URL is already saved
+  // Auto-connect to Google Sheets
   useEffect(() => {
     const savedUrl = localStorage.getItem('spreadsheet_url');
     if (savedUrl && token) {
@@ -474,7 +263,6 @@ export default function App() {
             productHpp: currentHpp,
             detailResep: currentResep,
           }),
-          // Also sync revenue data if available
           (() => {
             try {
               const revenueData = localStorage.getItem('revenue_tracker_data');
@@ -500,7 +288,6 @@ export default function App() {
                 spreadsheetId: currentId,
                 data: { bahanBaku: currentBahan, productHpp: currentHpp, detailResep: currentResep },
               });
-              // Also queue revenue if available
               try {
                 const revenueData = localStorage.getItem('revenue_tracker_data');
                 if (revenueData) {
@@ -518,19 +305,24 @@ export default function App() {
             }
           });
       }
-    }, 5 * 60 * 1000); // 5 minutes
+    }, 5 * 60 * 1000);
 
     return () => clearInterval(interval);
   }, []);
 
-  // Connect to Google Sheets — improved with better UX & feedback
+  // Connect to Google Sheets
   const initiateGoogleConnect = async () => {
-    const choice = window.confirm(
-      'HUBUNGKAN GOOGLE SHEETS\n\n' +
-      'Pilih metode:\n\n' +
-      '• OK = Login dengan Google (akses penuh baca/tulis)\n' +
-      '• BATAL = Input URL manual (sheet harus publik)'
-    );
+    const choice = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Hubungkan Google Sheets',
+        message: 'Pilih metode:\n\n• OK = Login dengan Google (akses penuh baca/tulis)\n• BATAL = Input URL manual (sheet harus publik)',
+        confirmLabel: 'Login Google',
+        cancelLabel: 'Input URL Manual',
+        variant: 'info',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
 
     if (choice) {
       try {
@@ -562,11 +354,10 @@ export default function App() {
     }
   };
 
-  // Manual URL input fallback with clear feedback
   const tryManualConnect = () => {
     const url = window.prompt(
       'Masukkan URL Google Sheets Anda:\n\n' +
-      'Pastikan sheet diatur ke \"Anyone with the link can view\"\n' +
+      'Pastikan sheet diatur ke "Anyone with the link can view"\n' +
       'untuk akses baca.\n\n' +
       'Atau kosongkan untuk tetap mode offline (data lokal).',
       localStorage.getItem('spreadsheet_url') || ''
@@ -580,12 +371,11 @@ export default function App() {
     }
   };
 
-  // Core Connector to Google Sheets
   const handleConnect = async (authToken: string, sId: string, showSuccessToast: boolean = true) => {
     setIsConnecting(true);
     try {
       const loaded = await loadProjectDataFromSheets(authToken, sId);
-      
+
       setSheetTitles(loaded.sheetTitles);
       setBahanBaku(loaded.bahanBaku);
       setProductHpp(loaded.productHpp);
@@ -593,7 +383,6 @@ export default function App() {
       setHasUnsavedChanges(false);
       setSpreadsheetTitle('Data Resep & HPP Bisnis');
 
-      // Check if template is needed
       const hasBahan = loaded.sheetTitles.includes('Bahan Baku');
       const hasHpp = loaded.sheetTitles.includes('HPP Produk');
       const hasResep = loaded.sheetTitles.includes('Resep Detail');
@@ -613,7 +402,6 @@ export default function App() {
 
   const handleManualConnect = (url: string) => {
     if (!url) {
-      // Clear
       setSpreadsheetId(null);
       setSpreadsheetTitle('');
       setBahanBaku([]);
@@ -635,7 +423,6 @@ export default function App() {
     }
   };
 
-  // Bootstrap template tabs in spreadsheet
   const handleInitializeTemplates = async () => {
     if (!token || !spreadsheetId) return;
     setIsConnecting(true);
@@ -644,7 +431,6 @@ export default function App() {
     try {
       await createAndInitializeTemplates(token, spreadsheetId, sheetTitles);
       showToast('Berhasil menginisialisasi lembar kerja template!', 'success');
-      // Reload values
       await handleConnect(token, spreadsheetId, false);
     } catch (err: any) {
       console.error(err);
@@ -654,14 +440,19 @@ export default function App() {
     }
   };
 
-  // Synchronize internal state back to Google Sheets (MUTATION / WRITE)
   const handleSaveToSheets = async () => {
     if (!token || !spreadsheetId) return;
-
-    // MANDATORY USER CONFIRMATION
-    const confirmed = window.confirm(
-      'Apakah Anda ingin menyimpan seluruh perubahan kustom Bahan Baku, Resep, dan Margins Anda kembali ke file Google Sheets? Ini akan menimpa data baris yang ada.'
-    );
+    const confirmed = await new Promise((resolve) => {
+      showConfirm({
+        title: 'Simpan ke Google Sheets',
+        message: 'Apakah Anda ingin menyimpan seluruh perubahan kustom Bahan Baku, Resep, dan Margins Anda kembali ke file Google Sheets? Ini akan menimpa data baris yang ada.',
+        confirmLabel: 'Simpan',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
     if (!confirmed) return;
 
     setIsSaving(true);
@@ -681,540 +472,26 @@ export default function App() {
     }
   };
 
-  // State mutators for components
-  const handleAddMaterial = (m: BahanBaku) => {
-    // Validasi isiKemasan > 0 (mencegah Infinity di hargaSatuan)
-    if (m.isiKemasan <= 0) {
-      showToast('Isi kemasan harus lebih dari 0!', 'error');
-      return;
-    }
-    // Check key duplicate
-    const duplicate = bahanBaku.some((b) => b.nama.toLowerCase().trim() === m.nama.toLowerCase().trim());
-    if (duplicate) {
-      showToast(`Bahan baku "${m.nama}" sudah terdaftar!`, 'error');
-      return;
-    }
-    setBahanBaku((prev) => [...prev, m]);
-    setHasUnsavedChanges(true);
-    showToast(`Bahan Baku "${m.nama}" ditambahkan!`, 'success');
-  };
-
-  const handleEditMaterial = (oldName: string, updated: BahanBaku) => {
-    // Validasi isiKemasan > 0
-    if (updated.isiKemasan <= 0) {
-      showToast('Isi kemasan harus lebih dari 0!', 'error');
-      return;
-    }
-    setBahanBaku((prev) =>
-      prev.map((b) => (b.nama.toLowerCase().trim() === oldName.toLowerCase().trim() ? updated : b))
-    );
-
-    // Cascade name updates to DetailResep where applicable
-    setDetailResep((prev) =>
-      prev.map((r) =>
-        r.namaBahan.toLowerCase().trim() === oldName.toLowerCase().trim()
-          ? { ...r, namaBahan: updated.nama }
-          : r
-      )
-    );
-
-    setHasUnsavedChanges(true);
-    showToast(`Bahan Baku "${updated.nama}" disesuaikan!`, 'success');
-  };
-
-  const handleDeleteMaterial = (name: string) => {
-    setBahanBaku((prev) => prev.filter((b) => b.nama.toLowerCase().trim() !== name.toLowerCase().trim()));
-
-    // Cascade remove from recipes too to keep consistency
-    setDetailResep((prev) => prev.filter((r) => r.namaBahan.toLowerCase().trim() !== name.toLowerCase().trim()));
-
-    setHasUnsavedChanges(true);
-    showToast(`Bahan Baku "${name}" dihapus!`, 'info');
-  };
-
-  const handleAddProduct = (p: ProductHpp, ingredients: DetailResep[]) => {
-    setProductHpp((prev) => [...prev, p]);
-    if (ingredients.length > 0) {
-      setDetailResep((prev) => [...prev, ...ingredients]);
-    }
-    setHasUnsavedChanges(true);
-    // Auto-sync ke Firestore agar produk langsung muncul di Web Store
-    setTimeout(() => {
-      const updatedCalc = calculateAllProducts(bahanBakuRef.current, [...productHppRef.current, p], detailResepRef.current);
-      const allProducts = [...productHppRef.current, p].filter(pr => pr.status !== 'draft');
-      if (allProducts.length > 0) {
-        syncProductsToFirestore(updatedCalc, allProducts, detailResepRef.current, bahanBakuRef.current, 'pusat').catch((err) => {
-          console.warn('Auto-sync after recipe creation failed:', err);
-        });
-      }
-    }, 1000);
-    showToast(`Resep Produk "${p.namaProduk}" diformulasikan!`, 'success');
-  };
-
-  const handleUpdateProductIngredients = (
-    productName: string,
-    updatedDetails: DetailResep[],
-    porsiJual: number,
-    status?: 'draft' | 'published'
-  ) => {
-    // Update portions size + status jika diberikan
-    setProductHpp((prev) =>
-      prev.map((p) =>
-        p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
-          ? { ...p, porsiJual, ...(status ? { status } : {}) }
-          : p
-      )
-    );
-
-    // Evict and replace details for this product
-    setDetailResep((prev) => [
-      ...prev.filter((r) => r.namaProduk.toLowerCase().trim() !== productName.toLowerCase().trim()),
-      ...updatedDetails,
-    ]);
-
-    setHasUnsavedChanges(true);
-    if (status === 'published') {
-      showToast(`✅ Resep "${productName}" diterbitkan! Kini tersedia di semua modul.`, 'success');
-      // Sync ke Firestore agar muncul di Web Store
-      setTimeout(() => {
-        const publishedAll = productHppRef.current.filter(pr => pr.status !== 'draft');
-        const updatedCalc = calculateAllProducts(bahanBakuRef.current, publishedAll, detailResepRef.current);
-        syncProductsToFirestore(updatedCalc, publishedAll, detailResepRef.current, bahanBakuRef.current, 'pusat').catch(console.warn);
-      }, 500);
-    } else {
-      showToast(`Bahan resep "${productName}" diperbarui!`, 'success');
-    }
-  };
-
-  const handleDeleteProduct = (productName: string) => {
-    setProductHpp((prev) => prev.filter((p) => p.namaProduk.toLowerCase().trim() !== productName.toLowerCase().trim()));
-    setDetailResep((prev) => prev.filter((r) => r.namaProduk.toLowerCase().trim() !== productName.toLowerCase().trim()));
-    setHasUnsavedChanges(true);
-    showToast(`Produk "${productName}" dihapus!`, 'info');
-  };
-
-  const handleUpdateProductPricing = (productName: string, hargaJual: number) => {
-    setProductHpp((prev) =>
-      prev.map((p) =>
-        p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
-          ? { ...p, hargaJual }
-          : p
-      )
-    );
-    setHasUnsavedChanges(true);
-  };
-
-  // ─── VARIAN HANDLERS ───
-  const handleAddVariant = (productName: string, variant: import('./types').ProductVariant) => {
-    setProductHpp(prev => prev.map(p =>
-      p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
-        ? { ...p, variants: [...(p.variants || []), variant] }
-        : p
-    ));
-    setHasUnsavedChanges(true);
-    showToast(`Varian "${variant.name}" ditambahkan ke ${productName}!`, 'success');
-  };
-
-  const handleUpdateVariant = (productName: string, variantId: string, updates: Partial<import('./types').ProductVariant>) => {
-    setProductHpp(prev => prev.map(p =>
-      p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
-        ? {
-            ...p,
-            variants: (p.variants || []).map(v =>
-              v.id === variantId ? { ...v, ...updates } : v
-            ),
-          }
-        : p
-    ));
-    setHasUnsavedChanges(true);
-    showToast(`Varian ${productName} diperbarui!`, 'success');
-  };
-
-  const handleDeleteVariant = (productName: string, variantId: string) => {
-    setProductHpp(prev => prev.map(p =>
-      p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
-        ? { ...p, variants: (p.variants || []).filter(v => v.id !== variantId) }
-        : p
-    ));
-    setHasUnsavedChanges(true);
-    showToast(`Varian dihapus dari ${productName}!`, 'info');
-  };
-
-  const handleCompletePOSSale = (productName: string, soldQty: number, totalRevenue: number, source?: string, cabangId?: string) => {
-    // 3. Record revenue to revenue tracker (for profit distribution)
-    try {
-      const saved = localStorage.getItem('revenue_tracker_data');
-      const tracker = saved ? JSON.parse(saved) : { transactions: [], dailyTotals: {} };
-      const today = new Date().toISOString().substring(0, 10);
-      const txEntry = {
-        id: `rev-${Date.now()}`,
-        time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-        product: productName,
-        qty: soldQty,
-        amount: totalRevenue,
-        source: source || 'Walk-In POS',
-        date: today,
-      };
-      tracker.transactions.push(txEntry);
-      // Keep last 500 transactions max
-      if (tracker.transactions.length > 500) {
-        tracker.transactions = tracker.transactions.slice(-500);
-      }
-      // Update daily totals
-      if (!tracker.dailyTotals[today]) {
-        tracker.dailyTotals[today] = { total: 0, sources: {} };
-      }
-      tracker.dailyTotals[today].total += totalRevenue;
-      const src = txEntry.source;
-      if (!tracker.dailyTotals[today].sources[src]) {
-        tracker.dailyTotals[today].sources[src] = 0;
-      }
-      tracker.dailyTotals[today].sources[src] += totalRevenue;
-      localStorage.setItem('revenue_tracker_data', JSON.stringify(tracker));
-    } catch (err) {
-      console.error('Failed to record revenue:', err);
-    }
-
-    // 6. If from a branch, deduct branch stock
-    if (cabangId && source?.startsWith('POS Cabang')) {
-      const ingredientsForProduct = detailResep.filter(
-        (r) => r.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
-      );
-      const productInfo = productHpp.find(
-        (p) => p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
-      );
-      const yieldPortions = productInfo?.porsiJual || 1;
-
-      ingredientsForProduct.forEach(ing => {
-        const consumedAmount = (ing.takaran / yieldPortions) * soldQty;
-        const bahan = bahanBaku.find(b => b.nama.toLowerCase().trim() === ing.namaBahan.toLowerCase().trim());
-        updateBranchStock(cabangId, ing.namaBahan, -consumedAmount, bahan?.satuan || 'gr');
-        addBranchTransaction({
-          cabangId,
-          tipe: 'pos_jual',
-          bahanNama: ing.namaBahan,
-          qty: consumedAmount,
-          satuan: bahan?.satuan || 'gr',
-          tanggal: new Date().toISOString(),
-          refId: `pos-${Date.now()}`,
-        });
-      });
-    }
-
-    setHasUnsavedChanges(true);
-    const revStr = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(totalRevenue);
-    showToast(`Transaksi Sukses! Menjual ${soldQty} pcs "${productName}" (${revStr}).`, 'success');
-  };
-
-  // ─── PRODUCTION CENTER — Potong stok bahan baku saat baking log disimpan ───
-  const handleProductionComplete = (productName: string, batchQty: number) => {
-    const ingredientsForProduct = detailResep.filter(
-      (r) => r.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
-    );
-    if (ingredientsForProduct.length === 0) {
-      showToast(`⚠️ Produk "${productName}" belum punya resep, stok tidak dipotong.`, 'info');
-      return;
-    }
-
-    // DOUBLE-DEDUCTION GUARD: Cek apakah produk ini sudah auto-deduct
-    const alreadyDeducted = [...autoDeductedProductsRef.current].some(
-      (p) => p.toLowerCase().trim() === productName.toLowerCase().trim()
-    );
-    if (alreadyDeducted) {
-      console.warn(`[Double-Deduction] Produk "${productName}" sudah dipotong otomatis dari Web Store!`);
-      showToast(`Stok "${productName}" sudah dipotong dari Web Store! Yakin catat produksi?`, 'warning');
-    }
-    const productInfo = productHpp.find(
-      (p) => p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
-    );
-    const yieldPortions = productInfo?.porsiJual || 1;
-
-    setBahanBaku((prev) =>
-      prev.map((b) => {
-        const ingredientUsed = ingredientsForProduct.find(
-          (ing) => ing.namaBahan.toLowerCase().trim() === b.nama.toLowerCase().trim()
-        );
-        if (ingredientUsed) {
-          const consumedAmount = (ingredientUsed.takaran / yieldPortions) * batchQty;
-          const currentUnitStock = b.isiKemasan - consumedAmount;
-          if (currentUnitStock < 50 && b.isiKemasan >= 50) {
-            showToast(`⚠️ Stok ${b.nama} menipis (sisa ~${Math.round(currentUnitStock)} ${b.satuan}) — segera order!`, 'info');
-          }
-          return { ...b, isiKemasan: Math.max(0, Number(currentUnitStock.toFixed(2))) };
-        }
-        return b;
-      })
-    );
-    setHasUnsavedChanges(true);
-    showToast(`🏭 Produksi ${batchQty}x "${productName}" dicatat! Stok bahan baku otomatis dipotong.`, 'success');
-  };
-
-  // ─── MULTI-CABANG HANDLERS ───
-  const handleAddCabang = (c: Cabang) => {
-    const dup = cabangList.some(cb => cb.username === c.username);
-    if (dup) { showToast(`Username "${c.username}" sudah dipakai!`, 'error'); return; }
-    setCabangList(prev => [...prev, c]);
-    showToast(`Cabang "${c.nama}" berhasil didaftarkan!`, 'success');
-  };
-
-  const handleEditCabang = (id: string, c: Cabang) => {
-    setCabangList(prev => prev.map(cb => cb.id === id ? c : cb));
-    showToast(`Cabang "${c.nama}" diupdate!`, 'success');
-  };
-
-  const handleDeleteCabang = (id: string) => {
-    setCabangList(prev => prev.filter(c => c.id !== id));
-    showToast('Cabang dihapus.', 'info');
-  };
-
-  const handleAddSuratOrder = (so: SuratOrder) => {
-    setSuratOrders(prev => [so, ...prev]);
-
-    if (so.status === 'dikirim') {
-      // Owner langsung kirim barang → kurangi stok pusat (bahanBaku)
-      setBahanBaku(prev => prev.map(b => {
-        const item = so.items.find(i => i.bahanNama === b.nama);
-        if (item) {
-          return { ...b, isiKemasan: Math.max(0, b.isiKemasan - item.qty) };
-        }
-        return b;
-      }));
-    }
-
-    // Record branch transaction for sent goods
-    so.items.forEach(item => {
-      const bahan = bahanBaku.find(b => b.nama === item.bahanNama);
-      addBranchTransaction({
-        cabangId: so.cabangId,
-        tipe: so.status === 'dikirim' ? 'so_kirim' : 'so_minta',
-        bahanNama: item.bahanNama,
-        qty: item.qty,
-        satuan: bahan?.satuan || 'pcs',
-        tanggal: new Date().toISOString(),
-        refId: so.id,
-      });
-    });
-    const msg = so.status === 'minta' ? `Permintaan dari "${so.cabangNama}" masuk!` : `Surat Order ke "${so.cabangNama}" dikirim!`;
-    showToast(msg, 'success');
-  };
-
-  // ─── PROCESSED ORDER IDS — persist ke localStorage agar tahan refresh ───
-  // Mencegah double-processing order dari Firestore listener
+  // ─── PROCESSED ORDER IDS ───
   const processedOrderIdsRef = useRef<Set<string>>(() => {
     const saved = safeGetLocalStorage<string[]>('processed_order_ids', []);
     return new Set(saved);
   });
 
-  // Helper: add order ID dan simpan ke localStorage
   const markOrderProcessed = (orderId: string) => {
     processedOrderIdsRef.current.add(orderId);
     localStorage.setItem('processed_order_ids', JSON.stringify([...processedOrderIdsRef.current]));
   };
 
-  // Cache untuk track produk — Open PO: tidak ada auto-deduct via order
-  // Hanya Production Center yang memotong stok bahan baku
-  const autoDeductedProductsRef = useRef<Set<string>>(new Set());
-
-  // ─── CHAT NOTIFICATION — Track lastMessage untuk deteksi pesan baru ───
-  // Hanya trigger notifikasi ketika lastMessage benar-benar berubah (pesan baru)
-  // Bukan untuk chat baru (added) atau update field lain (unreadBySeller dll)
+  // ─── CHAT NOTIFICATION TRACKING ───
   const chatLastMsgRef = useRef<Map<string, string>>(new Map());
 
-  const handleUpdateSuratOrder = (id: string, so: SuratOrder) => {
-    const prevStatus = suratOrders.find(s => s.id === id)?.status;
-    setSuratOrders(prev => prev.map(s => s.id === id ? so : s));
-
-    // Guard: cegah double Terima (Bug #6 - Phantom Stock)
-    if (so.status === 'diterima' && prevStatus === 'diterima') {
-      showToast('⚠️ Surat Order ini sudah diterima sebelumnya!', 'info');
-      return;
-    }
-
-    if (so.status === 'dikirim' && prevStatus === 'minta') {
-      // Owner setujui permintaan cabang → kurangi stok pusat
-      setBahanBaku(prev => prev.map(b => {
-        const item = so.items.find(i => i.bahanNama === b.nama);
-        if (item) {
-          return { ...b, isiKemasan: Math.max(0, b.isiKemasan - item.qty) };
-        }
-        return b;
-      }));
-      showToast(`Permintaan "${so.cabangNama}" disetujui! Stok pusat berkurang.`, 'success');
-    }
-
-    if (so.status === 'diterima' && prevStatus !== 'diterima') {
-      // Cabang terima barang → tambah stok cabang (pakai qtyTerima jika ada)
-      const original = suratOrders.find(s => s.id === id);
-      const items = original?.items || so.items;
-      items.forEach(item => {
-        const actualQty = item.qtyTerima ?? item.qty; // Pakai qtyTerima jika cabang mengisi
-        const bahan = bahanBaku.find(b => b.nama === item.bahanNama);
-        updateBranchStock(so.cabangId, item.bahanNama, actualQty, bahan?.satuan || 'pcs');
-        addBranchTransaction({
-          cabangId: so.cabangId,
-          tipe: 'so_terima',
-          bahanNama: item.bahanNama,
-          qty: item.qty,
-          satuan: bahan?.satuan || 'pcs',
-          tanggal: new Date().toISOString(),
-          refId: so.id,
-        });
-      });
-      showToast(`Surat Order ke "${so.cabangNama}" diterima! Stok cabang bertambah.`, 'success');
-    }
-  };
-
-  // ─── RETUR SURAT ORDER — Barang rusak di jalan ───
-  const handleReturSuratOrder = (id: string, returNote: string) => {
-    const so = suratOrders.find(s => s.id === id);
-    if (!so) return;
-    if (!window.confirm(`Retur semua barang dari "${so.cabangNama}"?\n\nStok akan dikembalikan ke pusat.\nCatatan: ${returNote}`)) return;
-
-    // Update status SO
-    setSuratOrders(prev => prev.map(s =>
-      s.id === id ? { ...s, status: 'diretur' as const, returNote } : s
-    ));
-
-    // Kembalikan stok ke pusat (bahanBaku)
-    setBahanBaku(prev => prev.map(b => {
-      const item = so.items.find(i => i.bahanNama === b.nama);
-      if (item) {
-        return { ...b, isiKemasan: b.isiKemasan + item.qty };
-      }
-      return b;
-    }));
-
-    // Catat transaksi retur
-    so.items.forEach(item => {
-      const bahan = bahanBaku.find(b => b.nama === item.bahanNama);
-      addBranchTransaction({
-        cabangId: so.cabangId,
-        tipe: 'retur',
-        bahanNama: item.bahanNama,
-        qty: item.qty,
-        satuan: bahan?.satuan || 'pcs',
-        tanggal: new Date().toISOString(),
-        refId: so.id,
-      });
-    });
-
-    showToast(`🔄 Barang dari "${so.cabangNama}" diretur! Stok pusat dikembalikan.`, 'success');
-  };
-
-  // ─── SYNC STOCK OPNAME FROM BRANCH ───
-  const handleSyncStokOpname = (cabangId: string, bahanNama: string, stokFisik: number, satuan: string) => {
-    setCabangStok(prev => {
-      const existing = prev.find(s => s.cabangId === cabangId && s.bahanNama === bahanNama);
-      if (existing) {
-        return prev.map(s =>
-          s.cabangId === cabangId && s.bahanNama === bahanNama
-            ? { ...s, stokFisik, lastUpdated: new Date().toISOString() }
-            : s
-        );
-      }
-      return [...prev, {
-        cabangId,
-        bahanNama,
-        stokTeoritis: 0,
-        stokFisik,
-        satuan,
-        lastUpdated: new Date().toISOString(),
-      }];
-    });
-  };
-
-  // ─── OPNAME DRAFTS — Stock Opname Approval ───
-  const [opnameDrafts, setOpnameDrafts] = useState<OpnameDraft[]>(() =>
-    safeGetLocalStorage<OpnameDraft[]>('opname_drafts_data', [])
-  );
-  useEffect(() => {
-    const timer = setTimeout(() => localStorage.setItem('opname_drafts_data', JSON.stringify(opnameDrafts)), 500);
-    return () => clearTimeout(timer);
-  }, [opnameDrafts]);
-
-  const handleAddOpnameDraft = (cabangId: string, cabangNama: string, bahanNama: string, stokFisik: number, stokTeoritis: number, satuan: string, petugas: string) => {
-    // Replace existing draft for same cabang+bahan if exists
-    setOpnameDrafts(prev => {
-      const filtered = prev.filter(d => !(d.cabangId === cabangId && d.bahanNama === bahanNama && d.status === 'pending'));
-      const draft: OpnameDraft = {
-        id: `op-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-        cabangId,
-        cabangNama,
-        bahanNama,
-        stokFisik,
-        stokTeoritis,
-        satuan,
-        tanggal: new Date().toISOString(),
-        petugas,
-        status: 'pending',
-      };
-      return [...filtered, draft];
-    });
-  };
-
-  const handleApproveOpname = (draftId: string) => {
-    const draft = opnameDrafts.find(d => d.id === draftId);
-    if (!draft) return;
-    // Update cabangStok with approved stokFisik
-    setCabangStok(prev => prev.map(s =>
-      s.cabangId === draft.cabangId && s.bahanNama === draft.bahanNama
-        ? { ...s, stokFisik: draft.stokFisik, lastUpdated: new Date().toISOString() }
-        : s
-    ));
-    // Mark draft as approved
-    setOpnameDrafts(prev => prev.map(d =>
-      d.id === draftId ? { ...d, status: 'approved' as const } : d
-    ));
-    showToast(`✅ Stok opname "${draft.bahanNama}" di ${draft.cabangNama} telah disetujui!`, 'success');
-  };
-
-  const handleRejectOpname = (draftId: string, note?: string) => {
-    setOpnameDrafts(prev => prev.map(d =>
-      d.id === draftId ? { ...d, status: 'rejected' as const, rejectNote: note } : d
-    ));
-    const draft = opnameDrafts.find(d => d.id === draftId);
-    showToast(`❌ Stok opname "${draft?.bahanNama}" ditolak.`, 'info');
-  };
-
-  // ─── BRANCH AUTH HANDLERS ───
-  const handleBranchLogin = (cabang: Cabang) => {
-    setBranchAuth({ id: cabang.id, nama: cabang.nama });
-  };
-
-  const handleBranchLogout = () => {
-    localStorage.removeItem('branch_authenticated');
-    localStorage.removeItem('branch_authenticated_at');
-    setBranchAuth(null);
-  };
-
-  // Compute calculated results array of all products
-  const calculatedProducts: CalculationResult[] = calculateAllProducts(bahanBaku, productHpp, detailResep);
-
-  // Ref untuk state yang dibutuhkan di Firestore listener (mencegah stale closure serta re-subscribe tiap state berubah)
-  const bahanBakuRef = useRef(bahanBaku);
-  const productHppRef = useRef(productHpp);
-  const detailResepRef = useRef(detailResep);
-  const calculatedProductsRef = useRef(calculatedProducts);
-  useEffect(() => { bahanBakuRef.current = bahanBaku; }, [bahanBaku]);
-  useEffect(() => { productHppRef.current = productHpp; }, [productHpp]);
-  useEffect(() => { detailResepRef.current = detailResep; }, [detailResep]);
-  useEffect(() => { calculatedProductsRef.current = calculatedProducts; }, [calculatedProducts]);
-
-  // Helpers for waste & rd totals
-  const wasteTotalLoss = wasteLogs.reduce((acc, curr) => acc + curr.lossValue, 0);
-  const rdTotalCost = rdExperiments.reduce((acc, curr) => acc + curr.components.reduce((sum, c) => sum + (c.takaran * c.unitPrice), 0) + curr.estOverhead, 0);
-
   // ─── FIRESTORE LISTENER — Notifikasi Order & Chat dari Web Store ───
-  // Dipisah dari useEffect utama agar tidak re-subscribe tiap state berubah (Bug Fix #1)
-  // Semua akses state via refs (bahanBakuRef, productHppRef, dll) — lihat di atas
   useEffect(() => {
-    // Listen for new orders from web store
     const unsubOrders = listenNewOrders((order) => {
-      // Show notification toast
       const totalStr = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(order.totalAmount);
       showToast(`🛒 Pesanan Baru dari Web Store! ${order.userName} — ${totalStr} (${order.status})`, 'success');
 
-      // 🔥 Catat order ke pos_orders_data (biar muncul di Ringkasan Dashboard)
       try {
         const savedOrders = localStorage.getItem('pos_orders_data');
         const posOrders = savedOrders ? JSON.parse(savedOrders) : [];
@@ -1232,7 +509,6 @@ export default function App() {
         localStorage.setItem('pos_orders_data', JSON.stringify(posOrders));
       } catch (e) { console.warn('Failed to save pos_orders_data:', e); }
 
-      // 🔥 Catat revenue ke revenue_tracker_data (biar muncul di Ringkasan Dashboard)
       try {
         const saved = localStorage.getItem('revenue_tracker_data');
         const tracker = saved ? JSON.parse(saved) : { transactions: [], dailyTotals: {} };
@@ -1254,16 +530,9 @@ export default function App() {
         tracker.dailyTotals[today].sources['Web Store'] += order.totalAmount;
         localStorage.setItem('revenue_tracker_data', JSON.stringify(tracker));
       } catch (e) { console.warn('Failed to save revenue_tracker_data:', e); }
-      // Open PO / Restock system — stok bahan baku dipotong SAAT PRODUKSI (Production Center)
-      // Order Web Store hanya jadi trigger produksi, bukan auto-deduct stok.
-      // Lihat handleProductionComplete untuk logika potong stok.
     }, (err) => console.warn('Order listener error:', err));
 
-    // ─── LISTENER: Update status order Web Store saat pembayaran dikonfirmasi ───
-    // CATATAN: Stok bahan baku TIDAK dipotong di sini. Hanya Production Center yang memotong stok.
-    // Ini untuk mencegah double deduction (Bug #6 sebelumnya).
     const unsubStatus = listenOrderStatusChanges((order, previousStatus) => {
-      // Guard: cegah double-processing untuk order yang sudah diproses
       if (processedOrderIdsRef.current.has(order.id)) {
         console.log(`Order ${order.id.slice(-8)} sudah diproses, skip.`);
         return;
@@ -1274,19 +543,17 @@ export default function App() {
 
       const currentCalc = calculatedProductsRef.current;
 
-      // Update status order di pos_orders_data (baca fresh)
       try {
         const savedOrders = localStorage.getItem('pos_orders_data');
         if (savedOrders) {
           const posOrders = JSON.parse(savedOrders);
-          const updated = posOrders.map((p: any) => 
+          const updated = posOrders.map((p: any) =>
             p.ordId === `ws-${order.id}` ? { ...p, status: order.status } : p
           );
           localStorage.setItem('pos_orders_data', JSON.stringify(updated));
         }
       } catch (e) { /* silent */ }
 
-      // Sync produk ke Firestore (gunakan refs untuk data terbaru)
       if (currentCalc.length > 0) {
         setTimeout(() => {
           const published = productHppRef.current.filter(pr => pr.status !== 'draft');
@@ -1294,25 +561,15 @@ export default function App() {
           syncProductsToFirestore(updatedCalc, published, detailResepRef.current, bahanBakuRef.current, 'pusat').catch(console.warn);
         }, 2000);
       }
-
-      // Open PO / Restock system — TIDAK auto-deduct stok dari order Web Store
-      // Stok bahan baku hanya dipotong saat produksi (Production Center)
-      // Order ini akan menjadi trigger produksi/restock di production planner
     }, (err) => console.warn('Status change listener error:', err));
 
-    // Listen for ERP notifications
     const unsubNotif = listenNotifications((notif) => {
       showToast(`📢 ${notif.title}: ${notif.body}`, 'info');
     }, (err) => console.warn('Notification listener error:', err));
 
-    // Listen for new chat messages from Web Store
-    // ─── HANYA NOTIFIKASI UNTUK PESAN BARU (lastMessage berubah) ───
-    // Tidak trigger untuk: added (chat baru), modified (update unreadBySeller dll)
-    // Hanya trigger ketika lastMessage berubah = ada pesan baru dari buyer
     const chatMsgTracker = chatLastMsgRef.current;
-    
+
     const unsubChats = listenNewChats((chat) => {
-      // Update localStorage always (utk badge unread count)
       try {
         const saved = localStorage.getItem('unread_chats_data');
         const chats = saved ? JSON.parse(saved) : [];
@@ -1330,16 +587,11 @@ export default function App() {
       const prevLastMsg = chatMsgTracker.get(chat.id);
       const currentMsg = chat.lastMessage;
 
-      // ─── DETEKSI PESAN BARU ───
-      // Notif hanya jika lastMessage berubah (ada pesan baru yang masuk)
-      // Tidak notif saat initial load (tracker masih kosong) atau update field lain
       if (prevLastMsg !== undefined && prevLastMsg !== currentMsg) {
-        // Ini pesan baru! Simpan & notifikasi
         chatMsgTracker.set(chat.id, currentMsg);
         const msgDisplay = currentMsg.length > 50 ? currentMsg.substring(0, 50) + '...' : currentMsg;
         showToast(`💬 Chat dari ${chat.buyerName}: "${msgDisplay}"`, 'info');
       } else if (prevLastMsg === undefined) {
-        // Initial load — simpan lastMessage tanpa trigger notifikasi
         chatMsgTracker.set(chat.id, currentMsg);
       }
     }, (err) => console.warn('Chat listener error:', err));
@@ -1350,27 +602,22 @@ export default function App() {
       unsubNotif();
       unsubChats();
     };
-  }, []); // <-- empty deps! Subscribe sekali, akses data via refs
+  }, []);
 
-  // ─── FIRESTORE CATEGORY PULL — Ambil kategori dari Firestore sebagai source of truth ───
-  // Saat startup, ERP menarik daftar kategori dari Firestore (web store / WebStoreManager)
-  // dan menyimpannya ke localStorage agar WebStoreManagerTab bisa mengaksesnya.
+  // ─── FIRESTORE CATEGORY PULL ───
   useEffect(() => {
     getFirestoreCategories('pusat').then(catData => {
       if (catData && catData.categories.length > 0) {
         localStorage.setItem('firestore_categories', JSON.stringify(catData.categories));
         localStorage.setItem('firestore_category_icons', JSON.stringify(catData.categoryIcons));
       }
-    }).catch(() => {/* silent — offline mode */});
+    }).catch(() => {});
   }, []);
 
-  // ─── GLOBAL IoT SIMULATION — Berjalan terus (tidak hanya saat tab Smart IoT aktif) ───
-  // Data suhu chiller/freezer disimulasikan dan disimpan ke localStorage agar ComplianceSafetyTab
-  // bisa membaca dan memicu recall otomatis jika suhu melebihi batas aman.
+  // ─── GLOBAL IoT SIMULATION ───
   const [iotDevices, setIotDevices] = useState<IoTDevice[]>([]);
-  
+
   useEffect(() => {
-    // Inisialisasi baseline sensor (read from localStorage if exists)
     const saved = safeGetLocalStorage<IoTDevice[]>('iot_device_data', []);
     if (saved.length > 0) {
       setIotDevices(saved);
@@ -1394,7 +641,6 @@ export default function App() {
         let newValue = d.value;
         const fluctuation = (Math.random() - 0.5) * 4;
         if (d.type === 'freezer') {
-          // Chiller: 0-10°C, Freezer: -25 to -10°C
           newValue = Math.round((d.value + fluctuation) * 10) / 10;
           newValue = d.value > 0 ? Math.max(0, Math.min(12, newValue)) : Math.max(-25, Math.min(-8, newValue));
         } else if (d.type === 'oven') {
@@ -1414,7 +660,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [iotDevices.length > 0]);
 
-  // Sync IoT data ke localStorage untuk ComplianceSafetyTab
   useEffect(() => {
     if (iotDevices.length > 0) {
       localStorage.setItem('iot_device_data', JSON.stringify(iotDevices));
@@ -1430,7 +675,6 @@ export default function App() {
       if (lastVisit !== today) {
         localStorage.setItem('last_visit_date', today);
 
-        // Show welcome notification after a short delay
         setTimeout(() => {
           showToast('👋 Selamat datang di Near Bakery & Co. ERP! Kelola bahan baku, resep, dan produksi roti Anda.', 'info');
         }, 500);
@@ -1457,92 +701,8 @@ export default function App() {
     }
   }, [isOwnerAuthenticated]);
 
-  // ─── FIRESTORE SYNC — Auto-load data from Firestore on login ───
-  const [firestoreLoaded, setFirestoreLoaded] = useState(false);
-
-  useEffect(() => {
-    if ((isOwnerAuthenticated || branchAuth) && !firestoreLoaded) {
-      loadAllFromFirestore().then(remoteData => {
-        // Cek apakah remoteData beneran ada isinya atau cuma array kosong
-        const hasRemoteData = remoteData !== null && (
-          remoteData.bahanBaku.length > 0 ||
-          remoteData.productHpp.length > 0 ||
-          remoteData.detailResep.length > 0 ||
-          remoteData.cabangList.length > 0 ||
-          remoteData.suratOrders.length > 0 ||
-          remoteData.wasteLogs.length > 0 ||
-          remoteData.writeOffLogs.length > 0 ||
-          remoteData.rdExperiments.length > 0 ||
-          remoteData.toppings.length > 0 ||
-          remoteData.cabangStok.length > 0 ||
-          remoteData.branchTransactions.length > 0
-        );
-
-        if (hasRemoteData) {
-          // Firestore punya data — pakai data cloud (timpa localStorage)
-          setBahanBaku(remoteData!.bahanBaku);
-          setProductHpp(remoteData!.productHpp);
-          setDetailResep(remoteData!.detailResep);
-          setCabangList(remoteData!.cabangList);
-          setSuratOrders(remoteData!.suratOrders);
-          setWasteLogs(remoteData!.wasteLogs);
-          setWriteOffLogs(remoteData!.writeOffLogs);
-          setRdExperiments(remoteData!.rdExperiments);
-          setToppings(remoteData!.toppings);
-          setCabangStok(remoteData!.cabangStok);
-          setBranchTransactions(remoteData!.branchTransactions);
-          showToast('☁️ Data tersinkron dari cloud — semua perangkat pakai data terbaru!', 'success');
-        } else {
-          // Firestore kosong atau data kosong — prioritaskan data localStorage
-          const hasLocalData = bahanBaku.length > 0 || productHpp.length > 0 || detailResep.length > 0;
-          if (hasLocalData) {
-            saveAllToFirestore({ bahanBaku, productHpp, detailResep, cabangList, suratOrders, wasteLogs, writeOffLogs, rdExperiments, toppings, cabangStok, branchTransactions }).then(() => {
-              showToast('☁️ Data lokal diunggah ke cloud — aman di semua perangkat!', 'success');
-            });
-          }
-        }
-        setFirestoreLoaded(true);
-      }).catch(err => {
-        console.warn('Firestore initial load failed (offline mode ok):', err);
-        setFirestoreLoaded(true);
-      });
-    }
-  }, [isOwnerAuthenticated, branchAuth]);
-
-  // ─── FIRESTORE AUTO-SAVE — Simpan ke Firestore setiap ada perubahan ───
-  useEffect(() => {
-    if (!firestoreLoaded) return;
-    const timer = setTimeout(() => {
-      saveAllToFirestore({ bahanBaku, productHpp, detailResep, cabangList, suratOrders, wasteLogs, writeOffLogs, rdExperiments, toppings, cabangStok, branchTransactions }).catch(() => {});
-    }, 2000); // debounce 2 detik
-    return () => clearTimeout(timer);
-  }, [bahanBaku, productHpp, detailResep, cabangList, suratOrders, wasteLogs, writeOffLogs, rdExperiments, toppings, cabangStok, branchTransactions, firestoreLoaded]);
-
-  // ─── FIRESTORE REAL-TIME LISTENER — update dari perangkat lain ───
-  useEffect(() => {
-    if (!firestoreLoaded) return;
-    const unsub = listenAllChanges({
-      onBahanBaku: (items) => { setBahanBaku(items); },
-      onProductHpp: (items) => { setProductHpp(items); },
-      onDetailResep: (items) => { setDetailResep(items); },
-      onCabangList: (items) => { setCabangList(items); },
-      onSuratOrders: (items) => { setSuratOrders(items); },
-      onWasteLogs: (items) => { setWasteLogs(items); },
-      onWriteOffLogs: (items) => { setWriteOffLogs(items); },
-      onRdExperiments: (items) => { setRdExperiments(items); },
-      onToppings: (items) => { setToppings(items); },
-      onCabangStok: (items) => { setCabangStok(items); },
-      onBranchTransactions: (items) => { setBranchTransactions(items); },
-    });
-    return () => unsub();
-  }, [firestoreLoaded]);
-
   // ─── AUTH GATE ───
-  const [showBranchLogin, setShowBranchLogin] = useState(false);
-  const [showOwnerLogin, setShowOwnerLogin] = useState(false);
-
   if (!isOwnerAuthenticated && !branchAuth) {
-    // Show login selection screen
     if (!showBranchLogin && !showOwnerLogin && cabangList.length > 0) {
       return (
         <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
@@ -1573,7 +733,7 @@ export default function App() {
     if (showOwnerLogin) {
       return <OwnerLogin onLoginSuccess={handleOwnerLogin} />;
     }
-    
+
     if (showBranchLogin) {
       return (
         <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
@@ -1581,7 +741,7 @@ export default function App() {
         </div>
       );
     }
-    
+
     return <OwnerLogin onLoginSuccess={handleOwnerLogin} />;
   }
 
@@ -1606,6 +766,7 @@ export default function App() {
           onUpdateSuratOrder={handleUpdateSuratOrder}
           onCompletePOSSale={handleCompletePOSSale}
           onAddOpnameDraft={handleAddOpnameDraft}
+          onProductionComplete={handleBranchProductionComplete}
           onLogout={handleBranchLogout}
         />
       );
@@ -1614,16 +775,16 @@ export default function App() {
 
   return (
     <div id="application-layout" className="h-screen bg-slate-100 font-sans text-gray-800 flex overflow-hidden">
-      
-      {/* MOBILE OVERLAY BACKDROP — when sidebar is open on mobile */}
+
+      {/* MOBILE OVERLAY BACKDROP */}
       {isSidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/40 z-30 md:hidden"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
-      {/* FLOATING SIDEBAR TOGGLE — when sidebar is closed, shown on all sizes */}
+      {/* FLOATING SIDEBAR TOGGLE */}
       {!isSidebarOpen && (
         <button
           onClick={() => setIsSidebarOpen(true)}
@@ -1634,15 +795,14 @@ export default function App() {
         </button>
       )}
 
-      {/* ─── MOBILE SIDEBAR (overlay, translate-based) ─── */}
+      {/* MOBILE SIDEBAR */}
       <aside className={`md:hidden fixed top-0 left-0 z-40 h-full w-72 bg-slate-900 text-slate-300 border-r border-slate-800 flex flex-col shadow-2xl transition-all duration-300 ease-in-out ${
         isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
       }`}>
-        {/* SIDEBAR CONTENT — will be rendered inside here */}
         <SidebarContent isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} activeTab={activeTab} setActiveTab={setActiveTab} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} setSpreadsheetTitle={setSpreadsheetTitle} showToast={showToast} initiateGoogleConnect={initiateGoogleConnect} handleOwnerLogout={handleOwnerLogout} />
       </aside>
 
-      {/* ─── DESKTOP SIDEBAR (push layout, width-based) ─── */}
+      {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex flex-shrink-0 bg-slate-900 text-slate-300 border-r border-slate-800 flex-col shadow-2xl transition-all duration-300 ease-in-out overflow-hidden h-full"
         style={{ width: isSidebarOpen ? 288 : 0 }}>
         <div style={{ width: 288 }} className="flex flex-col h-full">
@@ -1650,13 +810,12 @@ export default function App() {
         </div>
       </aside>
 
-      {/* MAIN WORKSPACE — flex-1, adjusts width as sidebar opens/closes */}
+      {/* MAIN WORKSPACE */}
       <div id="erp-workspace-area" className="flex-1 min-w-0 flex flex-col bg-slate-50">
-        
-        {/* TOP MOBILE TOGGLE & SYSTEM CLOCK CONTROL BAR */}
+
+        {/* TOP BAR */}
         <header className="bg-white border-b border-gray-150 h-16 py-3 px-4 sm:px-6 flex justify-between items-center shrink-0 shadow-xs z-30">
           <div className="flex items-center gap-3.5">
-            {/* Mobile Sidebar open button */}
             <button
               onClick={() => setIsSidebarOpen(true)}
               className="p-2 -ml-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg md:hidden cursor-pointer flex items-center"
@@ -1671,7 +830,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* SINKRONISASI COOPERATIVE SYNC BUTTONS */}
           <div className="flex items-center gap-3">
             {spreadsheetId && (
               <span className="hidden md:inline-flex items-center gap-1.5 text-[10px] text-emerald-700 font-extrabold bg-emerald-50 border border-emerald-100 px-2.5 py-1.5 rounded-xl">
@@ -1699,8 +857,8 @@ export default function App() {
                 onClick={handleSaveToSheets}
                 disabled={isSaving}
                 className={`py-1.5 px-3.5 rounded-xl text-xs font-bold transition-all uppercase flex items-center gap-1.5 shadow-sm active:scale-[0.98] cursor-pointer ${
-                  hasUnsavedChanges 
-                    ? 'bg-amber-500 hover:bg-amber-600 text-white animate-bounce-slow' 
+                  hasUnsavedChanges
+                    ? 'bg-amber-500 hover:bg-amber-600 text-white animate-bounce-slow'
                     : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                 }`}
               >
@@ -1716,27 +874,16 @@ export default function App() {
                   </>
                 )}
               </button>
-            ) : firestoreLoaded ? (
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 p-2 rounded-xl flex items-center gap-1.5">
-                <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                <span>☁️ Cloud Sync Aktif</span>
-              </span>
-            ) : (
-              <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 p-2 rounded-xl flex items-center gap-1.5">
-                <AlertTriangle className="w-3 h-3 text-amber-500" />
-                <span>Mode Offline — Data Local Storage</span>
-              </span>
-            )}
+            ) : null}
           </div>
         </header>
 
-        {/* WORKSPACE DETAILED WRAPPER VIEW SCROLLABLE */}
+        {/* MAIN CONTENT */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 scrollbar-thin">
-          
-          {/* RENDER CURRENT TAB VIEW WITH FULL STRUCTURAL COMPATIBILITY */}
           <div className="pb-16">
-            {activeTab === 'data_pusat' && (
-              <DataPusatTab
+            <Suspense fallback={<div className="flex items-center justify-center py-20"><RefreshCw className="w-8 h-8 animate-spin text-emerald-500" /></div>}>
+            {activeTab === 'inventaris' && (
+              <InventarisTab
                 bahanBaku={bahanBaku}
                 onAddMaterial={handleAddMaterial}
                 onEditMaterial={handleEditMaterial}
@@ -1757,21 +904,14 @@ export default function App() {
                 onRejectOpname={handleRejectOpname}
               />
             )}
-            {activeTab === 'materials' && (
-              <MaterialsTab
-                bahanBaku={bahanBaku}
-                cabangList={cabangList}
-                cabangStok={cabangStok}
-                suratOrders={suratOrders}
-                onUpdateSuratOrder={handleUpdateSuratOrder}
-              />
-            )}
-            {activeTab === 'dashboard' && (
-              <DashboardTab
+            {activeTab === 'keuangan' && (
+              <KeuanganDashboard
                 calculatedProducts={calculatedProducts}
                 bahanBaku={bahanBaku}
                 cabangList={cabangList}
                 branchTransactions={branchTransactions}
+                wasteTotalLoss={wasteTotalLoss}
+                rdTotalCost={rdTotalCost}
                 onWipeAllData={handleWipeAllData}
                 onSyncToFirestore={handleSyncToFirestore}
               />
@@ -1781,6 +921,7 @@ export default function App() {
                 bahanBaku={bahanBaku}
                 productHpp={productHpp}
                 detailResep={detailResep}
+                calculatedProducts={calculatedProducts}
                 onAddProduct={handleAddProduct}
                 onUpdateProductIngredients={handleUpdateProductIngredients}
                 onDeleteProduct={handleDeleteProduct}
@@ -1799,15 +940,11 @@ export default function App() {
                 onEditMaterial={handleEditMaterial}
               />
             )}
-            {activeTab === 'erp_bi' && (
-              <EnterpriseDashboard calculatedProducts={calculatedProducts} bahanBaku={bahanBaku} />
-            )}
-
             {activeTab === 'erp_waste' && (
-              <WasteControlTab 
-                bahanBaku={bahanBaku} 
-                wasteLogs={wasteLogs} 
-                onAddWasteLog={handleAddWasteLog} 
+              <WasteControlTab
+                bahanBaku={bahanBaku}
+                wasteLogs={wasteLogs}
+                onAddWasteLog={handleAddWasteLog}
                 onDeleteWasteLog={handleDeleteWasteLog}
                 calculatedProducts={calculatedProducts}
                 writeOffLogs={writeOffLogs}
@@ -1816,11 +953,11 @@ export default function App() {
               />
             )}
             {activeTab === 'erp_rd' && (
-              <RdSandboxTab 
-                bahanBaku={bahanBaku} 
-                rdExperiments={rdExperiments} 
-                onAddRD={handleAddRD} 
-                onDeleteRD={handleDeleteRD} 
+              <RdSandboxTab
+                bahanBaku={bahanBaku}
+                rdExperiments={rdExperiments}
+                onAddRD={handleAddRD}
+                onDeleteRD={handleDeleteRD}
               />
             )}
             {activeTab === 'erp_bom' && (
@@ -1857,7 +994,7 @@ export default function App() {
               />
             )}
             {activeTab === 'erp_crm' && (
-              <CrmMarketingTab 
+              <CrmMarketingTab
                 calculatedProducts={calculatedProducts}
                 bahanBaku={bahanBaku}
                 productHpp={productHpp}
@@ -1881,42 +1018,8 @@ export default function App() {
             {activeTab === 'erp_compliance' && (
               <ComplianceSafetyTab productHpp={productHpp} onAddWasteLog={handleAddWasteLog} cabangList={cabangList} />
             )}
-            {activeTab === 'erp_production_planner' && (
-              <ProductionPlannerTab
-                productHpp={productHpp}
-                detailResep={detailResep}
-                calculatedProducts={calculatedProducts}
-                bahanBaku={bahanBaku}
-              />
-            )}
-            {activeTab === 'erp_work_order' && (
-              <KitchenWorkOrderTab
-                productHpp={productHpp}
-                detailResep={detailResep}
-                calculatedProducts={calculatedProducts}
-                bahanBaku={bahanBaku}
-              />
-            )}
-            {activeTab === 'erp_baker_pct' && (
-              <BakerPercentageTab
-                bahanBaku={bahanBaku}
-                detailResep={detailResep}
-              />
-            )}
             {activeTab === 'erp_bep' && (
               <BepTab calculatedProducts={calculatedProducts} />
-            )}
-            {activeTab === 'erp_dough_temp' && (
-              <DoughTemperatureTab />
-            )}
-
-            {activeTab === 'erp_laporan_keuangan' && (
-              <LaporanKeuanganTab
-                calculatedProducts={calculatedProducts}
-                bahanBaku={bahanBaku}
-                wasteTotalLoss={wasteTotalLoss}
-                rdTotalCost={rdTotalCost}
-              />
             )}
             {activeTab === 'erp_backup' && (
               <BackupSystemTab
@@ -1943,7 +1046,6 @@ export default function App() {
                 detailResep={detailResep}
                 cabangList={cabangList}
                 onImportProduct={(product) => {
-                  // Cek duplikasi
                   const exists = productHpp.some(
                     p => p.namaProduk.toLowerCase().trim() === product.namaProduk.toLowerCase().trim()
                   );
@@ -1961,10 +1063,11 @@ export default function App() {
               <ChatTab />
             )}
 
+          </Suspense>
           </div>
         </main>
 
-        {/* BOTTOM METADATA DETAILS BAR */}
+        {/* FOOTER */}
         <footer className="bg-white border-t border-gray-150 py-3 px-6 text-center text-xs text-gray-400 shrink-0 select-none z-10 flex flex-col sm:flex-row justify-between items-center gap-2">
           <span>Sistem ERP Bakery Terintegrasi Google Sheets © 2026.</span>
           <span className="font-mono text-[10px] bg-slate-100 text-gray-500 px-2.5 py-1 rounded">
@@ -1974,18 +1077,18 @@ export default function App() {
 
       </div>
 
-      {/* BOOTSTRAPPING TEMPLATE WORKBOOK TABS MODAL DIALOG */}
+      {/* TEMPLATE MODAL */}
       {showTemplateModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-gray-100 text-center space-y-4">
             <div className="w-12 h-12 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto">
               <Sparkles className="w-6 h-6 animate-pulse" />
             </div>
-            
+
             <h3 className="text-base font-bold text-gray-900 uppercase tracking-wide">Inisialisasi Lembar Kerja Resep</h3>
-            
+
             <p className="text-xs text-gray-500 leading-relaxed">
-              Google Sheet kustom yang terhubung belum memiliki worksheet tabel modal <span className="font-semibold font-mono text-gray-700">"Bahan Baku"</span>, <span className="font-semibold font-mono text-gray-700">"HPP Produk"</span>, dan <span className="font-semibold font-mono text-gray-700">"Resep Detail"</span>. 
+              Google Sheet kustom yang terhubung belum memiliki worksheet tabel modal <span className="font-semibold font-mono text-gray-700">"Bahan Baku"</span>, <span className="font-semibold font-mono text-gray-700">"HPP Produk"</span>, dan <span className="font-semibold font-mono text-gray-700">"Resep Detail"</span>.
               <br className="mb-2" />
               Apakah Anda ingin menginisialisasi lembar kerja template kustom baru dengan data sampel bahan otomatis untuk panduan kalkulasi?
             </p>
@@ -2008,7 +1111,7 @@ export default function App() {
         </div>
       )}
 
-      {/* TOAST SYSTEM FEEDBACK ALERTS */}
+      {/* TOAST SYSTEM */}
       <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
         {toasts.map((t) => (
           <div
@@ -2076,7 +1179,6 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
 
   return (
     <>
-      {/* LOGO BRAND BAR */}
       <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-black shadow-md">
@@ -2093,7 +1195,6 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
         </button>
       </div>
 
-      {/* PROFILE */}
       <div className="p-4 bg-slate-900/60 border-b border-slate-800 text-xs flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-7.5 h-7.5 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-bold font-mono text-emerald-400">OW</div>
@@ -2114,27 +1215,23 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
         </div>
       </div>
 
-      {/* NAVIGATION — Urutan dari Ringkasan sampai Backup */}
       <nav className="flex-1 overflow-y-auto p-4 space-y-5 select-none scrollbar-thin">
         <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">① Ringkasan & Dashboard</span>
-          {sidebarBtn('dashboard', <LineChart className="w-4 h-4" />, '👋 Ringkasan')}
-          {sidebarBtn('erp_bi', <TrendingUp className="w-4 h-4" />, '📊 Laporan P&L')}
-          {sidebarBtn('erp_laporan_keuangan', <BarChart3 className="w-4 h-4" />, '📊 Laporan Keuangan')}
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">① Dashboard Keuangan</span>
+          {sidebarBtn('keuangan', <LineChart className="w-4 h-4" />, '📊 Dashboard Keuangan')}
         </div>
         <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">② Master Data</span>
-          {sidebarBtn('data_pusat', <Building2 className="w-4 h-4" />, '🏛️ Data Pusat')}
-          {sidebarBtn('materials', <Package className="w-4 h-4" />, '📦 Monitor Stok')}
-          {sidebarBtn('recipes', <FolderTree className="w-4 h-4" />, '📝 Formulasi Resep')}
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">② Inventaris & Resep</span>
+          {sidebarBtn('inventaris', <Building2 className="w-4 h-4" />, '📦 Inventaris')}
+          {sidebarBtn('recipes', <FolderTree className="w-4 h-4" />, '📝 Formulasi Resep + Harga')}
           {sidebarBtn('erp_toppings', <Coins className="w-4 h-4" />, '🧩 Add-on & Topping')}
         </div>
         <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">③ Inventory & Produksi</span>
-          {sidebarBtn('erp_fefo_expiry', <ShieldAlert className="w-4 h-4" />, '📋 FEFO & Expiry')}
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">③ Dapur Produksi</span>
+          {sidebarBtn('erp_production_center', <ClipboardList className="w-4 h-4" />, '🏭 Production Center')}
           {sidebarBtn('erp_bom', <Layers className="w-4 h-4" />, '🔧 BOM & Yield')}
-          {sidebarBtn('erp_production_center', <ClipboardList className="w-4 h-4" />, '🏭 Prod. Center')}
-          {/* Rekap Bahan sudah merge ke Data Pusat → sub-section Rekap */}
+          {sidebarBtn('erp_fefo_expiry', <ShieldAlert className="w-4 h-4" />, '📋 FEFO & Expiry')}
+          {sidebarBtn('erp_waste', <X className="w-4 h-4" />, '🗑️ Manajemen Waste')}
         </div>
         <div className="space-y-1">
           <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">④ Kasir & Penjualan</span>
@@ -2143,28 +1240,24 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
           {sidebarBtn('erp_crm', <TrendingUp className="w-4 h-4" />, '📈 CRM Marketing')}
         </div>
         <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑤ Keuangan</span>
-
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑤ Keuangan & Analisis</span>
           {sidebarBtn('erp_anggaran_alokasi', <PieChart className="w-4 h-4" />, '💰 Anggaran & Alokasi')}
           {sidebarBtn('erp_bep', <BarChart3 className="w-4 h-4" />, '🧮 BEP & Balance')}
-          {sidebarBtn('hpp', <TrendingUp className="w-4 h-4" />, '📈 Harga & HPP')}
+          {sidebarBtn('erp_rd', <FlaskConical className="w-4 h-4" />, '🔬 Sandbox R&D')}
         </div>
         <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑥ Operasional & Tools</span>
-          {sidebarBtn('erp_waste', <X className="w-4 h-4" />, '🗑️ Manajemen Waste')}
-          {sidebarBtn('erp_rd', <FlaskConical className="w-4 h-4" />, '🔬 Sandbox R&D')}
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑥ Operasional</span>
           {sidebarBtn('erp_compliance', <ShieldAlert className="w-4 h-4" />, '🧊 Recall Pangan')}
           {sidebarBtn('erp_iot', <Cpu className="w-4 h-4" />, '🤖 Smart IoT')}
-        </div>
-        <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑦ Backup</span>
           {sidebarBtn('erp_webstore', <Globe className="w-4 h-4" />, '🌐 Web Store')}
           {sidebarBtn('erp_chat', <MessageSquare className="w-4 h-4" />, '💬 Chat Pembeli')}
+        </div>
+        <div className="space-y-1">
+          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⑦ Sistem</span>
           {sidebarBtn('erp_backup', <Cloud className="w-4 h-4" />, '💾 Backup & Restore')}
         </div>
       </nav>
 
-      {/* GSHEETS CONNECTION */}
       <div className="p-4 border-t border-slate-800 bg-slate-950 flex flex-col gap-2 shrink-0">
         {spreadsheetId ? (
           <>
@@ -2188,6 +1281,7 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
             <FileSpreadsheet className="w-3.5 h-3.5" /> HUBUNGKAN GOOGLE SHEETS
           </button>
         )}
+t	<ConfirmModal />
       </div>
     </>
   );

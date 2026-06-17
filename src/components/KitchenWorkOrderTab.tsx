@@ -137,7 +137,7 @@ export default function KitchenWorkOrderTab({
               <select value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)}
                 className="w-full border border-gray-200 rounded-lg p-2.5 bg-white">
                 <option value="">-- Pilih Produk --</option>
-                {productHpp.map(p => (
+                {productHpp.filter(p => p.status !== 'draft').map(p => (
                   <option key={p.namaProduk} value={p.namaProduk}>{p.namaProduk}</option>
                 ))}
               </select>

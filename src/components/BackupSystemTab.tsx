@@ -244,8 +244,20 @@ export default function BackupSystemTab({ bahanBaku, productHpp, detailResep, ca
     setHistory(prev => prev.filter(h => h.id !== id));
   };
 
-  const clearHistory = () => {
-    if (window.confirm('Hapus semua riwayat backup?')) {
+  const clearHistory = async () => {
+    const confirmed_248 = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: 'Hapus semua riwayat backup?',
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (confirmed_248) {
+
       setHistory([]);
     }
   };

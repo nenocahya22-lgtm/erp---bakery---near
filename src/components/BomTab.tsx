@@ -15,7 +15,8 @@ interface BomTabProps {
 }
 
 export default function BomTab({ productHpp, calculatedProducts }: BomTabProps) {
-  const [selectedProduct, setSelectedProduct] = useState(productHpp.length > 0 ? productHpp[0].namaProduk : '');
+  const publishedProducts = productHpp.filter(p => p.status !== 'draft');
+  const [selectedProduct, setSelectedProduct] = useState(publishedProducts.length > 0 ? publishedProducts[0].namaProduk : '');
   const [bomStages, setBomStages] = useState<BOMStage[]>([]);
   const [stageName, setStageName] = useState('');
   const [stageDescription, setStageDescription] = useState('');
@@ -42,12 +43,12 @@ export default function BomTab({ productHpp, calculatedProducts }: BomTabProps) 
           <p className="text-xs text-gray-500 mt-1">Multi-level Bill of Materials dan kalkulasi penyusutan baking.</p>
         </div>
         <div className="flex items-center gap-2">
-          {productHpp.length > 0 && (
+          {publishedProducts.length > 0 && (
             <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl">
               <span className="text-xs text-gray-400 font-bold">Produk:</span>
               <select value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)}
                 className="text-xs font-bold text-gray-800 bg-transparent focus:outline-none">
-                {productHpp.map(p => <option key={p.namaProduk} value={p.namaProduk}>{p.namaProduk}</option>)}
+                {publishedProducts.map(p => <option key={p.namaProduk} value={p.namaProduk}>{p.namaProduk}</option>)}
               </select>
             </div>
           )}
@@ -102,8 +103,20 @@ export default function BomTab({ productHpp, calculatedProducts }: BomTabProps) 
                   </span>
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-bold text-gray-900">{stage.stageName}</h4>
-                    <button onClick={() => {
-                      if (window.confirm(`Hapus tahap "${stage.stageName}"?`)) {
+                    <button onClick={async () => {
+                      const confirmed_107 = await new Promise<boolean>((resolve) => {
+                        showConfirm({
+                          title: 'Konfirmasi',
+                          message: `Hapus tahap "${stage.stageName}"?`,
+                          confirmLabel: 'Ya',
+                          cancelLabel: 'Batal',
+                          variant: 'warning',
+                          onConfirm: () => resolve(true),
+                          onCancel: () => resolve(false),
+                        });
+                      });
+                      if (confirmed_107) {
+
                         setBomStages(prev => prev.filter((_, i) => i !== idx));
                       }
                     }}

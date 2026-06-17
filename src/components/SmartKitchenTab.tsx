@@ -90,8 +90,19 @@ export default function SmartKitchenTab() {
     setNewAssetTargetDate('');
   };
 
-  const handleDeleteWorkOrder = (assetName: string) => {
-    if (!window.confirm(`Hapus "${assetName}"?`)) return;
+  const handleDeleteWorkOrder = async (assetName: string) => {
+    const confirmed_94 = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: `Hapus "${assetName}"?`,
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!confirmed_94) return;
     setWorkOrders(prev => prev.filter(w => w.assetName !== assetName));
   };
 

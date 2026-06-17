@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
 
 dotenv.config();
 
@@ -39,6 +40,17 @@ function requireApiKey(req: express.Request, res: express.Response, next: expres
 }
 
 app.use('/api', requireApiKey);
+
+// ─── RATE LIMITER: maks 10 request / menit per IP untuk endpoint marketing (Gemini) ───
+const marketingLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Terlalu banyak permintaan. Coba lagi dalam 1 menit.' },
+});
+
+app.use('/api/marketing', marketingLimiter);
 
 // ─── API: MARKETING CONSULT ───
 app.post('/api/marketing/consult', async (req, res) => {

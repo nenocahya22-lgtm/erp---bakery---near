@@ -25,6 +25,7 @@ import {
   writeBatch,
   Timestamp,
   deleteDoc,
+  DocumentData,
 } from 'firebase/firestore';
 import { WebStoreConfig, PaymentMethod, BahanBaku, ProductHpp, DetailResep, CalculationResult, Cabang } from '../types';
 
@@ -81,7 +82,7 @@ export async function getWebStoreConfig(cabangId: string): Promise<WebStoreConfi
   const docRef = doc(db, 'webstore_config', cabangId);
   const snap = await getDoc(docRef);
   if (!snap.exists()) return null;
-  const data = snap.data() as any;
+  const data = snap.data() as DocumentData;
   return {
     ...data,
     lastUpdated: data.lastUpdated?.toDate?.()?.toISOString() || new Date().toISOString(),
@@ -99,7 +100,7 @@ export function listenWebStoreConfig(
     docRef,
     (snap) => {
       if (snap.exists()) {
-        const data = snap.data() as any;
+        const data = snap.data() as DocumentData;
         onData({
           ...data,
           lastUpdated: data.lastUpdated?.toDate?.()?.toISOString() || new Date().toISOString(),
@@ -116,7 +117,7 @@ export async function getAllWebStoreConfigs(): Promise<{ cabangId: string; confi
   const snap = await getDocs(colRef);
   const results: { cabangId: string; config: WebStoreConfig }[] = [];
   snap.forEach((d) => {
-    const data = d.data() as any;
+    const data = d.data() as DocumentData;
     results.push({
       cabangId: d.id,
       config: {
@@ -170,7 +171,7 @@ export async function syncProductsToFirestore(
   );
 
   // Map productId -> existing data untuk lookup cepat
-  const existingDataMap = new Map<string, any>();
+  const existingDataMap = new Map<string, DocumentData>();
   existingSnaps.forEach((snap, i) => {
     if (snap?.exists()) {
       existingDataMap.set(productRefs[i].productId, snap.data());
@@ -267,8 +268,8 @@ export async function syncProductsToFirestore(
       // stock: tidak dikirim — Open PO system, pelanggan tidak perlu lihat stok
       imageUrl: displayImage,
       category: kategori,
-      rating: existingData ? (existingData as any).rating || 5.0 : 5.0,
-      reviewCount: existingData ? (existingData as any).reviewCount || 0 : 0,
+      rating: existingData?.rating || 5.0,
+      reviewCount: existingData?.reviewCount || 0,
       // HPP & margin TIDAK disinkron ke produk publik — hanya untuk internal ERP
       // Pelanggan web store tidak boleh melihat biaya produksi
       updatedAt: serverTimestamp(),
@@ -389,7 +390,7 @@ export async function getAllFirestoreProducts(): Promise<FirestoreProductSummary
     const snap = await getDocs(colRef);
     const products: FirestoreProductSummary[] = [];
     snap.forEach((d) => {
-      const data = d.data() as any;
+      const data = d.data() as DocumentData;
       products.push({
         docId: data.id || d.id,
         name: data.name || '',
@@ -414,7 +415,7 @@ export async function getFirestoreCategories(cabangId: string = 'pusat'): Promis
     const docRef = doc(db, 'categories', cabangId);
     const snap = await getDoc(docRef);
     if (snap.exists()) {
-      const data = snap.data() as any;
+      const data = snap.data() as DocumentData;
       const cats = data.categories || [];
       if (cats.length > 0) {
         return { categories: cats, categoryIcons: data.categoryIcons || {} };
@@ -457,18 +458,21 @@ export async function saveCategoriesToFirestore(
 // ============================================================================
 
 // Tipe data untuk order dari web store
+export interface WebStoreOrderItem {
+  /** productId dari Firestore collection 'products' — cocokkan dengan namaProduk di ProductHpp via field `id` */
+  productId: string;
+  name: string;
+  price: number;
+  quantity: number;
+  imageUrl: string;
+}
+
 export interface WebStoreOrder {
   id: string;
   userId: string;
   userName: string;
   userEmail: string;
-  items: {
-    productId: string;
-    name: string;
-    price: number;
-    quantity: number;
-    imageUrl: string;
-  }[];
+  items: WebStoreOrderItem[];
   totalAmount: number;
   status: 'Menunggu Pembayaran' | 'Diproses' | 'Dikirim' | 'Selesai' | 'Dibatalkan';
   shippingAddress: {
@@ -554,11 +558,11 @@ export function listenOrderStatusChanges(
     (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') {
-          // Track initial status untuk order yang baru masuk
-          orderStatusCache.set(change.doc.id, (change.doc.data() as WebStoreOrder).status);
+          orderStatusCache.set(change.doc.id, { status: (change.doc.data() as WebStoreOrder).status, timestamp: Date.now() });
         } else if (change.type === 'modified') {
           const newData = change.doc.data() as WebStoreOrder;
-          const prevStatus = orderStatusCache.get(change.doc.id);
+          const prevEntry = orderStatusCache.get(change.doc.id);
+          const prevStatus = prevEntry?.status;
           
           if (prevStatus && prevStatus !== newData.status) {
             // Status berubah! Cek apakah dari pending → confirmed
@@ -572,7 +576,7 @@ export function listenOrderStatusChanges(
           }
           
           // Update cache dengan status terbaru
-          orderStatusCache.set(change.doc.id, newData.status);
+          orderStatusCache.set(change.doc.id, { status: newData.status, timestamp: Date.now() });
         }
       });
     },
@@ -581,7 +585,15 @@ export function listenOrderStatusChanges(
 }
 
 // Local cache untuk melacak status order sebelumnya (untuk deteksi perubahan status)
-const orderStatusCache = new Map<string, string>();
+// Auto-flush: hapus entry lebih dari 10 menit agar tidak memory leak
+const orderStatusCache = new Map<string, { status: string; timestamp: number }>();
+const CACHE_TTL = 10 * 60 * 1000; // 10 menit
+setInterval(() => {
+  const now = Date.now();
+  orderStatusCache.forEach((val, key) => {
+    if (now - val.timestamp > CACHE_TTL) orderStatusCache.delete(key);
+  });
+}, 60_000); // cleanup tiap 1 menit
 
 /** Ambil semua orders untuk ditampilkan di dashboard */
 export async function getAllOrders(cabangId?: string): Promise<WebStoreOrder[]> {
@@ -639,7 +651,7 @@ export async function getCabangIdBySubdomain(subdomain: string): Promise<{ caban
   const docRef = doc(db, 'cabang_subdomains', subdomain);
   const snap = await getDoc(docRef);
   if (!snap.exists()) return null;
-  const data = snap.data() as any;
+  const data = snap.data() as DocumentData;
   return { cabangId: data.cabangId, cabangNama: data.cabangNama };
 }
 
@@ -649,7 +661,7 @@ export async function getAllSubdomains(): Promise<{ subdomain: string; cabangId:
   const snap = await getDocs(colRef);
   const results: { subdomain: string; cabangId: string; cabangNama: string }[] = [];
   snap.forEach((d) => {
-    const data = d.data() as any;
+    const data = d.data() as DocumentData;
     results.push({ subdomain: d.id, cabangId: data.cabangId, cabangNama: data.cabangNama });
   });
   return results;
@@ -745,7 +757,7 @@ export function listenNewChats(
     (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added' || change.type === 'modified') {
-          const data = change.doc.data() as any;
+          const data = change.doc.data() as DocumentData;
           onChatUpdate({
             id: change.doc.id,
             buyerId: data.buyerId,
@@ -770,7 +782,7 @@ export async function getAllChats(): Promise<ChatSummary[]> {
     const snap = await getDocs(q);
     const chats: ChatSummary[] = [];
     snap.forEach((d) => {
-      const data = d.data() as any;
+      const data = d.data() as DocumentData;
       chats.push({
         id: d.id,
         buyerId: data.buyerId,

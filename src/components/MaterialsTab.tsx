@@ -265,8 +265,20 @@ export default function MaterialsTab({ bahanBaku, cabangList, cabangStok, suratO
                     ))}
                   </div>
                 </div>
-                <button onClick={() => {
-                  if (window.confirm(`Konfirmasi penerimaan barang dari "${so.cabangNama}"?\nStok cabang akan bertambah secara otomatis.`)) {
+                <button onClick={async () => {
+                  const confirmed_269 = await new Promise<boolean>((resolve) => {
+                    showConfirm({
+                      title: 'Konfirmasi',
+                      message: `Konfirmasi penerimaan barang dari "${so.cabangNama}"?\nStok cabang akan bertambah secara otomatis.`,
+                      confirmLabel: 'Ya',
+                      cancelLabel: 'Batal',
+                      variant: 'warning',
+                      onConfirm: () => resolve(true),
+                      onCancel: () => resolve(false),
+                    });
+                  });
+                  if (confirmed_269) {
+
                     onUpdateSuratOrder(so.id, { ...so, status: 'diterima' });
                   }
                 }}

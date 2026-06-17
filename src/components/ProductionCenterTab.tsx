@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { ProductHpp, DetailResep, CalculationResult, BahanBaku, ProductionCalendarEntry, SATUAN_OPTIONS } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
+import { getAllOrders } from '../lib/firestore-bridge';
 
 interface ProductionCenterTabProps {
   productHpp: ProductHpp[];
@@ -77,6 +78,33 @@ export default function ProductionCenterTab({
   // ─── PLANNER STATE ───
   const [plannerTargets, setPlannerTargets] = useState<Record<string, number>>({});
   const [plannerSatuans, setPlannerSatuans] = useState<Record<string, string>>({});
+  const [pendingOrders, setPendingOrders] = useState<{ productName: string; qty: number }[] | null>(null);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+
+  const loadPendingOrders = async () => {
+    setLoadingOrders(true);
+    try {
+      const orders = await getAllOrders();
+      const active = orders.filter(o => o.status === 'Diproses');
+      const tally: Record<string, number> = {};
+      active.forEach(o => o.items.forEach(item => {
+        tally[item.name] = (tally[item.name] || 0) + item.quantity;
+      }));
+      setPendingOrders(Object.entries(tally).map(([k, v]) => ({ productName: k, qty: v })));
+    } catch {
+      setPendingOrders([]);
+    }
+    setLoadingOrders(false);
+  };
+
+  const applyPendingOrders = () => {
+    if (!pendingOrders) return;
+    const updated = { ...plannerTargets };
+    pendingOrders.forEach(po => {
+      updated[po.productName] = (updated[po.productName] || 0) + po.qty;
+    });
+    setPlannerTargets(updated);
+  };
 
   const calcPlannerNeeds = () => {
     const needs: Record<string, { total: number; satuan: string; hargaTotal: number; perProduk: { nama: string; qty: number }[] }> = {};
@@ -126,8 +154,19 @@ export default function ProductionCenterTab({
     localStorage.setItem('production_checklist_data', JSON.stringify(updated));
   };
 
-  const handleResetChecklist = () => {
-    if (!window.confirm('Reset checklist harian? Semua centang akan dihapus.')) return;
+  const handleResetChecklist = async () => {
+    const confirmed_158 = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: 'Reset checklist harian? Semua centang akan dihapus.',
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!confirmed_158) return;
     setChecklistItems({});
     localStorage.setItem('production_checklist_data', JSON.stringify({}));
   };
@@ -136,12 +175,12 @@ export default function ProductionCenterTab({
   const [bakingLogs, setBakingLogs] = useState<{
     id: string; date: string; productName: string; batchQty: number;
     doughTemp: number; ovenTemp: number; startTime: string; endTime: string;
-    notes: string;
+    notes: string; cabangId?: string;
   }[]>(() => {
     return safeGetLocalStorage<{
       id: string; date: string; productName: string; batchQty: number;
       doughTemp: number; ovenTemp: number; startTime: string; endTime: string;
-      notes: string;
+      notes: string; cabangId?: string;
     }[]>('production_baking_logs', []);
   });
   const [showBakingLogModal, setShowBakingLogModal] = useState(false);
@@ -214,7 +253,28 @@ export default function ProductionCenterTab({
       const dalamKg = r.scaleTakaran >= 1000;
       return `<tr><td style="padding:8px;border-bottom:1px solid #eee;">${r.namaBahan}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;">${dalamKg ? (r.scaleTakaran/1000).toFixed(2) : r.scaleTakaran.toFixed(0)}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">${dalamKg ? 'kg' : (bahan?.satuan||'gr')}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;">${formatCurrency(r.scaleTakaran * (bahan?.hargaSatuan||0))}</td></tr>`;
     }).join('');
-    pw.document.write(`<html><head><title>WO - ${woProduct}</title><style>body{font-family:'Segoe UI',Arial,sans-serif;max-width:700px;margin:0 auto;padding:40px;color:#1f2937;}h1{font-size:22px;}table{width:100%;border-collapse:collapse;}th{background:#f3f4f6;padding:10px;text-align:left;font-size:11px;text-transform:uppercase;}@media print{body{padding:20px;}}</style></head><body><h1>🧾 Kitchen Work Order</h1><p style="color:#6b7280;font-size:12px;"><strong>Produk:</strong> ${woProduct} &nbsp;|&nbsp; <strong>Batch:</strong> ${woBatch}x &nbsp;|&nbsp; <strong>Output:</strong> ${woTotalOutput} porsi &nbsp;|&nbsp; <strong>Tanggal:</strong> ${new Date().toLocaleDateString('id-ID')}</p><table><thead><tr><th>Bahan</th><th style="text-align:right;">Jumlah</th><th style="text-align:center;">Satuan</th><th style="text-align:right;">Biaya</th></tr></thead><tbody>${rows}</tbody></table><div style="margin-top:16px;padding:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;"><strong>Total Batch: ${formatCurrency(woTotalHpp)}</strong> &nbsp;|&nbsp; Cost/porsi: ${formatCurrency(woTotalHpp/woTotalOutput)}</div>${woNotes ? `<div style="margin-top:12px;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;"><strong>Catatan:</strong> ${woNotes}</div>` : ''}<p style="margin-top:40px;text-align:center;color:#9ca3af;font-size:11px;">Near Bakery & Co. ERP — Work Order</p><script>window.print();<\/script></body></html>`);
+    pw.document.write(`<html><head><title>WO - ${woProduct}</title><style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',Arial,sans-serif;max-width:700px;margin:0 auto;padding:40px;color:#1f2937;font-size:13px;}
+h1{font-size:22px;margin-bottom:4px;}h2{font-size:14px;color:#6b7280;font-weight:400;margin-bottom:20px;}
+table{width:100%;border-collapse:collapse;margin-top:16px;}
+th{background:#f3f4f6;padding:10px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#374151;}
+td{padding:8px;border-bottom:1px solid #e5e7eb;}
+tr:last-child td{border-bottom:2px solid #d1d5db;}
+.footer{margin-top:20px;padding-top:16px;border-top:2px solid #e5e7eb;text-align:center;color:#9ca3af;font-size:11px;}
+.badge{display:inline-block;background:#dbeafe;color:#1e40af;padding:4px 12px;border-radius:12px;font-size:11px;font-weight:600;}
+@media print{body{padding:20px;}th{background:#e5e7eb !important;}.no-print{display:none;}}
+</style></head><body>
+<h1>🧾 Kitchen Work Order</h1>
+<h2>${woProduct} &mdash; Batch ${woBatch}x (${woTotalOutput} porsi) &bull; ${new Date().toLocaleDateString('id-ID')}</h2>
+<table><thead><tr><th>Bahan</th><th style="text-align:right;">Jumlah</th><th style="text-align:center;">Satuan</th><th style="text-align:right;">Biaya</th></tr></thead><tbody>${rows}</tbody></table>
+<div style="margin-top:16px;display:flex;gap:12px;flex-wrap:wrap;">
+  <div style="padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;flex:1;"><strong>Total Batch:</strong> ${formatCurrency(woTotalHpp)}</div>
+  <div style="padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;flex:1;"><strong>Cost / porsi:</strong> ${formatCurrency(woTotalHpp/woTotalOutput)}</div>
+</div>
+${woNotes ? `<div style="margin-top:12px;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;"><strong>📝 Catatan:</strong> ${woNotes}</div>` : ''}
+<p class="footer">Near Bakery & Co. ERP &mdash; Work Order &bull; Dicetak ${new Date().toLocaleString('id-ID')}</p>
+<script>window.print();<\/script></body></html>`);
     pw.document.close();
   };
 
@@ -354,11 +414,11 @@ export default function ProductionCenterTab({
             <p className="text-xs text-gray-500">
               Persentase setiap bahan terhadap total tepung. Tepung = 100%.
             </p>
-            {productHpp.length === 0 ? (
+            {productHpp.filter(p => p.status !== 'draft').length === 0 ? (
               <p className="text-xs text-gray-400 text-center py-8">Belum ada produk.</p>
             ) : (
               <div className="space-y-3">
-                {productHpp.map(p => {
+                {productHpp.filter(p => p.status !== 'draft').map(p => {
                   const resep = detailResep.filter(r => r.namaProduk === p.namaProduk);
                   const tepungResep = resep.find(r => 
                     r.namaBahan.toLowerCase().includes('tepung') ||
@@ -486,8 +546,31 @@ export default function ProductionCenterTab({
             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-50 pb-2">
               <ShoppingCart className="w-4 h-4 inline text-emerald-600 mr-1" /> Target Produksi
             </h3>
+            <div className="flex gap-2">
+              <button onClick={loadPendingOrders} disabled={loadingOrders}
+                className="text-[9px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-2.5 py-1.5 rounded-lg transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1">
+                <ShoppingCart className="w-3 h-3" /> {loadingOrders ? 'Memuat...' : 'Ambil dari ✓ Pesanan Online'}
+              </button>
+              {pendingOrders && pendingOrders.length > 0 && (
+                <button onClick={applyPendingOrders}
+                  className="text-[9px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> Terapkan ({pendingOrders.reduce((s, p) => s + p.qty, 0)} pcs)
+                </button>
+              )}
+            </div>
+            {pendingOrders && pendingOrders.length > 0 && (
+              <div className="bg-indigo-50 p-2.5 rounded-xl border border-indigo-100 text-[10px] space-y-1">
+                <p className="font-bold text-indigo-800 mb-1">Pesanan Online Menunggu Produksi:</p>
+                {pendingOrders.map(po => (
+                  <div key={po.productName} className="flex justify-between text-indigo-700">
+                    <span>{po.productName}</span>
+                    <span className="font-mono font-bold">{po.qty} pcs</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="space-y-3">
-              {productHpp.map(p => (
+              {productHpp.filter(p => p.status !== 'draft').map(p => (
                 <div key={p.namaProduk} className="flex items-center gap-3">
                   <span className="text-xs font-semibold text-gray-700 flex-1 truncate">{p.namaProduk}</span>
                   <input type="number" min="0" value={plannerTargets[p.namaProduk] || ''}
@@ -500,7 +583,7 @@ export default function ProductionCenterTab({
                   </select>
                 </div>
               ))}
-              {productHpp.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Belum ada produk.</p>}
+              {productHpp.filter(p => p.status !== 'draft').length === 0 && <p className="text-xs text-gray-400 text-center py-4">Belum ada produk.</p>}
             </div>
             {totalPlannerPcs > 0 && (
               <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-xs space-y-1">
@@ -570,7 +653,7 @@ export default function ProductionCenterTab({
                 <select value={woProduct} onChange={e => setWoProduct(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg p-2.5 bg-white">
                   <option value="">-- Pilih Produk --</option>
-                  {productHpp.map(p => <option key={p.namaProduk} value={p.namaProduk}>{p.namaProduk}</option>)}
+                  {productHpp.filter(p => p.status !== 'draft').map(p => <option key={p.namaProduk} value={p.namaProduk}>{p.namaProduk}</option>)}
                 </select>
               </div>
               {woProduct && (
@@ -710,11 +793,11 @@ export default function ProductionCenterTab({
             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-50 pb-2">
               <CheckCircle2 className="w-4 h-4 inline text-emerald-600 mr-1" /> Standar Resep
             </h3>
-            {productHpp.length === 0 ? (
+            {productHpp.filter(p => p.status !== 'draft').length === 0 ? (
               <p className="text-xs text-gray-400 text-center py-8">Belum ada resep.</p>
             ) : (
               <div className="space-y-2">
-                {productHpp.map(p => {
+                {productHpp.filter(p => p.status !== 'draft').map(p => {
                   const resep = detailResep.filter(r => r.namaProduk === p.namaProduk);
                   const calc = calculatedProducts.find(c => c.namaProduk === p.namaProduk);
                   return (
@@ -880,7 +963,7 @@ export default function ProductionCenterTab({
                 <select required value={blProduct} onChange={e => setBlProduct(e.target.value)}
                   className="w-full border border-gray-200 rounded-xl p-2.5 bg-white">
                   <option value="">-- Pilih Produk --</option>
-                  {productHpp.map(p => <option key={p.namaProduk} value={p.namaProduk}>{p.namaProduk}</option>)}
+                  {productHpp.filter(p => p.status !== 'draft').map(p => <option key={p.namaProduk} value={p.namaProduk}>{p.namaProduk}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">

@@ -134,9 +134,20 @@ export default function AnggaranAlokasiTab({ calculatedProducts, bahanBaku, wast
     setShowAddForm(false);
   };
 
-  const handleDeleteRule = (id: string) => {
+  const handleDeleteRule = async (id: string) => {
     if (rules.length <= 1) { alert('Minimal harus ada 1 aturan.'); return; }
-    if (!window.confirm('Hapus aturan ini?')) return;
+    const confirmed_139 = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: 'Hapus aturan ini?',
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!confirmed_139) return;
     setRules(prev => prev.filter(r => r.id !== id));
   };
 
@@ -161,7 +172,7 @@ export default function AnggaranAlokasiTab({ calculatedProducts, bahanBaku, wast
   };
 
   const handleReset = () => {
-    if (window.confirm('Reset semua ke default?')) setRules(DEFAULT_RULES);
+    showConfirm({ title: "Reset Rules", message: "Reset semua ke default?", confirmLabel: "Reset", cancelLabel: "Batal", variant: "warning", onConfirm: () => setRules(DEFAULT_RULES), });
   };
 
   const amounts = rules.map(r => ({ ...r, amount: Math.round(monthlyRevenue * r.pct / 100) }));

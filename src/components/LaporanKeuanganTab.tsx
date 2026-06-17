@@ -57,8 +57,20 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
     setNewOpexAmount('');
   };
 
-  const deleteOpex = (id: string) => {
-    if (window.confirm('Hapus item OPEX ini?')) {
+  const deleteOpex = async (id: string) => {
+    const confirmed_61 = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: 'Hapus item OPEX ini?',
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (confirmed_61) {
+
       setOpexItems(prev => prev.filter(item => item.id !== id));
     }
   };
@@ -207,8 +219,20 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
   };
 
   // ─── DELETE TRANSACTION ───
-  const handleDeleteTx = (txId: string) => {
-    if (window.confirm('Hapus transaksi ini?')) {
+  const handleDeleteTx = async (txId: string) => {
+    const confirmed_211 = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: 'Hapus transaksi ini?',
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (confirmed_211) {
+
       try {
         const data = getRevenueData();
         data.transactions = data.transactions.filter((t: any) => t.id !== txId);

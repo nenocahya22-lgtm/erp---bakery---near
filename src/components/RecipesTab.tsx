@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BahanBaku, ProductHpp, DetailResep, ProductVariant, SATUAN_OPTIONS } from '../types';
+import { BahanBaku, ProductHpp, DetailResep, ProductVariant, CalculationResult, SATUAN_OPTIONS } from '../types';
 import {
   Plus,
   Trash2,
@@ -23,8 +23,9 @@ interface RecipesTabProps {
   bahanBaku: BahanBaku[];
   productHpp: ProductHpp[];
   detailResep: DetailResep[];
+  calculatedProducts: CalculationResult[];
   onAddProduct: (p: ProductHpp, ingredients: DetailResep[]) => void;
-  onUpdateProductIngredients: (productName: string, updatedDetails: DetailResep[], porsiJual: number) => void;
+  onUpdateProductIngredients: (productName: string, updatedDetails: DetailResep[], porsiJual: number, status?: 'draft' | 'published') => void;
   onDeleteProduct: (productName: string) => void;
   onUpdateProductDetails?: (oldName: string, updated: ProductHpp) => void;
   onAddVariant?: (productName: string, variant: ProductVariant) => void;
@@ -36,6 +37,7 @@ export default function RecipesTab({
   bahanBaku,
   productHpp,
   detailResep,
+  calculatedProducts,
   onAddProduct,
   onUpdateProductIngredients,
   onDeleteProduct,
@@ -99,13 +101,24 @@ export default function RecipesTab({
     setNewCategoryName('');
   };
 
-  const handleDeleteCategory = (cat: string) => {
+  const handleDeleteCategory = async (cat: string) => {
     if (cat === 'Semua') return;
     const productsInCat = productHpp.filter(p => (p.kategori || 'Lainnya') === cat);
     const msg = productsInCat.length > 0
       ? `Hapus kategori "${cat}" beserta ${productsInCat.length} resep di dalamnya?\n\nResep yang akan dihapus:\n${productsInCat.map(p => `- ${p.namaProduk}`).join('\n')}`
       : `Hapus kategori "${cat}"? (tidak ada resep di dalamnya)`;
-    if (!window.confirm(msg)) return;
+    const confirmed_110 = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: msg,
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!confirmed_110) return;
     
     // Hapus semua produk dalam kategori ini
     productsInCat.forEach(p => onDeleteProduct(p.namaProduk));
@@ -209,9 +222,20 @@ export default function RecipesTab({
     }, 800);
   };
 
-  const handleDeleteImage = () => {
+  const handleDeleteImage = async () => {
     if (!selectedProductName) return;
-    if (!window.confirm('Hapus foto produk ini? Gambar akan dikembalikan ke default.')) return;
+    const confirmed_216 = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: 'Hapus foto produk ini? Gambar akan dikembalikan ke default.',
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!confirmed_216) return;
     deleteRecipeImage(selectedProductName);
     const autoPrompt = buildAutoPrompt(selectedProductName, activeProduct?.kategori);
     setImagePrompt(autoPrompt);
@@ -357,7 +381,7 @@ export default function RecipesTab({
   };
 
   // Create new product form submit
-  const handleCreateProduct = (e: React.FormEvent) => {
+  const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProductName.trim()) return;
 
@@ -371,7 +395,18 @@ export default function RecipesTab({
     }
 
     // Konfirmasi sebelum menyimpan
-    if (!window.confirm(`Buat resep baru "${newProductName.trim()}"?`)) return;
+    const confirmed_376 = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: `Buat resep baru "${newProductName.trim()}"?`,
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!confirmed_376) return;
 
     const nextKode = `PRD-${String(productHpp.length + 1).padStart(3, '0')}`;
     const newProduct: ProductHpp = {
@@ -380,6 +415,7 @@ export default function RecipesTab({
       porsiJual: parseFloat(newProductPorsi) || 1,
       hargaJual: 0,
       kategori: newProductKategori,
+      status: 'draft',
     };
 
     onAddProduct(newProduct, []);
@@ -393,11 +429,19 @@ export default function RecipesTab({
   };
 
   // Delete product
-  const handleDeleteProductClick = (productName: string) => {
-    const confirmDelete = window.confirm(
-      `Apakah Anda yakin ingin menghapus produk "${productName}" beserta seluruh resep detailnya?`
-    );
-    if (confirmDelete) {
+  const handleDeleteProductClick = async (productName: string) => {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: `Apakah Anda yakin ingin menghapus produk "${productName}" beserta seluruh resep detailnya?`,
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (confirmed) {
       onDeleteProduct(productName);
       // Select another product or empty
       const remaining = productHpp.filter(
@@ -618,6 +662,11 @@ export default function RecipesTab({
                         <div className="flex items-center gap-1.5">
                           <span className="text-[9px] font-mono font-bold text-gray-400 mr-1">{p.kode || `PRD-${String(productHpp.indexOf(p) + 1).padStart(3, '0')}`}</span>
                           <span className="text-xs font-bold text-gray-900 truncate leading-tight">{p.namaProduk}</span>
+                          {p.status === 'draft' && (
+                            <span className="text-[8px] font-extrabold uppercase bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-md leading-none border border-amber-200/50">
+                              Draft
+                            </span>
+                          )}
                           <span className="text-[8px] font-extrabold uppercase bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md leading-none border border-slate-200/50">
                             {p.kategori || 'Lainnya'}
                           </span>
@@ -660,6 +709,16 @@ export default function RecipesTab({
                   <span className="text-[10px] uppercase font-black tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-150 px-2.5 py-0.5 rounded-md leading-none">
                     Kategori: {activeProduct.kategori || 'Lainnya'}
                   </span>
+                  {activeProduct.status === 'draft' && (
+                    <span className="text-[10px] uppercase font-black tracking-wider text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-md leading-none">
+                      ⏳ Draft
+                    </span>
+                  )}
+                  {activeProduct.status === 'published' && (
+                    <span className="text-[10px] uppercase font-black tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-md leading-none">
+                      ✅ Terbit
+                    </span>
+                  )}
                 </div>
                 <h3 className="text-lg font-black text-slate-900 font-sans tracking-tight">{activeProduct.namaProduk}</h3>
                 <p className="text-xs text-gray-500">
@@ -668,6 +727,30 @@ export default function RecipesTab({
               </div>
 
               <div className="flex items-center gap-2">
+                {activeProduct.status === 'draft' && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const confirmed_693 = await new Promise<boolean>((resolve) => {
+                        showConfirm({
+                          title: 'Konfirmasi',
+                          message: `Terbitkan resep "${activeProduct.namaProduk}"? Produk akan tersedia di semua modul (produksi, POS, web store).`,
+                          confirmLabel: 'Ya',
+                          cancelLabel: 'Batal',
+                          variant: 'warning',
+                          onConfirm: () => resolve(true),
+                          onCancel: () => resolve(false),
+                        });
+                      });
+                      if (!confirmed_693) return;
+                      onUpdateProductIngredients(activeProduct.namaProduk, activeDetails, activeRecipePorsi, 'published');
+                      showToastLocal('✅ Resep diterbitkan!', 'success');
+                    }}
+                    className="inline-flex items-center gap-1 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-xs cursor-pointer transition uppercase"
+                  >
+                    Terbitkan
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setIsEditingProductDetails(!isEditingProductDetails)}
@@ -837,6 +920,22 @@ export default function RecipesTab({
                       Porsi per batch masakan / adonan (Yield)
                     </span>
                   </div>
+                  {activeRecipePorsi === 1 && activeProduct && detailResep.filter(r => r.namaProduk === activeProduct.namaProduk).length >= 2 && (
+                    (() => {
+                      const ings = detailResep.filter(r => r.namaProduk === activeProduct.namaProduk);
+                      const totalTakaran = ings.reduce((s, r) => s + r.takaran, 0);
+                      if (totalTakaran > 300) {
+                        const estimatedYield = Math.round(totalTakaran / 100);
+                        return (
+                          <div className="mt-2 flex items-start gap-1.5 bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold p-2 rounded-lg">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />
+                            <span>Porsi Jual = 1, tapi total bahan ~{Math.round(totalTakaran)} unit (cukup untuk ~{estimatedYield} porsi). pastikan angka Yield sudah benar agar stok tidak terpotong berlebihan.</span>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()
+                  )}
                 </div>
                 <div className="flex flex-col justify-center items-end text-right md:border-l md:border-gray-150 md:pl-4">
                   <span className="text-xs text-gray-500 font-semibold uppercase tracking-wider text-[10px]">Estimasi HPP Bahan Baku:</span>
@@ -1276,43 +1375,112 @@ export default function RecipesTab({
                   </div>
                 </div>
 
-                {/* Suggested Pricing Section */}
-                <div className="border-t border-slate-800/80 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Current Price & Margin */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-400">Harga Jual Saat Ini</span>
-                      <span className={`font-mono font-bold ${activeProduct.hargaJual > 0 ? 'text-white' : 'text-amber-400'}`}>
-                        {activeProduct.hargaJual > 0 ? formatCurrency(activeProduct.hargaJual) : 'BELUM DIATUR'}
-                      </span>
+                {/* Suggested Pricing Section — dari CalculatedProducts */}
+                {(() => {
+                  const calc = calculatedProducts.find(
+                    c => c.namaProduk.toLowerCase().trim() === selectedProductName.toLowerCase().trim()
+                  );
+                  if (!calc) {
+                    return (
+                      <div className="border-t border-slate-800/80 pt-3">
+                        <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                          <p className="text-[10px] text-slate-400 leading-relaxed">
+                            💡 Atur <strong>target margin & harga jual</strong> di modul <strong>📈 Harga & HPP → HPP & Margin</strong>.
+                            Simpan resep terlebih dahulu agar kalkulasi HPP muncul di sini.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  const marginRp = calc.hargaJual - calc.hppPerPorsi;
+                  const marginPct = calc.hppPerPorsi > 0 ? (marginRp / calc.hargaJual) * 100 : 0;
+                  return (
+                    <div className="border-t border-slate-800/80 pt-3 space-y-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+                          <span className="text-[9px] uppercase text-slate-500 block font-semibold">HPP / porsi</span>
+                          <span className="text-sm font-black font-mono text-emerald-400">{formatCurrency(calc.hppPerPorsi)}</span>
+                        </div>
+                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+                          <span className="text-[9px] uppercase text-slate-500 block font-semibold">Harga Jual</span>
+                          <span className={`text-sm font-black font-mono ${calc.hargaJual > 0 ? 'text-white' : 'text-amber-400'}`}>
+                            {calc.hargaJual > 0 ? formatCurrency(calc.hargaJual) : '—'}
+                          </span>
+                        </div>
+                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+                          <span className="text-[9px] uppercase text-slate-500 block font-semibold">Laba / porsi</span>
+                          <span className={`text-sm font-black font-mono ${marginRp > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {calc.hargaJual > 0 ? formatCurrency(marginRp) : '—'}
+                          </span>
+                        </div>
+                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+                          <span className="text-[9px] uppercase text-slate-500 block font-semibold">Margin</span>
+                          <span className={`text-sm font-black font-mono ${marginPct >= 20 ? 'text-emerald-400' : marginPct > 0 ? 'text-amber-400' : 'text-red-400'}`}>
+                            {calc.hargaJual > 0 ? `${marginPct.toFixed(1)}%` : '—'}
+                          </span>
+                        </div>
+                      </div>
+                      {calc.biayaOverhead !== undefined && (calc.biayaOverhead > 0 || calc.biayaTenagaKerja || calc.biayaKemasan || calc.biayaUtilitas) && (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
+                          {calc.biayaOverhead > 0 && (
+                            <div className="flex justify-between text-slate-400">
+                              <span>Overhead</span>
+                              <span className="font-mono text-slate-300">{formatCurrency(calc.biayaOverhead)}</span>
+                            </div>
+                          )}
+                          {calc.biayaTenagaKerja > 0 && (
+                            <div className="flex justify-between text-slate-400">
+                              <span>Tenaga Kerja</span>
+                              <span className="font-mono text-slate-300">{formatCurrency(calc.biayaTenagaKerja)}</span>
+                            </div>
+                          )}
+                          {calc.biayaKemasan > 0 && (
+                            <div className="flex justify-between text-slate-400">
+                              <span>Kemasan</span>
+                              <span className="font-mono text-slate-300">{formatCurrency(calc.biayaKemasan)}</span>
+                            </div>
+                          )}
+                          {calc.biayaUtilitas > 0 && (
+                            <div className="flex justify-between text-slate-400">
+                              <span>Utilitas</span>
+                              <span className="font-mono text-slate-300">{formatCurrency(calc.biayaUtilitas)}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {calc.variants && calc.variants.length > 0 && (
+                        <div className="bg-slate-950/40 p-2 rounded-xl border border-slate-800/60">
+                          <span className="text-[9px] uppercase text-slate-500 block font-semibold mb-1">Varian</span>
+                          <div className="space-y-0.5">
+                            {calc.variants.map(v => (
+                              <div key={v.id} className="flex justify-between text-[10px]">
+                                <span className="text-slate-400">{v.name}</span>
+                                <span className="font-mono text-slate-300">
+                                  {formatCurrency(v.hppPerPorsi)} / porsi → jual {formatCurrency(v.hargaJual)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-400">Margin Aktual</span>
-                      <span className={`font-mono font-bold ${activeProduct.hargaJual > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
-                        {activeProduct.hargaJual > 0
-                          ? `${(((activeProduct.hargaJual - (totalIngredientsCost / activeRecipePorsi)) / activeProduct.hargaJual) * 100).toFixed(1)}%`
-                          : '—'}
-                      </span>
-                    </div>
-                  </div>
+                  );
+                })()}
 
-                  <div className="space-y-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-                    <p className="text-[10px] text-slate-400 leading-relaxed">
-                      💡 Atur <strong>target margin & harga jual</strong> di modul <strong>📈 Harga & HPP → HPP & Margin</strong>. 
-                      Di sana kamu bisa set margin per produk, atur target global untuk semua produk sekaligus, 
-                      dan lihat simulasi dynamic pricing dengan sekali klik.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Current margin badge */}
+                {/* Current margin badge — konsisten */}
                 <div className="border-t border-slate-800/80 pt-2 flex justify-end">
                   <div className="bg-slate-950 p-2 border border-slate-800 rounded-xl leading-none">
                     <span className="text-[10px] block text-slate-500 mb-1 font-semibold uppercase">Margin Bersih</span>
                     <span className="text-base font-black font-mono text-emerald-400">
-                      {activeProduct.hargaJual > 0
-                        ? `${(((activeProduct.hargaJual - (totalIngredientsCost / activeRecipePorsi)) / activeProduct.hargaJual) * 100).toFixed(1)}%`
-                        : '—'}
+                      {(() => {
+                        const c = calculatedProducts.find(
+                          p => p.namaProduk.toLowerCase().trim() === selectedProductName.toLowerCase().trim()
+                        );
+                        if (c && c.hppPerPorsi > 0 && c.hargaJual > 0) {
+                          return `${(((c.hargaJual - c.hppPerPorsi) / c.hargaJual) * 100).toFixed(1)}%`;
+                        }
+                        return '—';
+                      })()}
                     </span>
                   </div>
                 </div>

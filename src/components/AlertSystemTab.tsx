@@ -392,8 +392,20 @@ export default function AlertSystemTab({ calculatedProducts, bahanBaku, hasUnsav
 
           {pendingWa.length > 0 && waSettings.phoneNumber && (
             <div className="p-4 border-t border-gray-100 bg-gray-50">
-              <button onClick={() => {
-                if (window.confirm(`Kirim ${pendingWa.length} notifikasi ke ${waSettings.phoneNumber}?\n\nFitur ini membutuhkan API Key WhatsApp Gateway yang valid.\n\nUntuk sekarang, notifikasi akan ditandai sebagai terkirim.`)) {
+              <button onClick={async () => {
+                const confirmed_396 = await new Promise<boolean>((resolve) => {
+                  showConfirm({
+                    title: 'Konfirmasi',
+                    message: `Kirim ${pendingWa.length} notifikasi ke ${waSettings.phoneNumber}?\n\nFitur ini membutuhkan API Key WhatsApp Gateway yang valid.\n\nUntuk sekarang, notifikasi akan ditandai sebagai terkirim.`,
+                    confirmLabel: 'Ya',
+                    cancelLabel: 'Batal',
+                    variant: 'warning',
+                    onConfirm: () => resolve(true),
+                    onCancel: () => resolve(false),
+                  });
+                });
+                if (confirmed_396) {
+
                   pendingWa.forEach(n => markWaSent(n.id));
                 }
               }}
@@ -498,8 +510,20 @@ export default function AlertSystemTab({ calculatedProducts, bahanBaku, hasUnsav
                   ? `✅ Notifikasi akan dikirim ke ${waSettings.phoneNumber}`
                   : '⏸️ Notifikasi WA nonaktif — isi nomor untuk mengaktifkan'}
               </p>
-              <button onClick={() => {
-                if (window.confirm('Reset semua pengaturan notifikasi?')) {
+              <button onClick={async () => {
+                const confirmed_502 = await new Promise<boolean>((resolve) => {
+                  showConfirm({
+                    title: 'Konfirmasi',
+                    message: 'Reset semua pengaturan notifikasi?',
+                    confirmLabel: 'Ya',
+                    cancelLabel: 'Batal',
+                    variant: 'warning',
+                    onConfirm: () => resolve(true),
+                    onCancel: () => resolve(false),
+                  });
+                });
+                if (confirmed_502) {
+
                   setWaSettings({
                     phoneNumber: '',
                     apiKey: '',

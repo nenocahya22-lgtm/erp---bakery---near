@@ -24,8 +24,20 @@ export default function BepTab({ calculatedProducts }: BepTabProps) {
     setNewAmount('');
   };
 
-  const deleteFixedCost = (id: string) => {
-    if (window.confirm('Hapus biaya tetap ini?')) {
+  const deleteFixedCost = async (id: string) => {
+    const confirmed_28 = await new Promise<boolean>((resolve) => {
+      showConfirm({
+        title: 'Konfirmasi',
+        message: 'Hapus biaya tetap ini?',
+        confirmLabel: 'Ya',
+        cancelLabel: 'Batal',
+        variant: 'warning',
+        onConfirm: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (confirmed_28) {
+
       setFixedCosts(prev => prev.filter(item => item.id !== id));
     }
   };
