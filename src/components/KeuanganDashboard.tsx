@@ -13,6 +13,7 @@ interface KeuanganDashboardProps {
   rdTotalCost: number;
   onWipeAllData?: () => void;
   onSyncToFirestore?: () => Promise<void>;
+  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
 }
 
 export default function KeuanganDashboard(props: KeuanganDashboardProps) {
@@ -31,7 +32,7 @@ export default function KeuanganDashboard(props: KeuanganDashboardProps) {
           <button
             key={t.key}
             onClick={() => setSubTab(t.key)}
-            className={`px-4 py-2 rounded-xl text-xs font-extrabold uppercase tracking-wider cursor-pointer transition-all ${
+            className={`px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider cursor-pointer transition-all ${
               subTab === t.key
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-white'
@@ -56,6 +57,7 @@ export default function KeuanganDashboard(props: KeuanganDashboardProps) {
         <EnterpriseDashboard
           calculatedProducts={props.calculatedProducts}
           bahanBaku={props.bahanBaku}
+          showConfirm={props.showConfirm}
         />
       )}
       {subTab === 'laporan' && (
@@ -64,6 +66,7 @@ export default function KeuanganDashboard(props: KeuanganDashboardProps) {
           bahanBaku={props.bahanBaku}
           wasteTotalLoss={props.wasteTotalLoss}
           rdTotalCost={props.rdTotalCost}
+          showConfirm={props.showConfirm}
         />
       )}
     </div>

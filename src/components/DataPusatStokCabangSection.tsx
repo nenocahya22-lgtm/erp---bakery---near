@@ -92,7 +92,7 @@ export default function DataPusatStokCabangSection({
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
+                    <table className="w-full text-left text-xs border-collapse table-fixed">
                       <thead>
                         <tr className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50">
                           <th className="px-3 py-2 rounded-l-lg">Bahan</th>

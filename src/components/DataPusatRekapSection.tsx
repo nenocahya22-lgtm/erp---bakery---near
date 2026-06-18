@@ -1,12 +1,14 @@
 import React from 'react';
-import { BahanBaku } from '../types';
-import { FileText, Printer } from 'lucide-react';
+import { BahanBaku, Cabang, BranchStock } from '../types';
+import { FileText, Printer, Building2, Package } from 'lucide-react';
 
 interface DataPusatRekapSectionProps {
   bahanBaku: BahanBaku[];
+  cabangList?: Cabang[];
+  cabangStok?: BranchStock[];
 }
 
-export default function DataPusatRekapSection({ bahanBaku }: DataPusatRekapSectionProps) {
+export default function DataPusatRekapSection({ bahanBaku, cabangList = [], cabangStok = [] }: DataPusatRekapSectionProps) {
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
@@ -128,7 +130,7 @@ export default function DataPusatRekapSection({ bahanBaku }: DataPusatRekapSecti
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full text-left text-xs border-collapse table-fixed">
               <thead>
                 <tr className="border-b bg-gray-50 text-[10px] font-bold text-gray-500 uppercase">
                   <th className="px-4 py-3">Kode</th>
@@ -174,6 +176,78 @@ export default function DataPusatRekapSection({ bahanBaku }: DataPusatRekapSecti
             Total Nilai Stok: <span className="font-mono font-black text-emerald-700">{formatCurrency(bahanBaku.reduce((s,b) => s + (b.isiKemasan * b.hargaSatuan), 0))}</span>
           </div>
         </>
+      )}
+
+      {/* ─── PER-CABANG STOK MATRIX ─── */}
+      {cabangList.length > 0 && (
+        <div className="border-t border-gray-200 mt-4">
+          <div className="p-4 bg-gray-50/80 border-b border-gray-100">
+            <h4 className="text-xs font-bold text-gray-700 flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-emerald-600" /> Stok per Cabang
+            </h4>
+            <p className="text-[10px] text-gray-500 mt-0.5">Rincian stok setiap bahan baku di masing-masing cabang.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b bg-gray-50 text-[10px] font-bold text-gray-500 uppercase">
+                  <th className="px-4 py-3 sticky left-0 bg-gray-50">Nama Bahan</th>
+                  <th className="px-4 py-3 text-right">Stok Pusat</th>
+                  {cabangList.map(c => (
+                    <th key={c.id} className="px-4 py-3 text-right">{c.nama}</th>
+                  ))}
+                  <th className="px-4 py-3 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {[...bahanBaku].sort((a, b) => a.nama.localeCompare(b.nama)).map(b => {
+                  const cabangStokMap = new Map<string, number>();
+                  cabangStok
+                    .filter(s => s.bahanNama.toLowerCase() === b.nama.toLowerCase())
+                    .forEach(s => {
+                      cabangStokMap.set(s.cabangId, (cabangStokMap.get(s.cabangId) || 0) + s.stokTeoritis);
+                    });
+                  const perCabang = cabangList.map(c => cabangStokMap.get(c.id) || 0);
+                  const totalCabang = perCabang.reduce((s, v) => s + v, 0);
+                  const totalAll = b.isiKemasan + totalCabang;
+                  return (
+                    <tr key={b.nama} className="hover:bg-gray-50">
+                      <td className="px-4 py-2.5 font-semibold text-gray-900 sticky left-0 bg-white">{b.nama}</td>
+                      <td className="px-4 py-2.5 text-right font-mono">{b.isiKemasan}</td>
+                      {perCabang.map((v, i) => (
+                        <td key={cabangList[i].id} className={`px-4 py-2.5 text-right font-mono ${v === 0 ? 'text-gray-300' : v < 10 ? 'text-red-600 font-bold' : 'text-gray-900'}`}>
+                          {v > 0 ? v : '-'}
+                        </td>
+                      ))}
+                      <td className="px-4 py-2.5 text-right font-mono font-bold text-emerald-700">{totalAll}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="bg-gray-50 text-[10px] font-bold text-gray-600">
+                <tr>
+                  <td className="px-4 py-2.5">Total per Cabang</td>
+                  <td className="px-4 py-2.5 text-right font-mono">{bahanBaku.reduce((s, b) => s + b.isiKemasan, 0)}</td>
+                  {cabangList.map(c => {
+                    const totalForCabang = cabangStok
+                      .filter(s => s.cabangId === c.id)
+                      .reduce((s, v) => s + v.stokTeoritis, 0);
+                    return (
+                      <td key={c.id} className="px-4 py-2.5 text-right font-mono">{totalForCabang > 0 ? totalForCabang : '-'}</td>
+                    );
+                  })}
+                  <td className="px-4 py-2.5 text-right font-mono font-black text-emerald-700">
+                    {bahanBaku.reduce((s, b) => s + b.isiKemasan, 0) + cabangList.reduce((s, c) => s + cabangStok.filter(cs => cs.cabangId === c.id).reduce((s2, v) => s2 + v.stokTeoritis, 0), 0)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <div className="p-3 bg-gray-50/50 border-t border-gray-100 text-[10px] text-gray-400 flex items-center gap-3">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> Kritis (&lt;10)</span>
+            <span className="flex items-center gap-1"><Package className="w-3 h-3 text-emerald-500" /> Stok dari SO terima - POS jual - Waste</span>
+          </div>
+        </div>
       )}
     </div>
   );

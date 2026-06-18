@@ -53,7 +53,7 @@ export default function LogistikDashboard(props: LogistikDashboardProps) {
           <button
             key={t.key}
             onClick={() => setSubTab(t.key)}
-            className={`px-4 py-2 rounded-xl text-xs font-extrabold uppercase tracking-wider cursor-pointer transition-all ${
+            className={`px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider cursor-pointer transition-all ${
               subTab === t.key
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-white'
@@ -104,6 +104,7 @@ export default function LogistikDashboard(props: LogistikDashboardProps) {
           suratOrders={props.suratOrders}
           cabangStok={props.cabangStok}
           onAddWasteLog={props.onAddWasteLog}
+          showConfirm={props.showConfirm}
         />
       )}
       {subTab === 'waste' && (

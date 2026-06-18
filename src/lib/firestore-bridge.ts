@@ -128,22 +128,26 @@ export async function syncProductsToFirestore(
   productHpp: ProductHpp[],
   detailResep: DetailResep[],
   bahanBaku: BahanBaku[],
-  cabangId: string = 'pusat'
+  cabangId: string = 'pusat',
+  existingWsConfig?: WebStoreConfig | null
 ): Promise<number> {
   let synced = 0;
   const batch = writeBatch(db);
 
-  // Baca webstore config sekali sebelum loop (gambar produk, kategori, diskon)
+  // Baca webstore config — prioritaskan yg dikirim langsung (existingWsConfig)
+  // untuk hindari race condition setelah saveWebStoreConfig
   let wsProductImages: Record<string, string> = {};
-  let wsConfig: WebStoreConfig | null = null;
-  try {
-    wsConfig = await getWebStoreConfig(cabangId);
-    if (wsConfig?.products) {
-      wsConfig.products.forEach((p: any) => {
-        if (p.displayImage) wsProductImages[p.productName.toLowerCase().trim()] = p.displayImage;
-      });
-    }
-  } catch (e) { /* silent */ }
+  let wsConfig: WebStoreConfig | null = existingWsConfig ?? null;
+  if (!wsConfig) {
+    try {
+      wsConfig = await getWebStoreConfig(cabangId);
+    } catch (e) { /* silent */ }
+  }
+  if (wsConfig?.products) {
+    wsConfig.products.forEach((p: any) => {
+      if (p.displayImage) wsProductImages[p.productName.toLowerCase().trim()] = p.displayImage;
+    });
+  }
 
   // Batch: ambil semua existing products dari Firestore dalam 1 parallel call
   // (daripada sequential getDoc per produk yang lambat untuk >50 produk)
@@ -187,32 +191,38 @@ export async function syncProductsToFirestore(
   for (const pRef of productRefs) {
     const { calc, productId, productInfo } = pRef;
 
-    // Cari deskripsi & gambar dari berbagai sumber
+    // Cari deskripsi & gambar — PRIORITAS:
+    //   1. localStorage (RecipesTab — gambar yang di-generate/di-upload user)
+    //   2. WebStoreConfig (gambar yang diupload via Web Store Manager)
+    //   3. Existing Firestore data (fallback)
+    //
+    // ⚠️ localStorage harus priority #1 karena user mungkin generate gambar baru
+    //    di RecipesTab SETELAH produk sudah pernah di-sync sebelumnya.
     let displayImage = '';
     let description = calc.namaProduk;
     let kategori = productInfo?.kategori || 'Lainnya';
 
     const existingData = existingDataMap.get(productId);
     if (existingData) {
-      displayImage = existingData.imageUrl || '';
       description = existingData.description || calc.namaProduk;
       kategori = existingData.category || kategori;
     }
 
-    // Ambil gambar dari WebStoreConfig (produk images yang diupload di WebStoreManager)
+    // 1. localStorage (RecipesTab) — gambar paling update dari user
+    const savedKey = `recipe_img_${calc.namaProduk.toLowerCase().trim()}`;
+    const explicitlySaved = localStorage.getItem(savedKey);
+    if (explicitlySaved) {
+      displayImage = explicitlySaved;
+    }
+
+    // 2. Fallback ke WebStoreConfig
     if (!displayImage) {
       displayImage = wsProductImages[calc.namaProduk.toLowerCase().trim()] || '';
     }
 
-    // Ambil gambar dari ERP image storage (RecipesTab) jika sudah di-save user
-    // — hanya pakai gambar yang eksplisit di-generate/di-upload oleh user
-    // — jangan pakai fallback Unsplash otomatis dari getSavedRecipeImage
-    if (!displayImage) {
-      const savedKey = `recipe_img_${calc.namaProduk.toLowerCase().trim()}`;
-      const explicitlySaved = localStorage.getItem(savedKey);
-      if (explicitlySaved) {
-        displayImage = explicitlySaved;
-      }
+    // 3. Fallback ke existing Firestore data
+    if (!displayImage && existingData) {
+      displayImage = existingData.imageUrl || '';
     }
 
     // Dapatkan deskripsi dari productInfo / existing data
@@ -246,21 +256,26 @@ export async function syncProductsToFirestore(
         originalPrice: v.hargaJual,
       })) || undefined;
 
+    const madeToOrder = wsConfig?.madeToOrder !== false;
+    if (!wsConfig) {
+      console.warn(`⚠️ [Sync ${cabangId}] WebStoreConfig tidak terbaca — default madeToOrder=true (safe mode).`);
+    }
     batch.set(doc(db, 'products', productId), {
       id: productId,
       name: calc.namaProduk,
       description,
-      price: Math.round(product.hargaJual),
+      price: Math.round(calc.hargaJual),
       variants: webVariants,
       discountPercent: discountPercent > 0 ? discountPercent : undefined,
-      originalPrice: discountPercent > 0 ? Math.round(product.hargaJual) : undefined,
-      // stock: tidak dikirim — Open PO system, pelanggan tidak perlu lihat stok
+      originalPrice: discountPercent > 0 ? Math.round(calc.hargaJual) : undefined,
+      stock: madeToOrder ? 9999 : undefined,
       imageUrl: displayImage,
       category: kategori,
       rating: existingData?.rating || 5.0,
       reviewCount: existingData?.reviewCount || 0,
-      // HPP & margin TIDAK disinkron ke produk publik — hanya untuk internal ERP
-      // Pelanggan web store tidak boleh melihat biaya produksi
+      madeToOrder,
+      preOrderLabel: wsConfig?.preOrderLabel || 'Pre-Order — Produksi Setiap Hari',
+      preOrderBadge: wsConfig?.preOrderBadge || 'MADE-TO-ORDER',
       updatedAt: serverTimestamp(),
     });
 
@@ -286,60 +301,15 @@ export async function syncProductsToFirestore(
     }
   }
 
-  // ─── SYNC KATEGORI ke collection terpisah agar web store bisa baca ───
-  // Firestore sebagai Single Source of Truth: pull kategori existing dulu dari Firestore,
-  // lalu merge dengan kategori dari ERP agar tidak ada kategori Web Store yang hilang.
-  let catList: string[] = [];
-  let catIcons: Record<string, string> = {};
+  // ─── SYNC KATEGORI — hanya pakai dari webstore_config ───
+  // ⚠️ JANGAN merge dari productHpp dan jangan fallback ke default!
+  //    Jika webstore_config.categories kosong (user sudah hapus semua),
+  //    maka categories/{cabangId} HARUS diset kosong juga, bukan diisi default.
+  // Sumber kebenaran: webstore_config.categories (diatur user di Web Store Manager)
+  let catList: string[] = [...(wsConfig?.categories || [])];
+  let catIcons: Record<string, string> = { ...(wsConfig?.categoryIcons || {}) };
   
-  // 🔄 PULL kategori dari Firestore terlebih dahulu
-  try {
-    const existingCats = await getFirestoreCategories(cabangId);
-    if (existingCats && existingCats.categories.length > 0) {
-      catList = existingCats.categories;
-      catIcons = existingCats.categoryIcons || {};
-    }
-  } catch (e) { /* silent */ }
-  
-  let mergedCategories = [...catList];
-  
-  // 🔄 SCAN kategori dari products collection (Web Store) agar kategori Web Store ikut terdeteksi
-  try {
-    const prodSnap = await getDocs(collection(db, 'products'));
-    const webStoreCategories = new Set<string>();
-    prodSnap.forEach(p => {
-      const cat = p.data().category;
-      if (cat && typeof cat === 'string' && cat.trim()) webStoreCategories.add(cat.trim());
-    });
-    for (const cat of webStoreCategories) {
-      if (!mergedCategories.includes(cat)) {
-        mergedCategories.push(cat);
-        if (!catIcons[cat]) catIcons[cat] = 'package';
-      }
-    }
-  } catch (e) { /* silent — non-critical */ }
-  
-  // 🔄 MERGE dengan kategori dari ERP (tambah yang belum ada)
-  const erpCategories = [...new Set(productHpp.map(p => p.kategori || 'Lainnya').filter(Boolean))];
-  for (const cat of erpCategories) {
-    if (!mergedCategories.includes(cat)) {
-      mergedCategories.push(cat);
-      if (!catIcons[cat]) catIcons[cat] = 'package';
-    }
-  }
-  catList = mergedCategories;
-  
-  // Fallback ke default jika masih kosong
-  if (catList.length === 0) {
-    catList = ['Roti & Sourdough', 'Viennoiserie & Croissant', 'Kue & Tart', 'Kue Kering & Cookies', 'Minuman Kopi & Teh'];
-    catIcons = {
-      'Roti & Sourdough': 'wheat',
-      'Viennoiserie & Croissant': 'croissant',
-      'Kue & Tart': 'cake',
-      'Kue Kering & Cookies': 'cookie',
-      'Minuman Kopi & Teh': 'coffee'
-    };
-  }
+  // Hapus fallback default — biarkan array kosong jika user menghapus semua kategori
   
   try {
     const catDocRef = doc(db, 'categories', cabangId);
@@ -398,7 +368,7 @@ export async function getAllFirestoreProducts(): Promise<FirestoreProductSummary
   }
 }
 
-/** Ambil daftar kategori dari Firestore (collection categories/{cabangId}) — fallback scan products */
+/** Ambil daftar kategori dari Firestore (collection categories/{cabangId}) */
 export async function getFirestoreCategories(cabangId: string = 'pusat'): Promise<{ categories: string[]; categoryIcons: Record<string, string> } | null> {
   try {
     const docRef = doc(db, 'categories', cabangId);
@@ -409,16 +379,6 @@ export async function getFirestoreCategories(cabangId: string = 'pusat'): Promis
       if (cats.length > 0) {
         return { categories: cats, categoryIcons: data.categoryIcons || {} };
       }
-    }
-    // Fallback: scan categories dari products collection
-    const prodSnap = await getDocs(collection(db, 'products'));
-    const catSet = new Set<string>();
-    prodSnap.forEach(p => {
-      const cat = p.data().category;
-      if (cat && typeof cat === 'string' && cat.trim()) catSet.add(cat.trim());
-    });
-    if (catSet.size > 0) {
-      return { categories: [...catSet], categoryIcons: {} };
     }
     return null;
   } catch (e) {
@@ -601,7 +561,7 @@ export async function getAllOrders(cabangId?: string): Promise<WebStoreOrder[]> 
 }
 
 // --- HELPER: Stable product ID from name ---
-function hashProductName(name: string): string {
+export function hashProductName(name: string): string {
   let hash = 0;
   const s = name.toLowerCase().trim();
   for (let i = 0; i < s.length; i++) {

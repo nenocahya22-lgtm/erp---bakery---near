@@ -12,9 +12,10 @@ interface BOMStage {
 interface BomTabProps {
   productHpp: ProductHpp[];
   calculatedProducts: CalculationResult[];
+  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
 }
 
-export default function BomTab({ productHpp, calculatedProducts }: BomTabProps) {
+export default function BomTab({ productHpp, calculatedProducts, showConfirm }: BomTabProps) {
   const publishedProducts = productHpp.filter(p => p.status !== 'draft');
   const [selectedProduct, setSelectedProduct] = useState(publishedProducts.length > 0 ? publishedProducts[0].namaProduk : '');
   const [bomStages, setBomStages] = useState<BOMStage[]>([]);
@@ -38,7 +39,7 @@ export default function BomTab({ productHpp, calculatedProducts }: BomTabProps) 
       <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Layers className="w-6 h-6 text-emerald-600" /> BOM Produksi & Yield
+            <Layers className="w-6 h-6 text-emerald-600" /> Kebutuhan Bahan & Yield
           </h2>
           <p className="text-xs text-gray-500 mt-1">Multi-level Bill of Materials dan kalkulasi penyusutan baking.</p>
         </div>
@@ -66,22 +67,22 @@ export default function BomTab({ productHpp, calculatedProducts }: BomTabProps) 
                 </table></div>
             `).join('');
             printWin.document.write(`
-              <html><head><title>BOM - ${selectedProduct}</title>
+              <html><head><title>Kebutuhan Bahan - ${selectedProduct}</title>
               <style>body{font-family:'Segoe UI',Arial,sans-serif;max-width:800px;margin:0 auto;padding:40px;color:#1f2937;}h1{font-size:22px;color:#065f46;}h2{font-size:16px;margin-top:20px;color:#374151;}.meta{color:#6b7280;font-size:12px;margin-bottom:20px;}.yield{background:#f0fdf4;padding:12px;border-radius:8px;margin-top:16px;font-size:13px;}@media print{body{padding:20px;}}</style></head><body>
-              <h1>🏭 BOM PRODUKSI</h1>
+              <h1>🏭 KEBUTUHAN BAHAN</h1>
               <div class="meta">Produk: <strong>${selectedProduct}</strong> | Tanggal: ${new Date().toLocaleDateString('id-ID', { year:'numeric',month:'long',day:'numeric' })}</div>
-              ${stageHtml || '<p style="color:#9ca3af;">Belum ada tahap BOM.</p>'}
+              ${stageHtml || '<p style="color:#9ca3af;">Belum ada tahap produksi.</p>'}
               <div class="yield">
                 <strong>Yield Kalkulasi:</strong><br>
                 Input Mentah: ${rawWeight.toFixed(0)} gr | Shrinkage: ${currentShrinkage}% | Scrap: ${currentWaste}%<br>
                 <strong>Hasil Jadi: ${finalBakedYield.toFixed(0)} gr</strong>
               </div>
-              <p style="margin-top:40px;text-align:center;color:#9ca3af;font-size:11px;">Near Bakery & Co. ERP — BOM & Yield</p>
+              <p style="margin-top:40px;text-align:center;color:#9ca3af;font-size:11px;">Near Bakery & Co. ERP — Kebutuhan Bahan & Yield</p>
               <script>window.print();<\/script></body></html>
             `);
             printWin.document.close();
           }} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1">
-            <Printer className="w-3.5 h-3.5" /> Cetak BOM
+            <Printer className="w-3.5 h-3.5" /> Cetak Kebutuhan
           </button>
         </div>
       </div>
@@ -89,11 +90,11 @@ export default function BomTab({ productHpp, calculatedProducts }: BomTabProps) 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
           <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-50 pb-2">
-            <Sparkles className="w-4 h-4 text-emerald-600" /> Multi-Level BOM
+            <Sparkles className="w-4 h-4 text-emerald-600" /> Tahap Produksi
           </h3>
 
           {activeStages.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-6">Belum ada tahap BOM. Tambah level produksi di bawah.</p>
+            <p className="text-xs text-gray-400 text-center py-6">Belum ada tahap produksi. Tambah level produksi di bawah.</p>
           ) : (
             <div className="space-y-4">
               {activeStages.map((stage, idx) => (
@@ -143,7 +144,7 @@ export default function BomTab({ productHpp, calculatedProducts }: BomTabProps) 
           )}
 
           <div className="bg-gray-50 p-4 rounded-xl space-y-2 border border-dashed border-gray-200">
-            <h4 className="text-xs font-bold text-gray-700 uppercase">Tambah Tahap BOM</h4>
+            <h4 className="text-xs font-bold text-gray-700 uppercase">Tambah Tahap Produksi</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <input type="text" placeholder="Nama tahap (misal: Adonan Dasar)" value={stageName}
                 onChange={(e) => setStageName(e.target.value)}
@@ -163,7 +164,7 @@ export default function BomTab({ productHpp, calculatedProducts }: BomTabProps) 
               }
             }}
               className="w-full bg-gray-950 text-white font-bold text-xs py-2 rounded-lg hover:bg-gray-900 transition cursor-pointer">
-              + Tambah Level BOM
+              + Tambah Level Produksi
             </button>
           </div>
         </div>

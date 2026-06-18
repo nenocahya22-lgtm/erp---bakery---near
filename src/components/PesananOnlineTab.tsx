@@ -96,11 +96,21 @@ export default function PesananOnlineTab({
   const handleUpdateOrderStatus = async (orderId: string, newStatus: string, paymentStatus?: string) => {
     try {
       await updateOrderStatus(orderId, newStatus, paymentStatus);
-      setFirestoreOrders(prev => prev.map(o =>
-        o.id === orderId
-          ? { ...o, status: newStatus as any, ...(paymentStatus ? { paymentStatus: paymentStatus as any } : {}) }
-          : o
-      ));
+      setFirestoreOrders(prev => prev.map(o => {
+        if (o.id === orderId) {
+          const shouldAutoProduce = (newStatus === 'Diproses' || newStatus === 'Lunas')
+            ? o.status === 'Menunggu Pembayaran' || o.status === 'Belum Bayar'
+            : newStatus === 'Selesai' && (o.status !== 'Diproses' && o.status !== 'Dikirim');
+          if (shouldAutoProduce) {
+            o.items.forEach(item => {
+              onProductionComplete?.(item.name, item.quantity);
+              recordBakingLog(item.name, item.quantity);
+            });
+          }
+          return { ...o, status: newStatus as any, ...(paymentStatus ? { paymentStatus: paymentStatus as any } : {}) };
+        }
+        return o;
+      }));
       showLocalToast('Status berhasil diubah ke ' + newStatus + '!', 'success');
     } catch (err) {
       console.error('Failed to update order status:', err);
@@ -565,7 +575,7 @@ export default function PesananOnlineTab({
           {['GoFood', 'GrabFood', 'ShopeeFood'].map(p => (
             <div key={p} className="p-4 rounded-xl bg-slate-950/50 border border-amber-800/30">
               <span className={`text-sm font-black uppercase ${p === 'GoFood' ? 'text-rose-500' : p === 'GrabFood' ? 'text-emerald-400' : 'text-orange-500'}`}>{p}</span>
-              <p className="text-[10px] text-slate-500 text-center py-2">Integrasi langsung belum tersedia. Pesanan dari platform ini dapat dicatat manual via POS Kasir sebagai "WhatsApp Order".</p>
+              <p className="text-[10px] text-slate-500 text-center py-2">Integrasi langsung belum tersedia. Pesanan dari platform ini dapat dicatat manual via Kasir sebagai "WhatsApp Order".</p>
             </div>
           ))}
         </div>

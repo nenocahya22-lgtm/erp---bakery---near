@@ -507,7 +507,7 @@ export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangL
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full text-left text-xs border-collapse table-fixed">
               <thead>
                 <tr className="border-b bg-gray-50 text-[10px] font-bold text-gray-500 uppercase">
                   <th className="px-4 py-3">Bahan</th>

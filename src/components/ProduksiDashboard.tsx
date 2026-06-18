@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { BahanBaku, ProductHpp, DetailResep, CalculationResult } from '../types';
+import { BahanBaku, ProductHpp, DetailResep, CalculationResult, ProductTopping } from '../types';
 import RecipesTab from './RecipesTab';
 import RdSandboxTab from './RdSandboxTab';
 import SmartKitchenTab from './SmartKitchenTab';
 import BomTab from './BomTab';
 import ProductionCenterTab from './ProductionCenterTab';
+import ToppingsTab from './ToppingsTab';
 
 interface ProduksiDashboardProps {
   bahanBaku: BahanBaku[];
@@ -21,17 +22,22 @@ interface ProduksiDashboardProps {
   onAddRD: (exp: any) => void;
   onDeleteRD: (id: string) => void;
   onProductionComplete?: (productName: string, batchQty: number) => void;
+  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
+  toppings?: ProductTopping[];
+  onAddTopping?: (t: ProductTopping) => void;
+  onDeleteTopping?: (id: string) => void;
 }
 
 export default function ProduksiDashboard(props: ProduksiDashboardProps) {
-  const [subTab, setSubTab] = useState<'recipes' | 'rd' | 'smartkitchen' | 'bom' | 'production'>('recipes');
+  const [subTab, setSubTab] = useState<'recipes' | 'production' | 'rd' | 'smartkitchen' | 'bom' | 'toppings'>('recipes');
 
   const tabs = [
     { key: 'recipes' as const, label: '📝 Resep + Harga' },
     { key: 'production' as const, label: '🏭 Production Center' },
     { key: 'rd' as const, label: '🔬 Sandbox R&D' },
     { key: 'smartkitchen' as const, label: '🤖 Smart Kitchen' },
-    { key: 'bom' as const, label: '🔧 BOM & Yield' },
+    { key: 'toppings' as const, label: '🧩 Add-on & Topping' },
+    { key: 'bom' as const, label: '🔧 Kebutuhan Bahan' },
   ];
 
   return (
@@ -41,7 +47,7 @@ export default function ProduksiDashboard(props: ProduksiDashboardProps) {
           <button
             key={t.key}
             onClick={() => setSubTab(t.key)}
-            className={`px-4 py-2 rounded-xl text-xs font-extrabold uppercase tracking-wider cursor-pointer transition-all ${
+            className={`px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider cursor-pointer transition-all ${
               subTab === t.key
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-white'
@@ -64,6 +70,7 @@ export default function ProduksiDashboard(props: ProduksiDashboardProps) {
           onAddVariant={props.onAddVariant}
           onUpdateVariant={props.onUpdateVariant}
           onDeleteVariant={props.onDeleteVariant}
+          showConfirm={props.showConfirm}
         />
       )}
       {subTab === 'production' && (
@@ -90,8 +97,18 @@ export default function ProduksiDashboard(props: ProduksiDashboardProps) {
           detailResep={props.detailResep}
         />
       )}
+      {subTab === 'toppings' && (
+        <ToppingsTab
+          toppings={props.toppings || []}
+          productHpp={props.productHpp}
+          bahanBaku={props.bahanBaku}
+          onAddTopping={props.onAddTopping || (() => {})}
+          onDeleteTopping={props.onDeleteTopping || (() => {})}
+          showConfirm={props.showConfirm}
+        />
+      )}
       {subTab === 'bom' && (
-        <BomTab productHpp={props.productHpp} calculatedProducts={props.calculatedProducts} />
+        <BomTab productHpp={props.productHpp} calculatedProducts={props.calculatedProducts} showConfirm={props.showConfirm} />
       )}
     </div>
   );

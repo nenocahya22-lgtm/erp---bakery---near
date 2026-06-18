@@ -33,9 +33,10 @@ interface FefoExpiryTabProps {
   cabangList?: Cabang[];
   suratOrders?: SuratOrder[];
   cabangStok?: BranchStock[];
+  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
 }
 
-export default function FefoExpiryTab({ bahanBaku, productHpp, detailResep = [], onAddWasteLog, cabangList = [], suratOrders = [], cabangStok = [] }: FefoExpiryTabProps) {
+export default function FefoExpiryTab({ bahanBaku, productHpp, detailResep = [], onAddWasteLog, cabangList = [], suratOrders = [], cabangStok = [], showConfirm }: FefoExpiryTabProps) {
   const [batches, setBatches] = useState<BatchLog[]>(() =>
     safeGetLocalStorage<BatchLog[]>('fefo_expiry_batches_data', [])
   );
@@ -631,7 +632,7 @@ export default function FefoExpiryTab({ bahanBaku, productHpp, detailResep = [],
           )}
 
           <div className="overflow-y-auto max-h-[500px]">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs table-fixed">
               <thead>
                 <tr className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50/50 sticky top-0">
                   <th className="px-4 py-2.5">Batch #</th>

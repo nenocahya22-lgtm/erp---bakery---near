@@ -50,9 +50,10 @@ interface AnggaranAlokasiTabProps {
   bahanBaku: BahanBaku[];
   wasteTotalLoss: number;
   rdTotalCost: number;
+  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
 }
 
-export default function AnggaranAlokasiTab({ calculatedProducts, bahanBaku, wasteTotalLoss, rdTotalCost }: AnggaranAlokasiTabProps) {
+export default function AnggaranAlokasiTab({ calculatedProducts, bahanBaku, wasteTotalLoss, rdTotalCost, showConfirm }: AnggaranAlokasiTabProps) {
   const [activeTab, setActiveTab] = useState<'alokasi' | 'history'>('alokasi');
   const [rules, setRules] = useState<AllocationRule[]>(() =>
     safeGetLocalStorage<AllocationRule[]>('anggaran_alokasi_rules', DEFAULT_RULES)

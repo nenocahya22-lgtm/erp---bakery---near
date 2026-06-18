@@ -738,7 +738,7 @@ ${woNotes ? `<div style="margin-top:12px;padding:12px;background:#fffbeb;border:
                     <Package className="w-3.5 h-3.5 inline text-emerald-600 mr-1" /> Takaran Bahan — {woBatch}x Resep
                   </h4>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
+                    <table className="w-full text-left text-xs table-fixed">
                       <thead>
                         <tr className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50">
                           <th className="px-4 py-2.5 rounded-l-lg">Bahan</th>
@@ -775,7 +775,7 @@ ${woNotes ? `<div style="margin-top:12px;padding:12px;background:#fffbeb;border:
                   <div className="mt-4 bg-emerald-50 p-4 rounded-xl border border-emerald-100">
                     <div className="grid grid-cols-3 gap-4 text-xs">
                       <div><span className="text-[10px] uppercase font-bold text-gray-500 block">Bahan</span><span className="font-mono font-black text-gray-900">{formatCurrency(woTotalCost)}</span></div>
-                      <div><span className="text-[10px] uppercase font-bold text-gray-500 block">HPP / Porsi</span><span className="font-mono font-black text-emerald-800">{formatCurrency(woTotalHpp/woTotalOutput)}</span></div>
+                      <div><span className="text-[10px] uppercase font-bold text-gray-500 block">Modal / Porsi</span><span className="font-mono font-black text-emerald-800">{formatCurrency(woTotalHpp/woTotalOutput)}</span></div>
                     </div>
                   </div>
                   {woNotes && <div className="mt-3 bg-amber-50 p-3 rounded-xl border border-amber-100 text-xs"><span className="font-bold text-amber-800">📝 Catatan:</span> {woNotes}</div>}

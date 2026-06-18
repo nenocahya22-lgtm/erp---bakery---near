@@ -350,7 +350,39 @@ export async function createAndInitializeTemplates(
   await updateSheetValues(accessToken, spreadsheetId, 'Resep Detail!A1', headerResep);
 }
 
-export async function saveProjectDataToSheets(
+// ─── DATA HASH CACHE untuk Differential Sync (kurangi API calls) ───
+let dataHashCache: Record<string, string> = {};
+
+function computeDataHash(data: any): string {
+  const str = JSON.stringify(data);
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return hash.toString(36);
+}
+
+function hasDataChanged(key: string, data: any): boolean {
+  const hash = computeDataHash(data);
+  if (dataHashCache[key] === hash) return false;
+  dataHashCache[key] = hash;
+  return true;
+}
+
+export function resetDataHashCache(): void {
+  dataHashCache = {};
+}
+
+// ─── ATOMIC SAVE — Satu API call, zero data loss risk ───
+function toCellValue(val: any): any {
+  if (val === null || val === undefined) return { userEnteredValue: {} };
+  if (typeof val === 'number') return { userEnteredValue: { numberValue: val } };
+  return { userEnteredValue: { stringValue: String(val) } };
+}
+
+export async function atomicReplaceProjectData(
   accessToken: string,
   spreadsheetId: string,
   data: {
@@ -359,22 +391,18 @@ export async function saveProjectDataToSheets(
     detailResep: DetailResep[];
   }
 ): Promise<void> {
+  const details = await getSpreadsheetDetails(accessToken, spreadsheetId);
+  const sheetMap: Record<string, number> = {};
+  (details.sheets || []).forEach((s: any) => {
+    sheetMap[s.properties.title] = s.properties.sheetId;
+  });
+
   const bbRows: any[][] = [['Nama Bahan', 'Satuan', 'Harga Satuan (Markup)', 'Isi Kemasan', 'Harga Satuan (Markup) Per Unit', 'Harga Beli Real', 'Harga Satuan Real Per Unit', 'Markup Percent (%)']];
   data.bahanBaku.forEach((b) => {
     const realPrice = b.hargaBeliReal !== undefined ? b.hargaBeliReal : b.hargaBeli;
     const realSatuan = b.hargaSatuanReal !== undefined ? b.hargaSatuanReal : (realPrice / (b.isiKemasan || 1));
     const markupPct = b.markupPercent !== undefined ? b.markupPercent : 0;
-    
-    bbRows.push([
-      b.nama, 
-      b.satuan, 
-      b.hargaBeli, 
-      b.isiKemasan, 
-      b.hargaSatuan, 
-      realPrice, 
-      realSatuan, 
-      markupPct
-    ]);
+    bbRows.push([b.nama, b.satuan, b.hargaBeli, b.isiKemasan, b.hargaSatuan, realPrice, realSatuan, markupPct]);
   });
 
   const hppRows: any[][] = [['Nama Produk', 'Porsi Jual', 'Harga Jual']];
@@ -387,13 +415,74 @@ export async function saveProjectDataToSheets(
     resepRows.push([r.namaProduk, r.namaBahan, r.takaran]);
   });
 
-  // 🔧 Batch clear + batch update — 2 API call (dari 6), kurangi window race condition & data loss
-  await batchClearSheetValues(accessToken, spreadsheetId, ['Bahan Baku', 'HPP Produk', 'Resep Detail']);
-  await batchUpdateSheetValues(accessToken, spreadsheetId, [
-    { range: 'Bahan Baku!A1', values: bbRows },
-    { range: 'HPP Produk!A1', values: hppRows },
-    { range: 'Resep Detail!A1', values: resepRows },
-  ]);
+  const sheetDefs = [
+    { id: sheetMap['Bahan Baku'], rows: bbRows },
+    { id: sheetMap['HPP Produk'], rows: hppRows },
+    { id: sheetMap['Resep Detail'], rows: resepRows },
+  ];
+
+  const requests: any[] = [];
+  for (const s of sheetDefs) {
+    if (!s.id) continue;
+    requests.push({
+      updateCells: {
+        range: { sheetId: s.id, startRowIndex: 0, startColumnIndex: 0 },
+        rows: s.rows.map(row => ({ values: row.map(c => toCellValue(c)) })),
+        fields: "userEnteredValue",
+      },
+    });
+    requests.push({
+      repeatCell: {
+        range: { sheetId: s.id, startRowIndex: s.rows.length, startColumnIndex: 0, endColumnIndex: 10 },
+        cell: { userEnteredValue: {} },
+        fields: "userEnteredValue",
+      },
+    });
+  }
+
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests }),
+    }
+  );
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Failed atomic save: ${response.status}`);
+  }
+}
+
+// ─── DIFFERENTIAL SAVE — Hanya kirim sheet yang berubah ───
+export async function saveProjectDataToSheets(
+  accessToken: string,
+  spreadsheetId: string,
+  data: {
+    bahanBaku: BahanBaku[];
+    productHpp: ProductHpp[];
+    detailResep: DetailResep[];
+  }
+): Promise<void> {
+  const bbHash = computeDataHash(data.bahanBaku);
+  const hppHash = computeDataHash(data.productHpp);
+  const resepHash = computeDataHash(data.detailResep);
+
+  const bbChanged = dataHashCache['bb'] !== bbHash;
+  const hppChanged = dataHashCache['hpp'] !== hppHash;
+  const resepChanged = dataHashCache['resep'] !== resepHash;
+
+  if (!bbChanged && !hppChanged && !resepChanged) {
+    return; // Tidak ada perubahan — skip
+  }
+
+  dataHashCache['bb'] = bbHash;
+  dataHashCache['hpp'] = hppHash;
+  dataHashCache['resep'] = resepHash;
+
+  // Kirim atomic — 1 API call untuk semua sheet
+  await atomicReplaceProjectData(accessToken, spreadsheetId, data);
 }
 
 export async function saveRevenueToSheets(
@@ -409,11 +498,18 @@ export async function saveRevenueToSheets(
     date: string;
   }[]
 ): Promise<void> {
+  const revHash = computeDataHash(transactions);
+  if (dataHashCache['revenue'] === revHash) return;
+  dataHashCache['revenue'] = revHash;
+
   // Check if Revenue Tracker sheet exists, create if not
   const details = await getSpreadsheetDetails(accessToken, spreadsheetId);
-  const sheetTitles = details.sheets?.map((s: any) => s.properties?.title as string) || [];
+  const sheetMap: Record<string, number> = {};
+  (details.sheets || []).forEach((s: any) => {
+    sheetMap[s.properties.title] = s.properties.sheetId;
+  });
 
-  if (!sheetTitles.includes('Revenue Tracker')) {
+  if (!sheetMap['Revenue Tracker']) {
     const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
       method: 'POST',
       headers: {
@@ -428,25 +524,52 @@ export async function saveRevenueToSheets(
       const err = await response.json().catch(() => ({}));
       throw new Error(err.error?.message || 'Failed to create Revenue Tracker sheet');
     }
+    sheetMap['Revenue Tracker'] = details.sheets?.length || 1;
   }
 
-  // Write header + data
   const rows: any[][] = [['Date', 'Time', 'ID', 'Product', 'Qty', 'Amount', 'Source']];
-  // Sort by date descending, newest first
   const sorted = [...transactions].sort((a, b) => {
     if (a.date !== b.date) return b.date.localeCompare(a.date);
     return b.time.localeCompare(a.time);
   });
-  // Only write last 1000 transactions to sheets (to avoid hitting limits)
   const limited = sorted.slice(0, 1000);
   limited.forEach((tx) => {
     rows.push([tx.date, tx.time, tx.id, tx.product, tx.qty, tx.amount, tx.source]);
   });
 
-  await batchClearSheetValues(accessToken, spreadsheetId, ['Revenue Tracker']);
-  await batchUpdateSheetValues(accessToken, spreadsheetId, [
-    { range: 'Revenue Tracker!A1', values: rows },
-  ]);
+  const sheetId = sheetMap['Revenue Tracker'];
+  if (!sheetId) throw new Error('Revenue Tracker sheet ID not found');
+
+  const requests: any[] = [
+    {
+      updateCells: {
+        range: { sheetId, startRowIndex: 0, startColumnIndex: 0 },
+        rows: rows.map(row => ({ values: row.map(c => toCellValue(c)) })),
+        fields: "userEnteredValue",
+      },
+    },
+    {
+      repeatCell: {
+        range: { sheetId, startRowIndex: rows.length, startColumnIndex: 0, endColumnIndex: 10 },
+        cell: { userEnteredValue: {} },
+        fields: "userEnteredValue",
+      },
+    },
+  ];
+
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests }),
+    }
+  );
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Failed atomic revenue save: ${response.status}`);
+  }
 }
 
 export async function loadRevenueFromSheets(

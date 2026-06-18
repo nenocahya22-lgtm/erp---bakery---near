@@ -9,10 +9,11 @@ interface DataPusatPengirimanSectionProps {
   onAddSuratOrder: (so: SuratOrder) => void;
   onUpdateSuratOrder: (id: string, so: SuratOrder) => void;
   onReturSuratOrder?: (id: string, returNote: string) => void;
+  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
 }
 
 export default function DataPusatPengirimanSection({
-  cabangList, bahanBaku, suratOrders, onAddSuratOrder, onUpdateSuratOrder, onReturSuratOrder,
+  cabangList, bahanBaku, suratOrders, onAddSuratOrder, onUpdateSuratOrder, onReturSuratOrder, showConfirm,
 }: DataPusatPengirimanSectionProps) {
   const [showSOModal, setShowSOModal] = useState(false);
   const [soCabangId, setSoCabangId] = useState('');
@@ -369,7 +370,7 @@ export default function DataPusatPengirimanSection({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table className="w-full text-left text-xs border-collapse table-fixed">
                 <thead>
                   <tr className="border-b bg-gray-50 text-[10px] font-bold text-gray-500 uppercase">
                     <th className="px-4 py-3">Tanggal</th>

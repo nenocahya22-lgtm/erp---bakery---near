@@ -61,17 +61,17 @@ export default function MaterialsTab({ bahanBaku, cabangList, cabangStok, suratO
           <p className="text-xs text-gray-400 text-center py-8">Belum ada bahan baku terdaftar. Tambah via Data Pusat.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full text-left text-xs border-collapse table-fixed">
               <thead>
                 <tr className="border-b bg-gray-50 text-[10px] font-bold text-gray-500 uppercase">
                   <th className="px-4 py-3">Kode</th>
                   <th className="px-4 py-3">Nama Bahan</th>
                   <th className="px-4 py-3">Kategori</th>
-                  <th className="px-4 py-3">Kemasan</th>
+                  <th className="px-4 py-3">Stok</th>
                   <th className="px-4 py-3">Satuan</th>
-                  <th className="px-4 py-3 text-right">Harga Beli</th>
+                  <th className="px-4 py-3 text-right">Harga Beli (Real)</th>
                   <th className="px-4 py-3 text-right">Harga Satuan</th>
-                  <th className="px-4 py-3 text-right">Stok Pusat</th>
+                  <th className="px-4 py-3 text-right">Nilai Stok</th>
                   <th className="px-4 py-3 text-center">Batas Aman</th>
                   <th className="px-4 py-3 text-center">Status</th>
                 </tr>
@@ -84,7 +84,7 @@ export default function MaterialsTab({ bahanBaku, cabangList, cabangStok, suratO
                     <td className="px-4 py-3"><span className="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">{b.kategori || 'Produk'}</span></td>
                     <td className="px-4 py-3 font-mono">{b.isiKemasan}</td>
                     <td className="px-4 py-3 font-semibold text-emerald-700">{b.satuan}</td>
-                    <td className="px-4 py-3 text-right font-mono">{formatCurrency(b.hargaBeli)}</td>
+                    <td className="px-4 py-3 text-right font-mono">{formatCurrency(b.hargaBeliReal || b.hargaBeli)}</td>
                     <td className="px-4 py-3 text-right font-mono text-gray-500">{formatCurrency(b.hargaSatuan)}/{b.satuan}</td>
                     <td className="px-4 py-3 text-right font-mono font-bold">{b.isiKemasan} {b.satuan}</td>
                     <td className="px-4 py-3 text-center">
@@ -191,7 +191,7 @@ export default function MaterialsTab({ bahanBaku, cabangList, cabangStok, suratO
                     </span>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
+                    <table className="w-full text-left text-xs border-collapse table-fixed">
                       <thead>
                         <tr className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50">
                           <th className="px-3 py-2 rounded-l-lg">Bahan</th>

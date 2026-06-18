@@ -1,22 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { BahanBaku } from '../types';
+import { BahanBaku, Cabang, SuratOrder } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
-import { Package, Search, Plus, Trash2, Edit2, Printer, FileText, X } from 'lucide-react';
+import { Package, Search, Plus, Trash2, Edit2, Printer, FileText, X, Building2, Truck } from 'lucide-react';
 
 interface DataPusatBahanSectionProps {
   bahanBaku: BahanBaku[];
   onAddMaterial: (m: BahanBaku) => void;
   onEditMaterial: (oldName: string, m: BahanBaku) => void;
   onDeleteMaterial: (name: string) => void;
+  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
+  cabangList?: Cabang[];
+  suratOrders?: SuratOrder[];
 }
 
 export default function DataPusatBahanSection({
-  bahanBaku, onAddMaterial, onEditMaterial, onDeleteMaterial,
+  bahanBaku, onAddMaterial, onEditMaterial, onDeleteMaterial, showConfirm,
+  cabangList = [], suratOrders = [],
 }: DataPusatBahanSectionProps) {
   const [bahanSearch, setBahanSearch] = useState('');
   const [showBahanModal, setShowBahanModal] = useState(false);
   const [editingBahan, setEditingBahan] = useState<BahanBaku | null>(null);
-  const [bahanForm, setBahanForm] = useState({kode:'',nama:'',satuan:'gr',isiKemasan:1000,hargaBeliReal:0,markupPercent:25,kategori:'Produk'});
+  const [bahanForm, setBahanForm] = useState({kode:'',nama:'',satuan:'gr',isiKemasan:1000,hargaBeliReal:0,markupPercent:25,kategori:'Produk',konversiGram:0});
 
   const [bahanKategoriList, setBahanKategoriList] = useState<string[]>(() => {
     const saved = safeGetLocalStorage<string[]>('bahan_kategori_list', []);
@@ -189,7 +193,7 @@ export default function DataPusatBahanSection({
           const defaultSatuan = defaultKategori === 'Minuman' ? 'ml' : defaultKategori === 'Alat' ? 'pcs' : 'gr';
           const defaultIsi = defaultKategori === 'Alat' ? 1 : 1000;
           const defaultMarkup = defaultKategori === 'Alat' ? 0 : 25;
-          setBahanForm({kode: autoKode, nama: '', satuan: defaultSatuan, isiKemasan: defaultIsi, hargaBeliReal: 0, markupPercent: defaultMarkup, kategori: defaultKategori});
+          setBahanForm({kode: autoKode, nama: '', satuan: defaultSatuan, isiKemasan: defaultIsi, hargaBeliReal: 0, markupPercent: defaultMarkup, kategori: defaultKategori, konversiGram: 0});
           setShowBahanModal(true);
         }}
           className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer">
@@ -254,22 +258,43 @@ export default function DataPusatBahanSection({
           </div>
         </div>
       </div>
+
+      {/* ─── STOK STATS CARDS ─── */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 px-4 pb-4">
+        <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+          <p className="text-[10px] uppercase font-bold text-emerald-800">Total Jenis Bahan</p>
+          <p className="text-xl font-black text-emerald-700 font-mono mt-1">{bahanBaku.length}</p>
+        </div>
+        <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+          <p className="text-[10px] uppercase font-bold text-blue-800">Total Cabang Aktif</p>
+          <p className="text-xl font-black text-blue-700 font-mono mt-1">{cabangList.filter(c => c.isActive).length}</p>
+        </div>
+        <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
+          <p className="text-[10px] uppercase font-bold text-amber-800">SO Dikirim</p>
+          <p className="text-xl font-black text-amber-700 font-mono mt-1">{suratOrders.filter(s => s.status === 'dikirim').length}</p>
+        </div>
+        <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
+          <p className="text-[10px] uppercase font-bold text-purple-800">Permintaan Pending</p>
+          <p className="text-xl font-black text-purple-700 font-mono mt-1">{suratOrders.filter(s => s.status === 'minta').length}</p>
+        </div>
+      </div>
+
       {bahanBaku.length === 0 ? (
         <p className="text-xs text-gray-400 text-center py-8">Belum ada bahan terdaftar.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+<table className="w-full text-left text-xs border-collapse table-fixed">
             <thead>
               <tr className="border-b bg-gray-50 text-[10px] font-bold text-gray-500 uppercase">
                 <th className="px-4 py-3">Kode</th>
                 <th className="px-4 py-3">Kategori</th>
                 <th className="px-4 py-3">Nama Bahan</th>
-                <th className="px-4 py-3">Kemasan</th>
+                <th className="px-4 py-3 text-right">Stok Gudang</th>
+                <th className="px-4 py-3 text-right">Total Dikirim</th>
+                <th className="px-4 py-3 text-right">Sisa Stok</th>
                 <th className="px-4 py-3">Satuan</th>
-                <th className="px-4 py-3 text-right">Harga Beli (Real)</th>
-                <th className="px-4 py-3 text-right">Markup</th>
-                <th className="px-4 py-3 text-right">Harga Jual/Kemasan</th>
                 <th className="px-4 py-3 text-right">Harga Satuan</th>
+                <th className="px-4 py-3 text-center">Status</th>
                 <th className="px-4 py-3 text-center">Aksi</th>
               </tr>
             </thead>
@@ -281,12 +306,20 @@ export default function DataPusatBahanSection({
               }).map((b, idx) => {
                 const markPct = b.markupPercent ?? 25;
                 const hargaMarkup = b.hargaBeliReal > 0 ? b.hargaBeliReal * (1 + markPct/100) : b.hargaBeli;
+                const totalDikirim = suratOrders
+                  .filter(s => s.status === 'dikirim' || s.status === 'diterima')
+                  .flatMap(s => s.items)
+                  .filter(i => i.bahanNama === b.nama)
+                  .reduce((acc, i) => acc + i.qty, 0);
+                const sisaStok = b.isiKemasan;
                 return (
                   <tr key={b.nama} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono text-gray-500">{b.kode || `BB-${String(idx + 1).padStart(3, '0')}`}</td>
                     <td className="px-4 py-3"><span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full font-bold">{b.kategori || 'Produk'}</span></td>
                     <td className="px-4 py-3 font-semibold text-gray-900">{b.nama}</td>
-                    <td className="px-4 py-3 font-mono">{b.isiKemasan}</td>
+                    <td className="px-4 py-3 text-right font-mono">{b.isiKemasan}</td>
+                    <td className="px-4 py-3 text-right font-mono text-red-600">{totalDikirim > 0 ? `-${totalDikirim}` : '-'}</td>
+                    <td className={`px-4 py-3 text-right font-mono font-bold ${sisaStok < 10 ? 'text-red-700' : 'text-emerald-700'}`}>{sisaStok}</td>
                     <td className="px-4 py-3">{b.satuan}</td>
                     <td className="px-4 py-3 text-right font-mono">{b.hargaBeliReal > 0 ? formatCurrency(b.hargaBeliReal) : formatCurrency(b.hargaBeli)}</td>
                     <td className="px-4 py-3 text-right font-mono font-bold text-amber-700">{markPct}%</td>
@@ -294,7 +327,7 @@ export default function DataPusatBahanSection({
                     <td className="px-4 py-3 text-right font-mono text-gray-500">{formatCurrency(b.hargaSatuan)}/{b.satuan}</td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex justify-center gap-1">
-                        <button onClick={() => { setEditingBahan(b); setBahanForm({kode:b.kode||'',nama:b.nama,satuan:b.satuan,isiKemasan:b.isiKemasan,hargaBeliReal:b.hargaBeliReal||b.hargaBeli,markupPercent:markPct,kategori:b.kategori||'Produk'}); setShowBahanModal(true); }}
+                        <button onClick={() => { setEditingBahan(b); setBahanForm({kode:b.kode||'',nama:b.nama,satuan:b.satuan,isiKemasan:b.isiKemasan,hargaBeliReal:b.hargaBeliReal||b.hargaBeli,markupPercent:markPct,kategori:b.kategori||'Produk',konversiGram:b.konversiGram||0}); setShowBahanModal(true); }}
                           className="p-1.5 text-gray-400 hover:text-emerald-600 rounded-lg hover:bg-gray-100 cursor-pointer" title="Edit">
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
@@ -313,6 +346,15 @@ export default function DataPusatBahanSection({
       )}
       <div className="p-3 bg-blue-50 border-t border-blue-100 text-[10px] text-blue-800">
         <strong>💡 Markup Harga:</strong> Harga Beli (Real) × (1 + Markup%) = Harga Jual per Kemasan. <strong>Contoh:</strong> Rp10.000 × 25% markup = Rp12.500/kemasan.
+      </div>
+
+      {/* ─── STOK FLOW INFO ─── */}
+      <div className="mx-4 mb-4 p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-[10px] text-indigo-800">
+        <strong>Alur Stok Pusat → Cabang:</strong><br />
+        1. Cabang minta barang → Status <strong>"🕐 Minta"</strong> (pending)<br />
+        2. Owner setujui → Status <strong>"Dikirim"</strong> → <strong>Stok Pusat berkurang</strong> ✅<br />
+        3. Cabang terima → Status <strong>"Diterima"</strong> → <strong>Stok Cabang bertambah</strong> ✅<br />
+        Stok pusat otomatis ter-update dari setiap pengiriman.
       </div>
     </div>
 
@@ -357,7 +399,7 @@ export default function DataPusatBahanSection({
               <>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Kemasan (isi)</label>
+                    <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Stok Saat Ini</label>
                     <input type="number" min="1" value={bahanForm.isiKemasan}
                       onChange={e => setBahanForm(f => ({...f, isiKemasan: parseInt(e.target.value)||0}))}
                       className="w-full text-xs border border-gray-200 rounded-xl p-2.5 font-mono" />
@@ -378,6 +420,21 @@ export default function DataPusatBahanSection({
                     </select>
                   </div>
                 </div>
+                {['pcs','pack','bungkus','box','krat','ikat','ekor','karung','dus'].includes(bahanForm.satuan) && (
+                <div className="mb-3">
+                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Berat per Unit (gram) — untuk konversi takaran resep</label>
+                  <div className="flex items-center gap-2">
+                    <input type="number" min="0" step="0.1" placeholder="0" value={bahanForm.konversiGram}
+                      onChange={e => setBahanForm(f => ({...f, konversiGram: parseFloat(e.target.value)||0}))}
+                      className="w-24 text-xs border border-gray-200 rounded-xl p-2.5 font-mono" />
+                    <span className="text-[10px] text-gray-400">gr / {bahanForm.satuan}</span>
+                    {bahanForm.konversiGram > 0 && (
+                      <span className="text-[10px] text-emerald-600 font-semibold ml-2">1 {bahanForm.satuan} = {bahanForm.konversiGram} gr</span>
+                    )}
+                  </div>
+                  <p className="text-[9px] text-gray-400 mt-1">Contoh: 1 telur = 50gr. Isi 50 agar resep dalam gram otomatis dikonversi ke {bahanForm.satuan}.</p>
+                </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Harga Beli (Real) *</label>
@@ -470,17 +527,20 @@ export default function DataPusatBahanSection({
                 const isAlat = bahanForm.kategori === 'Alat';
                 const hargaJual = isAlat ? bahanForm.hargaBeliReal : Math.round(bahanForm.hargaBeliReal * (1 + bahanForm.markupPercent/100));
                 const hargaSatuan = isAlat ? bahanForm.hargaBeliReal : (bahanForm.isiKemasan > 0 ? Math.round(hargaJual / bahanForm.isiKemasan) : 0);
+                const finalIsiKemasan = isAlat ? (bahanForm.isiKemasan || 1) : bahanForm.isiKemasan;
                 const newBahan: BahanBaku = {
                   kode: bahanForm.kode || undefined,
                   nama: bahanForm.nama.trim(),
                   kategori: bahanForm.kategori || undefined,
                   satuan: isAlat ? 'pcs' : bahanForm.satuan,
-                  isiKemasan: isAlat ? (bahanForm.isiKemasan || 1) : bahanForm.isiKemasan,
+                  isiKemasan: finalIsiKemasan,
+                  stok: finalIsiKemasan,
                   hargaBeli: hargaJual,
                   hargaSatuan: hargaSatuan,
                   hargaBeliReal: bahanForm.hargaBeliReal,
                   hargaSatuanReal: isAlat ? bahanForm.hargaBeliReal : (bahanForm.isiKemasan > 0 ? Math.round(bahanForm.hargaBeliReal / bahanForm.isiKemasan) : 0),
                   markupPercent: isAlat ? 0 : bahanForm.markupPercent,
+                  konversiGram: bahanForm.konversiGram > 0 ? bahanForm.konversiGram : undefined,
                 };
                 if (editingBahan) {
                   onEditMaterial(editingBahan.nama, newBahan);

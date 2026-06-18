@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CalculationResult, BahanBaku } from '../types';
-import { BookOpen, DollarSign, TrendingUp, Package, AlertTriangle, FileDown, Printer, RefreshCw, Trash2, Plus, Coins, ShoppingCart } from 'lucide-react';
+import { BookOpen, DollarSign, TrendingUp, Package, AlertTriangle, FileDown, Printer, RefreshCw, Trash2, Plus, Coins, ShoppingCart, Lock } from 'lucide-react';
 import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface RevenueTx {
@@ -17,9 +17,10 @@ interface LaporanKeuanganTabProps {
   bahanBaku: BahanBaku[];
   wasteTotalLoss: number;
   rdTotalCost: number;
+  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
 }
 
-export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wasteTotalLoss, rdTotalCost }: LaporanKeuanganTabProps) {
+export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wasteTotalLoss, rdTotalCost, showConfirm }: LaporanKeuanganTabProps) {
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
@@ -41,20 +42,23 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
   const branchTx = safeGetLocalStorage<any[]>('branch_transactions_data', []);
   const wasteByLocation = safeGetLocalStorage<Record<string, number>>('waste_by_location_data', {});
 
-  // ─── OPEX ITEMS (dinamis) ───
-  const [opexItems, setOpexItems] = useState<{ id: string; label: string; amount: number }[]>(() =>
-    safeGetLocalStorage<{ id: string; label: string; amount: number }[]>('opex_items_data', [])
+  // ─── OPEX ITEMS (dinamis, per cabang) ───
+  const [opexItems, setOpexItems] = useState<{ id: string; label: string; amount: number; cabangId?: string }[]>(() =>
+    safeGetLocalStorage<{ id: string; label: string; amount: number; cabangId?: string }[]>('opex_items_data', [])
   );
   const [newOpexLabel, setNewOpexLabel] = useState('');
   const [newOpexAmount, setNewOpexAmount] = useState('');
+  const [newOpexCabang, setNewOpexCabang] = useState('global');
 
   useEffect(() => { localStorage.setItem('opex_items_data', JSON.stringify(opexItems)); }, [opexItems]);
 
   const addOpex = () => {
     if (!newOpexLabel.trim() || !newOpexAmount) return;
-    setOpexItems(prev => [...prev, { id: `opex-${Date.now()}`, label: newOpexLabel.trim(), amount: parseInt(newOpexAmount) || 0 }]);
+    const cabangId = newOpexCabang === 'global' ? undefined : newOpexCabang;
+    setOpexItems(prev => [...prev, { id: `opex-${Date.now()}`, label: newOpexLabel.trim(), amount: parseInt(newOpexAmount) || 0, cabangId }]);
     setNewOpexLabel('');
     setNewOpexAmount('');
+    setNewOpexCabang('global');
   };
 
   const deleteOpex = async (id: string) => {
@@ -105,18 +109,79 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
     ? branchTx
     : branchTx.filter((tx: any) => (tx.cabangId || '').toLowerCase().trim() === selectedCabang.toLowerCase().trim());
 
-  // ─── COGS ───
-  const avgHpp = calculatedProducts.length > 0
-    ? calculatedProducts.reduce((s, p) => s + p.hppPerPorsi, 0) / calculatedProducts.length : 0;
+  // ─── COGS (HPP Terjual) — Akurat ───
+  // Coba match dari calculatedProducts dulu, lalu manual dari resep & harga bahan
+  const findProductHpp = (productName: string): number | null => {
+    const name = productName.toLowerCase().trim();
+    const exact = calculatedProducts.find(p => p.namaProduk.toLowerCase().trim() === name);
+    if (exact) return exact.hppPerPorsi;
+    const partial = calculatedProducts.find(p =>
+      p.namaProduk.toLowerCase().trim().includes(name) || name.includes(p.namaProduk.toLowerCase().trim())
+    );
+    if (partial) return partial.hppPerPorsi;
 
-  const actualCOGS = filteredTx.reduce((sum: number, tx: any) => {
-    const prod = calculatedProducts.find(p => p.namaProduk.toLowerCase().trim() === tx.product.toLowerCase().trim());
-    return sum + (prod ? prod.hppPerPorsi * tx.qty : avgHpp * tx.qty);
+    // Fallback: hitung manual dari detailResep + hargaBeli bahan baku terkini
+    const resep = safeGetLocalStorage<any[]>('detail_resep_data', []).filter(
+      (r: any) => r.namaProduk.toLowerCase().trim() === name || name.includes(r.namaProduk.toLowerCase().trim())
+    );
+    if (resep.length > 0) {
+      const productInfo = safeGetLocalStorage<any[]>('product_hpp_data', []).find(
+        (p: any) => p.namaProduk.toLowerCase().trim() === name || name.includes(p.namaProduk.toLowerCase().trim())
+      );
+      const porsiJual = productInfo?.porsiJual || 1;
+      const bahanList = safeGetLocalStorage<any[]>('bahan_baku_data', []);
+      let totalBiaya = 0;
+      resep.forEach((r: any) => {
+        const bahan = bahanList.find((b: any) => b.nama.toLowerCase().trim() === r.namaBahan.toLowerCase().trim());
+        if (bahan) {
+          const hargaSatuan = bahan.hargaSatuanReal > 0 ? bahan.hargaSatuanReal : (bahan.hargaSatuan || 0);
+          totalBiaya += (r.takaran / porsiJual) * hargaSatuan;
+        }
+      });
+      if (totalBiaya > 0) return totalBiaya;
+    }
+    return null;
+  };
+
+  const baseCOGS = filteredTx.reduce((sum: number, tx: any) => {
+    const hpp = findProductHpp(tx.product);
+    if (hpp !== null) {
+      return sum + hpp * tx.qty;
+    }
+    return sum;
   }, 0);
 
+  const fallbackHpp = calculatedProducts.length > 0
+    ? calculatedProducts.reduce((s, p) => s + p.hppPerPorsi, 0) / calculatedProducts.length
+    : 0;
+  const unmatchedProducts = [...new Set(filteredTx
+    .filter(tx => {
+      const name = (tx.product || '').toLowerCase().trim();
+      const exact = calculatedProducts.find(p => p.namaProduk.toLowerCase().trim() === name);
+      const partial = exact ? null : calculatedProducts.find(p =>
+        p.namaProduk.toLowerCase().trim().includes(name) || name.includes(p.namaProduk.toLowerCase().trim())
+      );
+      return !exact && !partial;
+    })
+    .map(tx => tx.product))];
+  const unresolvedCOGS = filteredTx
+    .filter(tx => unmatchedProducts.includes(tx.product))
+    .reduce((sum, tx) => {
+      const name = (tx.product || '').toLowerCase().trim();
+      const resep = safeGetLocalStorage<any[]>('detail_resep_data', []).filter(
+        (r: any) => r.namaProduk.toLowerCase().trim() === name || name.includes(r.namaProduk.toLowerCase().trim())
+      );
+      if (resep.length > 0) return sum; // sudah dihitung di baseCOGS via findProductHpp manual
+      return sum + fallbackHpp * tx.qty;
+    }, 0);
+  const totalCOGS = baseCOGS + unresolvedCOGS;
+
   // ─── NET INCOME ───
-  const totalOPEX = opexItems.reduce((sum, item) => sum + item.amount, 0);
-  const netIncome = monthlyRevenue - actualCOGS - totalOPEX - filteredWaste - rdTotalCost;
+  const filteredOpex = selectedCabang === 'semua'
+    ? opexItems
+    : opexItems.filter(o => !o.cabangId || o.cabangId === selectedCabang);
+  const totalOPEX = filteredOpex.reduce((sum, item) => sum + item.amount, 0);
+  const netIncome = monthlyRevenue - totalCOGS - totalOPEX - filteredWaste - rdTotalCost;
   const marginPct = monthlyRevenue > 0 ? (netIncome / monthlyRevenue) * 100 : 0;
 
   // ─── STOK & PRODUK ───
@@ -154,7 +219,7 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
         <table>
           <tr><td>Revenue (Penjualan)</td><td style="text-align:right;font-family:monospace;font-weight:bold;">${formatCurrency(monthlyRevenue)}</td></tr>
           <tr><td>Total Transaksi</td><td style="text-align:right;">${filteredTx.length} transaksi (${monthlyQty} pcs)</td></tr>
-          <tr><td>HPP Bahan Baku</td><td style="text-align:right;font-family:monospace;color:#dc2626;">${formatCurrency(actualCOGS)}</td></tr>
+          <tr><td>Modal Bahan Baku</td><td style="text-align:right;font-family:monospace;color:#dc2626;">${formatCurrency(totalCOGS)}</td></tr>
           <tr><td>Total OPEX</td><td style="text-align:right;font-family:monospace;color:#dc2626;">${formatCurrency(totalOPEX)}</td></tr>
           <tr><td>Waste & Write-off</td><td style="text-align:right;font-family:monospace;color:#dc2626;">${formatCurrency(filteredWaste)}</td></tr>
           <tr><td>R&D (Litbang)</td><td style="text-align:right;font-family:monospace;color:#dc2626;">${formatCurrency(rdTotalCost)}</td></tr>
@@ -179,7 +244,7 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
         <h2>📋 RINCIAN BIAYA OPEX</h2>
         <table>
           <tr><th>Item</th><th style="text-align:right;">Amount</th></tr>
-          ${opexItems.filter(o => o.amount > 0).map(o => `<tr><td>${o.label}</td><td style="text-align:right;font-family:monospace;">${formatCurrency(o.amount)}</td></tr>`).join('')}
+          ${filteredOpex.filter(o => o.amount > 0).map(o => `<tr><td>${o.label}${o.cabangId ? ` (@${cabangList.find((c: any) => c.id === o.cabangId)?.nama || o.cabangId})` : ''}</td><td style="text-align:right;font-family:monospace;">${formatCurrency(o.amount)}</td></tr>`).join('')}
         </table>
         <script>window.print();<\/script>
       </body></html>
@@ -194,7 +259,7 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
       ['Revenue 30 Hari', formatCurrency(monthlyRevenue)],
       ['Total Transaksi', filteredTx.length.toString()],
       ['Qty Terjual', monthlyQty.toString()],
-      ['HPP Bahan', formatCurrency(actualCOGS)],
+      ['HPP Bahan', formatCurrency(totalCOGS)],
       ['Total OPEX', formatCurrency(totalOPEX)],
       ['Waste & Write-off', formatCurrency(filteredWaste)],
       ['R&D', formatCurrency(rdTotalCost)],
@@ -207,7 +272,7 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
       ['Rata-rata Margin', `${avgMargin.toFixed(1)}%`],
       ['Total Cabang', cabangList.length.toString()],
       ['Total Transaksi Cabang', branchTx.length.toString()],
-      ...opexItems.filter(o => o.amount > 0).map(o => [`OPEX: ${o.label}`, formatCurrency(o.amount)]),
+      ...filteredOpex.filter(o => o.amount > 0).map(o => [`OPEX: ${o.label}${o.cabangId ? ` (@${cabangList.find((c: any) => c.id === o.cabangId)?.nama || o.cabangId})` : ''}`, formatCurrency(o.amount)]),
     ];
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -218,13 +283,37 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
     a.click();
   };
 
+  // ─── ANTI-MANIPULASI: KODE OTORITAS ───
+  const [pendingDeleteTxId, setPendingDeleteTxId] = useState<string | null>(null);
+  const [authCode, setAuthCode] = useState('');
+  const [authError, setAuthError] = useState('');
+
+  const AUTHORITY_CODE = safeGetLocalStorage<string>('authority_code', 'owner123');
+
+  const handleRequestDelete = (txId: string) => {
+    setPendingDeleteTxId(txId);
+    setAuthCode('');
+    setAuthError('');
+  };
+
   // ─── DELETE TRANSACTION ───
-  const handleDeleteTx = async (txId: string) => {
+  const handleDeleteTx = async () => {
+    const txId = pendingDeleteTxId;
+    if (!txId) return;
+
+    if (authCode !== AUTHORITY_CODE) {
+      setAuthError('Kode otoritas salah!');
+      return;
+    }
+
+    setPendingDeleteTxId(null);
+    setAuthCode('');
+
     const confirmed_211 = await new Promise<boolean>((resolve) => {
       showConfirm({
-        title: 'Konfirmasi',
-        message: 'Hapus transaksi ini?',
-        confirmLabel: 'Ya',
+        title: 'Konfirmasi Hapus',
+        message: 'Hapus transaksi ini? Tindakan ini tidak bisa dibatalkan.',
+        confirmLabel: 'Ya, Hapus',
         cancelLabel: 'Batal',
         variant: 'warning',
         onConfirm: () => resolve(true),
@@ -247,6 +336,12 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
         setRevenueData(data);
       } catch (e) { console.error('Delete tx failed:', e); }
     }
+  };
+
+  const handleCancelDelete = () => {
+    setPendingDeleteTxId(null);
+    setAuthCode('');
+    setAuthError('');
   };
 
   // ─── PRODUK TERJUAL ───
@@ -335,13 +430,13 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
         </div>
         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs space-y-1">
           <span className="text-[10px] uppercase font-bold text-gray-400 block">HPP Bahan</span>
-          <p className="text-xl font-black font-mono text-rose-600">{formatCurrency(actualCOGS)}</p>
-          <div className="text-[10px] text-gray-400">{monthlyRevenue > 0 ? ((actualCOGS/monthlyRevenue)*100).toFixed(1) : 0}% dari revenue</div>
+          <p className="text-xl font-black font-mono text-rose-600">{formatCurrency(totalCOGS)}</p>
+          <div className="text-[10px] text-gray-400">{monthlyRevenue > 0 ? ((totalCOGS/monthlyRevenue)*100).toFixed(1) : 0}% dari revenue</div>
         </div>
         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs space-y-1">
           <span className="text-[10px] uppercase font-bold text-gray-400 block">Biaya Operasional</span>
           <p className="text-xl font-black font-mono text-rose-600">{formatCurrency(totalOPEX)}</p>
-          <div className="text-[10px] text-gray-400">{opexItems.filter(o => o.amount > 0).length} item aktif</div>
+          <div className="text-[10px] text-gray-400">{filteredOpex.filter(o => o.amount > 0).length} item aktif</div>
         </div>
         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs space-y-1">
           <span className="text-[10px] uppercase font-bold text-gray-400 block">Waste & R&D</span>
@@ -372,11 +467,16 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
           </div>
           <div className="py-3 flex justify-between text-rose-600">
             <span>(-) HPP Bahan Baku</span>
-            <span className="font-mono font-bold">-{formatCurrency(actualCOGS)}</span>
+            <span className="font-mono font-bold">-{formatCurrency(totalCOGS)}</span>
           </div>
-          {opexItems.filter(o => o.amount > 0).map(item => (
+          {unmatchedProducts.length > 0 && (
+            <div className="py-2 flex justify-between text-amber-500 text-[9px] italic">
+              <span>* {unmatchedProducts.length} produk tanpa resep, pakai rata-rata HPP ({formatCurrency(fallbackHpp)}/pcs)</span>
+            </div>
+          )}
+          {filteredOpex.filter(o => o.amount > 0).map(item => (
             <div key={item.id} className="py-3 flex justify-between text-rose-600">
-              <span>(-) {item.label}</span>
+              <span>(-) {item.label}{item.cabangId ? ` (@${cabangList.find((c: any) => c.id === item.cabangId)?.nama || item.cabangId})` : ''}</span>
               <span className="font-mono font-bold">-{formatCurrency(item.amount)}</span>
             </div>
           ))}
@@ -409,9 +509,13 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
             <p className="text-xs text-gray-400 text-center py-4">Belum ada item OPEX. Tambah di bawah.</p>
           ) : (
             <div className="space-y-2">
-              {opexItems.map(item => (
+              {opexItems.map(item => {
+                const cabang = item.cabangId ? cabangList.find((c: any) => c.id === item.cabangId) : null;
+                return (
                 <div key={item.id} className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-150">
                   <span className="font-bold text-xs text-gray-700 flex-1">{item.label}</span>
+                  {cabang && <span className="text-[9px] text-gray-400 bg-white px-1.5 py-0.5 rounded border">{cabang.nama}</span>}
+                  {!item.cabangId && <span className="text-[9px] text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">Global</span>}
                   <div className="relative w-32">
                     <span className="absolute inset-y-0 left-0 pl-2 flex items-center text-gray-400 font-bold text-xs">Rp</span>
                     <input type="number" value={item.amount}
@@ -423,7 +527,8 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -438,6 +543,13 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
               placeholder="0"
               className="w-full pl-7 pr-2 py-1.5 border border-emerald-200 rounded-lg font-mono font-bold text-xs" />
           </div>
+          <select value={newOpexCabang} onChange={e => setNewOpexCabang(e.target.value)}
+            className="text-[10px] border border-emerald-200 rounded-lg px-1.5 py-1.5 font-bold bg-white">
+            <option value="global">🌐 Global</option>
+            {cabangList.filter((c: any) => c.isActive).map((c: any) => (
+              <option key={c.id} value={c.id}>{c.nama}</option>
+            ))}
+          </select>
           <button onClick={addOpex} disabled={!newOpexLabel.trim() || !newOpexAmount}
             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-xs font-bold rounded-lg transition cursor-pointer disabled:cursor-not-allowed flex items-center gap-1">
             <Plus className="w-3.5 h-3.5" /> Tambah
@@ -558,7 +670,7 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
           </div>
         ) : (
           <div className="max-h-[300px] overflow-y-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs table-fixed">
               <thead className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50/50 sticky top-0">
                 <tr>
                   <th className="px-4 py-2.5">Tanggal</th>
@@ -578,7 +690,7 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
                     <td className="px-4 py-2.5 text-right font-mono font-bold text-emerald-700">{formatCurrency(tx.amount)}</td>
                     <td className="px-4 py-2.5 text-gray-500">{tx.source}</td>
                     <td className="px-4 py-2.5 text-center">
-                      <button onClick={() => handleDeleteTx(tx.id)}
+                      <button onClick={() => handleRequestDelete(tx.id)}
                         className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer" title="Hapus transaksi">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -590,10 +702,54 @@ export default function LaporanKeuanganTab({ calculatedProducts, bahanBaku, wast
           </div>
         )}
         <div className="p-3 bg-gray-50 border-t border-gray-100 text-[10px] text-gray-500 flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-red-400" />
-          Hapus transaksi untuk koreksi data. Perubahan akan recalculate daily totals otomatis.
+          <Lock className="w-3 h-3 text-red-400" />
+          Hapus transaksi dilindungi <span className="font-bold text-red-600">Kode Otoritas</span> — hanya pemilik yang bisa menghapus.
         </div>
       </div>
+
+      {/* ─── KODE OTORITAS MODAL ─── */}
+      {pendingDeleteTxId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-sm mx-4 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-100 border border-red-200 flex items-center justify-center shrink-0">
+                <Lock className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-gray-900">Kode Otoritas</h4>
+                <p className="text-[11px] text-gray-500">Masukkan kode otoritas untuk menghapus transaksi.</p>
+              </div>
+            </div>
+            <input
+              type="password"
+              value={authCode}
+              onChange={e => { setAuthCode(e.target.value); setAuthError(''); }}
+              onKeyDown={e => { if (e.key === 'Enter') handleDeleteTx(); }}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-red-400 mb-2"
+              placeholder="Masukkan kode otoritas..."
+              autoFocus
+            />
+            {authError && (
+              <p className="text-[11px] text-red-600 font-semibold mb-2 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" /> {authError}
+              </p>
+            )}
+            <div className="flex gap-2 mt-3">
+              <button onClick={handleDeleteTx}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition cursor-pointer">
+                Konfirmasi Hapus
+              </button>
+              <button onClick={handleCancelDelete}
+                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition cursor-pointer">
+                Batal
+              </button>
+            </div>
+            <p className="text-[9px] text-gray-400 mt-3 text-center">
+              Kode otoritas default: <span className="font-mono font-bold">owner123</span> — dapat diubah di localStorage key <span className="font-mono">authority_code</span>
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ─── SUMBER DATA ─── */}
       <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">

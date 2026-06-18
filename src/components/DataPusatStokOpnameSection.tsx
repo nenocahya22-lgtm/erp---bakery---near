@@ -156,7 +156,7 @@ export default function DataPusatStokOpnameSection({
                     </div>
                   ) : (
                     <div className="p-4">
-                      <table className="w-full text-left text-xs border-collapse">
+                      <table className="w-full text-left text-xs border-collapse table-fixed">
                         <thead>
                           <tr className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50">
                             <th className="px-3 py-2 rounded-l-lg">Bahan</th>

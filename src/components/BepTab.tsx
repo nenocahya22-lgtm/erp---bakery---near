@@ -5,9 +5,10 @@ import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface BepTabProps {
   calculatedProducts: CalculationResult[];
+  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
 }
 
-export default function BepTab({ calculatedProducts }: BepTabProps) {
+export default function BepTab({ calculatedProducts, showConfirm }: BepTabProps) {
   // Biaya tetap — dinamis (bisa tambah/hapus)
   const [fixedCosts, setFixedCosts] = useState<{ id: string; label: string; amount: number }[]>(() =>
     safeGetLocalStorage<{ id: string; label: string; amount: number }[]>('bep_fixed_costs', [])
@@ -196,7 +197,7 @@ export default function BepTab({ calculatedProducts }: BepTabProps) {
                   <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Skenario Volume Produksi</h4>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full text-left text-xs table-fixed">
                     <thead>
                       <tr className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50/50">
                         <th className="px-4 py-3">Volume (porsi/bulan)</th>

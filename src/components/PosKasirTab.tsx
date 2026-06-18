@@ -6,7 +6,7 @@ import { getSavedRecipeImage } from '../lib/image-generator';
 
 interface RetailOrder {
   ordId: string;
-  source: 'Walk-In POS' | 'WhatsApp Order' | 'GrabFood' | 'GoFood' | 'ShopeeFood' | 'Web Toko';
+  source: 'Walk-In' | 'WhatsApp Order' | 'GrabFood' | 'GoFood' | 'ShopeeFood' | 'Web Toko';
   customerName: string;
   items: string;
   totalSum: number;
@@ -43,7 +43,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
   const [selectedProduct, setSelectedProduct] = useState('');
   const [selectedVariant, setSelectedVariant] = useState<{ id: string; name: string; hargaJual: number } | null>(null);
   const [orderQty, setOrderQty] = useState(1);
-  const [orderSource, setOrderSource] = useState<RetailOrder['source']>('Walk-In POS');
+  const [orderSource, setOrderSource] = useState<RetailOrder['source']>('Walk-In');
   const [orderNotes, setOrderNotes] = useState('');
   const [orderAddOns, setOrderAddOns] = useState<{ nama: string; harga: number }[]>([]);
   const [showAddOnPicker, setShowAddOnPicker] = useState(false);
@@ -136,7 +136,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
     const prodInfo = calculatedProducts.find(p => p.namaProduk === selectedProduct);
     // Harga varian jika dipilih, fallback ke harga dasar
     const variantPrice = selectedVariant?.hargaJual || 0;
-    const price = variantPrice > 0 ? variantPrice : (prodInfo ? prodInfo.hargaJualPerPorsi : 19000);
+    const price = variantPrice > 0 ? variantPrice : (prodInfo ? prodInfo.hargaJualPerPorsi : 0);
     const totalRevenue = price * orderQty;
     const txId = `TX-${Date.now().toString().slice(-6)}`;
 
@@ -553,11 +553,11 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
               <div className="flex-1 text-right bg-emerald-50 p-2 rounded-xl border border-emerald-100">
                 <span className="text-[10px] text-gray-400 block uppercase font-bold">Total</span>
                 <span className="text-base font-black text-emerald-800 font-mono">
-                  {formatCurrency(((() => {
+                  {selectedProduct ? formatCurrency(((() => {
                     const variantPrice = selectedVariant?.hargaJual || 0;
-                    const basePrice = calculatedProducts.find(p => p.namaProduk === selectedProduct)?.hargaJualPerPorsi || 19000;
+                    const basePrice = calculatedProducts.find(p => p.namaProduk === selectedProduct)?.hargaJualPerPorsi || 0;
                     return (variantPrice > 0 ? variantPrice : basePrice) * orderQty;
-                  })()) + orderAddOns.reduce((s, a) => s + a.harga, 0))}
+                  })()) + orderAddOns.reduce((s, a) => s + a.harga, 0)) : formatCurrency(0)}
                 </span>
                 {selectedVariant && (
                   <span className="text-[8px] text-purple-600 block font-normal">📐 {selectedVariant.name}</span>
@@ -572,7 +572,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
               className={`w-full font-bold text-xs py-3 rounded-xl transition cursor-pointer shadow-sm active:scale-[0.98] uppercase tracking-wide ${
                 selectedProduct ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
               }`}>
-              <ShoppingCart className="w-4 h-4 inline mr-1" /> Transaksi POS
+              <ShoppingCart className="w-4 h-4 inline mr-1" /> Transaksi Kasir
             </button>
           </form>
         </div>
@@ -634,7 +634,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
                       <span className="font-mono text-[10px] font-bold text-gray-400">#{o.ordId}</span>
                       {o.catatan && <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">📝 {o.catatan}</span>}
                       <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded font-mono ${
-                        o.source === 'Walk-In POS' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                        o.source === 'Walk-In' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
                         'bg-purple-50 text-purple-700 border border-purple-200'
                       }`}>{o.source}</span>
                       <span className="text-[10px] text-gray-400">{o.timeAgo}</span>
@@ -865,7 +865,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
           <div className="bg-white rounded-2xl max-w-sm w-full border border-gray-100 shadow-2xl overflow-hidden flex flex-col">
             <div className="bg-slate-900 text-white p-4 flex justify-between items-center shrink-0">
               <span className="text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
-                <Printer className="w-4 h-4 text-emerald-400" /> Struk POS
+                <Printer className="w-4 h-4 text-emerald-400" /> Struk Kasir
               </span>
               <button onClick={() => setActiveReceipt(null)}
                 className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white cursor-pointer">

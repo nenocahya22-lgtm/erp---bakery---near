@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BahanBaku, PurchaseOrder } from '../types';
+import { BahanBaku, PurchaseOrder, SATUAN_OPTIONS } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
 import { Star, Plus, Trash2, FileText, Printer, Search, CheckCircle2, Package, X } from 'lucide-react';
 
@@ -11,7 +11,11 @@ interface DataPusatSupplierSectionProps {
 
 export default function DataPusatSupplierSection({ bahanBaku, onEditMaterial, showConfirm }: DataPusatSupplierSectionProps) {
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(() =>
-    safeGetLocalStorage<PurchaseOrder[]>('pusat_purchase_orders', [])
+    (safeGetLocalStorage<any[]>('pusat_purchase_orders', [])).map(po => ({
+      ...po,
+      satuanBeli: po.satuanBeli || po.satuan || 'pcs',
+      konversi: po.konversi || 1,
+    }))
   );
   const [suppliers, setSuppliers] = useState<{ name: string; kontak: string; bahan: string[] }[]>(() =>
     safeGetLocalStorage<{ name: string; kontak: string; bahan: string[] }[]>('pusat_suppliers', [])
@@ -23,7 +27,13 @@ export default function DataPusatSupplierSection({ bahanBaku, onEditMaterial, sh
   const [poBahan, setPoBahan] = useState('');
   const [poQty, setPoQty] = useState('');
   const [poHarga, setPoHarga] = useState('');
+  const [poSatuan, setPoSatuan] = useState('');
+  const [poKonversi, setPoKonversi] = useState('1');
   const [poSearch, setPoSearch] = useState('');
+
+  // State untuk proses penerimaan PO dengan input harga riil
+  const [receivingPo, setReceivingPo] = useState<PurchaseOrder | null>(null);
+  const [actualPrice, setActualPrice] = useState('');
 
   useEffect(() => { localStorage.setItem('pusat_purchase_orders', JSON.stringify(purchaseOrders)); }, [purchaseOrders]);
   useEffect(() => { localStorage.setItem('pusat_suppliers', JSON.stringify(suppliers)); }, [suppliers]);
@@ -57,10 +67,11 @@ export default function DataPusatSupplierSection({ bahanBaku, onEditMaterial, sh
   };
 
   const handleCreatePO = () => {
-    if (!poVendor || !poBahan || !poQty || !poHarga) return;
+    if (!poVendor || !poBahan || !poQty || !poHarga || !poSatuan) return;
     const qty = parseFloat(poQty) || 0;
     const harga = parseFloat(poHarga) || 0;
-    if (qty <= 0 || harga <= 0) return;
+    const konversi = parseFloat(poKonversi) || 1;
+    if (qty <= 0 || harga <= 0 || konversi <= 0) return;
     const newPO: PurchaseOrder = {
       id: `po-${Date.now()}`,
       poNo: `PO-${String(purchaseOrders.length + 1).padStart(3, '0')}`,
@@ -68,13 +79,15 @@ export default function DataPusatSupplierSection({ bahanBaku, onEditMaterial, sh
       bahanNama: poBahan,
       qty,
       satuan: bahanBaku.find(b => b.nama === poBahan)?.satuan || 'pcs',
+      satuanBeli: poSatuan,
+      konversi,
       hargaSatuan: harga,
       totalCost: qty * harga,
       tanggalOrder: new Date().toISOString().substring(0, 10),
       status: 'Draft',
     };
     setPurchaseOrders(prev => [newPO, ...prev]);
-    setPoQty(''); setPoHarga('');
+    setPoQty(''); setPoHarga(''); setPoSatuan(''); setPoKonversi('1');
   };
 
   const handleApprovePO = (id: string) => {
@@ -82,14 +95,44 @@ export default function DataPusatSupplierSection({ bahanBaku, onEditMaterial, sh
   };
 
   const handleTerimaPO = (id: string) => {
+    const po = purchaseOrders.find(p => p.id === id);
+    if (po) {
+      setReceivingPo(po);
+      setActualPrice(po.hargaSatuan.toString());
+    }
+  };
+
+  const handleConfirmTerima = () => {
+    if (!receivingPo) return;
+    const finalPrice = parseFloat(actualPrice) || receivingPo.hargaSatuan;
+
     setPurchaseOrders(prev => prev.map(p => {
-      if (p.id !== id) return p;
+      if (p.id !== receivingPo.id) return p;
       const bahan = bahanBaku.find(b => b.nama === p.bahanNama);
       if (bahan) {
-        onEditMaterial(bahan.nama, { ...bahan, isiKemasan: bahan.isiKemasan + p.qty });
+        const tambahanStok = p.qty * (p.konversi || 1);
+        const hargaPerUnit = p.konversi > 0 ? finalPrice / p.konversi : finalPrice;
+        
+        // Update master data bahan baku dengan harga asli dari nota
+        const qtyLama = bahan.isiKemasan;
+        const qtyBaru = qtyLama + tambahanStok;
+        const nilaiLama = bahan.hargaBeli;
+        const nilaiBaru = hargaPerUnit * tambahanStok;
+        const hargaRata = qtyBaru > 0 ? (nilaiLama + nilaiBaru) / qtyBaru : hargaPerUnit;
+
+        onEditMaterial(bahan.nama, {
+          ...bahan,
+          isiKemasan: qtyBaru,
+          stok: qtyBaru,
+          hargaBeli: nilaiLama + nilaiBaru,
+          hargaSatuan: hargaRata,
+          hargaBeliReal: nilaiLama + nilaiBaru,
+          hargaSatuanReal: hargaRata,
+        });
       }
-      return { ...p, status: 'Diterima' as const };
+      return { ...p, status: 'Diterima' as const, hargaSatuan: finalPrice, totalCost: p.qty * finalPrice };
     }));
+    setReceivingPo(null);
   };
 
   const handleDeletePO = (id: string) => {
@@ -194,8 +237,8 @@ export default function DataPusatSupplierSection({ bahanBaku, onEditMaterial, sh
     const filtered = purchaseOrders.filter(po =>
       poSearch===''||po.poNo.toLowerCase().includes(poSearch.toLowerCase())||po.vendorName.toLowerCase().includes(poSearch.toLowerCase())
     );
-    const headers = ['No PO','Tanggal','Supplier','Bahan','Qty','Total','Status'];
-    const rows = filtered.map(po => [po.poNo, po.tanggalOrder, po.vendorName, po.bahanNama, `${po.qty} ${po.satuan}`, formatCurrency(po.totalCost), po.status]);
+    const headers = ['No PO','Tanggal','Supplier','Bahan','Qty Beli','Isi/Satuan','Total Stok','Total','Status'];
+    const rows = filtered.map(po => [po.poNo, po.tanggalOrder, po.vendorName, po.bahanNama, `${po.qty} ${po.satuanBeli || po.satuan}`, `${(po.konversi || 1)} ${po.satuan}`, `${po.qty * (po.konversi || 1)} ${po.satuan}`, formatCurrency(po.totalCost), po.status]);
     cetakDokumen('Laporan_PO', cetakLaporanHtml('LAPORAN PURCHASE ORDER', headers, rows,
       `Total PO: ${filtered.length} | Total Nilai: ${formatCurrency(filtered.reduce((s,p)=>s+p.totalCost,0))}`
     ));
@@ -205,8 +248,8 @@ export default function DataPusatSupplierSection({ bahanBaku, onEditMaterial, sh
     const filtered = purchaseOrders.filter(po =>
       poSearch===''||po.poNo.toLowerCase().includes(poSearch.toLowerCase())||po.vendorName.toLowerCase().includes(poSearch.toLowerCase())
     );
-    const headers = ['No PO','Tanggal','Supplier','Bahan','Qty','Total','Status'];
-    const rows = filtered.map(po => [po.poNo, po.tanggalOrder, po.vendorName, po.bahanNama, `${po.qty} ${po.satuan}`, formatCurrency(po.totalCost), po.status]);
+    const headers = ['No PO','Tanggal','Supplier','Bahan','Qty Beli','Isi/Satuan','Total Stok','Total','Status'];
+    const rows = filtered.map(po => [po.poNo, po.tanggalOrder, po.vendorName, po.bahanNama, `${po.qty} ${po.satuanBeli || po.satuan}`, `${(po.konversi || 1)} ${po.satuan}`, `${po.qty * (po.konversi || 1)} ${po.satuan}`, formatCurrency(po.totalCost), po.status]);
     exportPdfLaporan('LAPORAN PURCHASE ORDER', headers, rows,
       `Total PO: ${filtered.length} | Total Nilai: ${formatCurrency(filtered.reduce((s,p)=>s+p.totalCost,0))}`
     );
@@ -238,19 +281,23 @@ export default function DataPusatSupplierSection({ bahanBaku, onEditMaterial, sh
           <strong>Status:</strong> ${po.status}
         </div>
         <table>
-          <thead><tr><th>No</th><th>Barang</th><th style="text-align:right;">Qty</th><th style="text-align:center;">Satuan</th><th style="text-align:right;">Harga</th><th style="text-align:right;">Total</th></tr></thead>
+          <thead><tr><th>No</th><th>Barang</th><th style="text-align:right;">Qty</th><th style="text-align:center;">Satuan Beli</th><th style="text-align:center;">Konversi</th><th style="text-align:right;">Harga</th><th style="text-align:right;">Total</th></tr></thead>
           <tbody>
             <tr>
               <td>1</td>
               <td>${po.bahanNama}</td>
               <td style="text-align:right;font-family:monospace;">${po.qty}</td>
-              <td style="text-align:center;">${po.satuan}</td>
+              <td style="text-align:center;">${po.satuanBeli || po.satuan}</td>
+              <td style="text-align:center;font-size:11px;">1 ${po.satuanBeli || po.satuan} = ${po.konversi || 1} ${po.satuan}</td>
               <td style="text-align:right;font-family:monospace;">${formatCurrency(po.hargaSatuan)}</td>
               <td style="text-align:right;font-family:monospace;font-weight:bold;">${formatCurrency(po.totalCost)}</td>
             </tr>
           </tbody>
         </table>
-        <div class="footer"><p><strong>Total Tagihan:</strong> ${formatCurrency(po.totalCost)}</p></div>
+        <div class="footer">
+          <p><strong>Total Tagihan:</strong> ${formatCurrency(po.totalCost)}</p>
+          <p style="font-size:11px;color:#6b7280;">Total Stok Masuk: ${po.qty * (po.konversi || 1)} ${po.satuan}</p>
+        </div>
         <div class="sign">
           <div>_____________<br>Pembeli</div>
           <div>_____________<br>Supplier</div>
@@ -339,7 +386,7 @@ export default function DataPusatSupplierSection({ bahanBaku, onEditMaterial, sh
             </div>
             <div>
               <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Bahan</label>
-              <select value={poBahan} onChange={e => setPoBahan(e.target.value)}
+              <select value={poBahan} onChange={e => { setPoBahan(e.target.value); const b = bahanBaku.find(b => b.nama === e.target.value); if (b) { setPoSatuan(b.satuan); } }}
                 className="w-full border border-gray-200 rounded-lg p-2.5">
                 <option value="">— Pilih —</option>
                 {bahanBaku.map(b => <option key={b.nama} value={b.nama}>{b.nama} ({b.satuan})</option>)}
@@ -357,7 +404,21 @@ export default function DataPusatSupplierSection({ bahanBaku, onEditMaterial, sh
               </div>
             </div>
             <div>
-              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Harga Satuan</label>
+              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Satuan Beli</label>
+              <select value={poSatuan} onChange={e => setPoSatuan(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg p-2.5">
+                <option value="">— Pilih —</option>
+                {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Isi per Satuan (Konversi)</label>
+              <input type="number" min="0" placeholder="1 (default)" value={poKonversi}
+                onChange={e => setPoKonversi(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg p-2.5 font-mono" />
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Estimasi Harga Satuan</label>
               <div className="flex items-center gap-1">
                 <div className="relative flex-1">
                   <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">Rp</span>
@@ -365,14 +426,19 @@ export default function DataPusatSupplierSection({ bahanBaku, onEditMaterial, sh
                     onChange={e => setPoHarga(e.target.value)}
                     className="w-full pl-8 border border-gray-200 rounded-lg p-2.5 font-mono" />
                 </div>
-                <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2.5 py-2 rounded-lg min-w-[40px] text-center">
-                  /{poBahan ? (bahanBaku.find(b => b.nama === poBahan)?.satuan || 'pcs') : '—'}
+                <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2.5 py-2 rounded-lg min-w-[40px] text-center whitespace-nowrap">
+                  /{poSatuan || (poBahan ? (bahanBaku.find(b => b.nama === poBahan)?.satuan || '—') : '—')}
                 </span>
               </div>
             </div>
           </div>
+          {poQty && poSatuan && poKonversi && (
+            <p className="text-[10px] text-gray-500 -mt-2 text-right">
+              Stok masuk: <strong>{parseFloat(poQty || '0') * parseFloat(poKonversi || '1')}</strong> {poBahan ? (bahanBaku.find(b => b.nama === poBahan)?.satuan || '') : ''}
+            </p>
+          )}
           <button onClick={handleCreatePO}
-            disabled={!poVendor || !poBahan || !poQty || !poHarga}
+            disabled={!poVendor || !poBahan || !poQty || !poHarga || !poSatuan}
             className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white font-bold text-xs py-2.5 rounded-xl transition cursor-pointer disabled:cursor-not-allowed">
             <Plus className="w-3.5 h-3.5 inline mr-1" /> Terbitkan PO
           </button>
@@ -411,13 +477,14 @@ export default function DataPusatSupplierSection({ bahanBaku, onEditMaterial, sh
             <p className="text-xs text-gray-400 text-center py-6">{poSearch ? 'Tidak ada PO yang cocok.' : 'Belum ada PO.'}</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table className="w-full text-left text-xs border-collapse table-fixed">
                 <thead>
                   <tr className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50">
                     <th className="px-3 py-2">No PO</th>
                     <th className="px-3 py-2">Supplier</th>
                     <th className="px-3 py-2">Bahan</th>
-                    <th className="px-3 py-2 text-right">Qty</th>
+                    <th className="px-3 py-2 text-right">Qty Beli</th>
+                    <th className="px-3 py-2 text-right">Total Stok</th>
                     <th className="px-3 py-2 text-right">Total</th>
                     <th className="px-3 py-2 text-center">Status</th>
                     <th className="px-3 py-2 text-center">Aksi</th>
@@ -435,7 +502,8 @@ export default function DataPusatSupplierSection({ bahanBaku, onEditMaterial, sh
                       <td className="px-3 py-2.5 font-mono font-bold text-gray-800">{po.poNo}</td>
                       <td className="px-3 py-2.5 text-gray-700">{po.vendorName}</td>
                       <td className="px-3 py-2.5 font-semibold">{po.bahanNama}</td>
-                      <td className="px-3 py-2.5 text-right font-mono">{po.qty} {po.satuan}</td>
+                      <td className="px-3 py-2.5 text-right font-mono">{po.qty} {po.satuanBeli || po.satuan} <span className="text-gray-400 text-[9px]">({(po.konversi || 1)} {po.satuan}/{po.satuanBeli || po.satuan})</span></td>
+                      <td className="px-3 py-2.5 text-right font-mono">{po.qty * (po.konversi || 1)} {po.satuan}</td>
                       <td className="px-3 py-2.5 text-right font-mono font-bold text-rose-700">{formatCurrency(po.totalCost)}</td>
                       <td className="px-3 py-2.5 text-center">
                         <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold ${
@@ -478,6 +546,62 @@ export default function DataPusatSupplierSection({ bahanBaku, onEditMaterial, sh
           )}
         </div>
       </div>
+
+      {/* MODAL TERIMA BARANG — INPUT HARGA RIIL */}
+      {receivingPo && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-gray-100 space-y-4">
+            <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
+              <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+                <Package className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 uppercase">Terima Barang PO</h3>
+                <p className="text-[10px] text-gray-500 font-mono">{receivingPo.poNo} — {receivingPo.bahanNama}</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Konfirmasi harga beli riil per <strong>{receivingPo.satuanBeli}</strong> sesuai nota/faktur supplier untuk mengupdate modal bahan baku.
+              </p>
+              
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Harga Satuan Riil (Sesuai Nota)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                  <input
+                    type="number"
+                    autoFocus
+                    value={actualPrice}
+                    onChange={e => setActualPrice(e.target.value)}
+                    className="w-full pl-10 border border-gray-200 rounded-xl p-3 font-mono font-bold text-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    placeholder="0"
+                  />
+                </div>
+                <p className="text-[9px] text-gray-400 mt-1 italic">
+                  * Estimasi awal: {formatCurrency(receivingPo.hargaSatuan)}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setReceivingPo(null)}
+                className="flex-1 py-2.5 text-xs font-bold text-gray-500 hover:text-gray-700 rounded-xl hover:bg-gray-100 transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleConfirmTerima}
+                className="flex-[2] py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md hover:shadow-lg transition-all"
+              >
+                Konfirmasi & Masuk Stok
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

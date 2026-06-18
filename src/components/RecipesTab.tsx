@@ -31,6 +31,7 @@ interface RecipesTabProps {
   onAddVariant?: (productName: string, variant: ProductVariant) => void;
   onUpdateVariant?: (productName: string, variantId: string, updates: Partial<ProductVariant>) => void;
   onDeleteVariant?: (productName: string, variantId: string) => void;
+  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
 }
 
 export default function RecipesTab({
@@ -45,6 +46,7 @@ export default function RecipesTab({
   onAddVariant,
   onUpdateVariant,
   onDeleteVariant,
+  showConfirm,
 }: RecipesTabProps) {
   const [selectedProductName, setSelectedProductName] = useState<string>(
     productHpp.length > 0 ? productHpp[0].namaProduk : ''
@@ -365,7 +367,7 @@ export default function RecipesTab({
 
     // Update locally or via prop cascade
     activeProduct.porsiJual = finalPorsi;
-    activeProduct.hargaJual = totalIngredientsCost; // auto dari bahan
+    activeProduct.hargaJual = Math.round(totalIngredientsCost * 1.4); // auto dari bahan + margin default 40%
     activeProduct.kategori = editKategori;
 
     // Re-trigger global listeners via triggering ingredients handler
@@ -617,10 +619,25 @@ export default function RecipesTab({
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
-              </div>                <div>
-                <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Total HPP (Rp) <span className="text-blue-500 font-normal normal-case">auto dr bahan</span></label>
-                <div className="w-full border border-gray-200 bg-gray-100 rounded-lg p-2 font-mono text-emerald-800 font-bold text-center text-xs">
-                  Rp 0 (hitung otomatis setelah tambah bahan)
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Porsi Yield</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={newProductPorsi}
+                    onChange={(e) => setNewProductPorsi(e.target.value)}
+                    className="w-full text-xs font-mono font-bold border border-gray-200 bg-white rounded-lg p-2.5 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Estimasi HPP</label>
+                  <div className="w-full border border-gray-200 bg-gray-100 rounded-lg p-2.5 font-mono text-emerald-800 font-bold text-center text-[10px]">
+                    Auto dr bahan
+                  </div>
                 </div>
               </div>
 
@@ -761,7 +778,7 @@ export default function RecipesTab({
                   }`}
                 >
                   <Edit2 className="w-3.5 h-3.5" />
-                  {isEditingProductDetails ? 'Tutup Panel Edit' : 'Edit HPP & Margin'}
+                  {isEditingProductDetails ? 'Tutup Panel Edit' : 'Edit Modal & Margin'}
                 </button>
                 <button
                   type="button"
@@ -793,7 +810,7 @@ export default function RecipesTab({
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Total HPP (Rp) <span className="text-blue-500 font-normal normal-case">auto dari bahan</span></label>
+                    <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Total Modal (Rp) <span className="text-blue-500 font-normal normal-case">auto dari bahan</span></label>
                     <div className="w-full border border-gray-200 bg-gray-100 rounded-lg p-2.5 font-mono text-emerald-800 font-bold text-center">
                       {formatCurrency(totalIngredientsCost)}
                     </div>
@@ -961,11 +978,10 @@ export default function RecipesTab({
                     <p className="text-[11px] text-gray-400 mt-0.5">Mulai dengan menambahkan bahan dari form di bawah.</p>
                   </div>
                 ) : (
-                  <div className="border border-gray-100 rounded-xl overflow-hidden">
-                    <div className="overflow-x-auto">
-                    <table className="w-full min-w-[600px] border-collapse text-left text-xs sm:text-sm">
+                  <div className="border border-gray-100 rounded-xl overflow-x-auto">
+                    <table className="w-full border-collapse text-left text-xs sm:text-sm">
                       <thead>
-                        <tr className="border-b border-gray-150 bg-slate-900 text-[10px] font-bold uppercase text-white font-mono">
+                        <tr className="border-b border-gray-150 bg-gray-50 text-[10px] font-bold uppercase text-gray-500">
                           <th className="px-2 sm:px-4 py-3 whitespace-nowrap">Nama Bahan</th>
                           <th className="px-2 sm:px-4 py-3 text-right whitespace-nowrap">Takaran</th>
                           <th className="px-2 sm:px-4 py-3 text-center whitespace-nowrap">Satuan</th>
@@ -1047,65 +1063,71 @@ export default function RecipesTab({
                         ))}
                       </tbody>
                     </table>
-                    </div>
                   </div>
                 )}
               </div>
 
               {/* Add Ingredient Form in active recipe */}
-              <div className="bg-gray-50/60 p-4.5 rounded-xl border border-gray-150 space-y-3">
-                <h4 className="text-[11px] uppercase font-bold text-slate-800 tracking-wider">
-                  Minyak / Tepung / Mengetik Bahan Baru Ke Adonan
-                </h4>
-                <form onSubmit={handleAddIngredientToActive} className="flex flex-col sm:flex-row gap-2.5">
-                  <div className="flex-1">
-                    <select
-                      required
-                      value={selectedBahan}
-                      onChange={(e) => setSelectedBahan(e.target.value)}
-                      className="w-full text-xs font-semibold border border-gray-205 rounded-xl p-2.5 bg-white focus:outline-none"
-                    >
-                      <option value="">-- Pilih Bahan Baku Terbagi --</option>
-                      {bahanBaku.map((b) => (
-                        <option key={b.nama} value={b.nama}>
-                          {b.nama} ({b.satuan}) - {formatCurrency(b.hargaSatuan)}/{b.satuan}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="w-full sm:w-40 flex gap-1">
-                    <input
-                      type="number"
-                      step="any"
-                      min="0.001"
-                      required
-                      placeholder="Takaran"
-                      value={takaranBahan}
-                      onChange={(e) => setTakaranBahan(e.target.value)}
-                      className="flex-1 text-xs border border-gray-205 rounded-xl p-2.5 bg-white"
-                    />
-                    <select value={takaranSatuan} onChange={e => setTakaranSatuan(e.target.value)}
-                      className="w-16 text-xs border border-gray-200 rounded-xl p-2.5 font-bold bg-white text-center">
-                      {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="sm:w-auto inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition duration-150 cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Tambah
-                  </button>
-                </form>
-
-                {bahanBaku.length === 0 && (
-                  <p className="text-[11px] text-red-500 font-medium">
-                    ⚠️ Belum ada Bahan Baku terdaftar di tab Bahan Baku. Silakan tambahkan bahan baku terlebih dahulu.
+              {bahanBaku.length === 0 ? (
+                <div className="bg-amber-50 border-2 border-dashed border-amber-300 rounded-xl p-6 text-center">
+                  <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto mb-2 stroke-1" />
+                  <p className="text-xs font-bold text-amber-900 mb-1">Belum ada Bahan Baku</p>
+                  <p className="text-[11px] text-amber-700 mb-3">
+                    Daftarkan bahan baku terlebih dahulu di <strong>Logistik → Data Pusat → Bahan</strong> sebelum menambahkan resep.
                   </p>
-                )}
-              </div>
+                  <span className="inline-block bg-amber-600 text-white text-[11px] font-bold px-4 py-2 rounded-lg">
+                    Tambah Bahan Baku di Logistik Terlebih Dahulu
+                  </span>
+                </div>
+              ) : (
+                <div className="bg-gray-50/60 p-4.5 rounded-xl border border-gray-150 space-y-3">
+                  <h4 className="text-[11px] uppercase font-bold text-slate-800 tracking-wider">
+                    Minyak / Tepung / Mengetik Bahan Baru Ke Adonan
+                  </h4>
+                  <form onSubmit={handleAddIngredientToActive} className="flex flex-col sm:flex-row gap-2.5">
+                    <div className="flex-1">
+                      <select
+                        required
+                        value={selectedBahan}
+                        onChange={(e) => setSelectedBahan(e.target.value)}
+                        className="w-full text-xs font-semibold border border-gray-205 rounded-xl p-2.5 bg-white focus:outline-none"
+                      >
+                        <option value="">-- Pilih Bahan Baku —</option>
+                        {bahanBaku.map((b) => (
+                          <option key={b.nama} value={b.nama}>
+                            {b.nama} ({b.satuan}) - {formatCurrency(b.hargaSatuan)}/{b.satuan}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="w-full sm:w-40 flex gap-1">
+                      <input
+                        type="number"
+                        step="any"
+                        min="0.001"
+                        required
+                        placeholder="Takaran"
+                        value={takaranBahan}
+                        onChange={(e) => setTakaranBahan(e.target.value)}
+                        className="flex-1 text-xs border border-gray-205 rounded-xl p-2.5 bg-white"
+                      />
+                      <select value={takaranSatuan} onChange={e => setTakaranSatuan(e.target.value)}
+                        className="w-16 text-xs border border-gray-200 rounded-xl p-2.5 font-bold bg-white text-center">
+                        {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="sm:w-auto inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition duration-150 cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Tambah
+                    </button>
+                  </form>
+                </div>
+              )}
 
               {/* ─── VARIAN PANEL — selalu tampil (untuk tambah varian pertama) ─── */}
               <div className="bg-gradient-to-br from-purple-50 to-white rounded-2xl border border-purple-200 p-4 space-y-3">
@@ -1226,7 +1248,7 @@ export default function RecipesTab({
                             id: `var-${Date.now()}`,
                             name,
                             porsi: activeRecipePorsi,
-                            hargaJual: hppPerPorsi,
+                            hargaJual: Math.round(hppPerPorsi * 1.4), // + margin default 40%
                             active: true,
                           });
                           setNewVariantName('');
@@ -1346,8 +1368,8 @@ export default function RecipesTab({
                 <div className="flex items-center gap-3 text-xs">
                   <Coins className="w-5 h-5 text-indigo-600 shrink-0" />
                   <p className="text-gray-600">
-                    <strong>Add-on / Topping</strong> sekarang dikelola di tab terpisah untuk menghindari <strong>double counting</strong> di POS. 
-                    Buka <strong>🧩 Add-on & Topping</strong> di sidebar untuk mengelola topping secara terpusat.
+                    <strong>Add-on / Topping</strong> tersedia di tab <strong>"🧩 Add-on & Topping"</strong> di dashboard yang sama. 
+                    Setiap topping menggunakan bahan baku yang terdaftar. Untuk menambahkan topping, buka sub-tab Add-on & Topping.
                   </p>
                 </div>
               </div>

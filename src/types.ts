@@ -4,11 +4,13 @@ export interface BahanBaku {
   kategori?: string;
   satuan: string;
   hargaBeli: number; // Effective purchase price (marked up)
-  isiKemasan: number;
+  isiKemasan: number; // Berisi total stok saat ini (bukan berat per kemasan)
+  stok: number; // Total saldo stok saat ini (sama dengan isiKemasan, untuk kejelasan semantik)
   hargaSatuan: number; // calculated: hargaBeli / isiKemasan (marked up price per unit)
   hargaBeliReal: number; // Actual purchase price (real)
   hargaSatuanReal: number; // Real price per unit: hargaBeliReal / isiKemasan
   markupPercent?: number; // Markup percentage (e.g., 25 for 25%)
+  konversiGram?: number; // Berat per unit (gram) untuk satuan count (pcs/bungkus/dll). Contoh: 1 telur = 50gr
 }
 
 export interface ProductVariant {
@@ -232,6 +234,8 @@ export interface PurchaseOrder {
   bahanNama: string;
   qty: number;
   satuan: string;
+  satuanBeli: string;
+  konversi: number;
   hargaSatuan: number;
   totalCost: number;
   tanggalOrder: string;
@@ -239,7 +243,7 @@ export interface PurchaseOrder {
 }
 
 // === SATUAN OPTIONS ===
-export const SATUAN_OPTIONS = ['gr', 'kg', 'pcs', 'ml', 'liter', 'ons', 'sdm', 'sdt', 'cup', 'bungkus', 'pack', 'box', 'krat', 'ikat', 'ekor'];
+export const SATUAN_OPTIONS = ['gr', 'kg', 'pcs', 'ml', 'liter', 'ons', 'sdm', 'sdt', 'cup', 'bungkus', 'pack', 'box', 'krat', 'ikat', 'ekor', 'karung', 'dus'];
 
 export const getSatuanFromBahan = (bahan: BahanBaku | undefined): string => bahan?.satuan || 'gr';
 

@@ -18,9 +18,10 @@ import {
 interface EnterpriseDashboardProps {
   calculatedProducts: CalculationResult[];
   bahanBaku: BahanBaku[];
+  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
 }
 
-export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDashboardProps) {
+export default function EnterpriseDashboard({ calculatedProducts, showConfirm }: EnterpriseDashboardProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -148,7 +149,7 @@ export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDa
       return [{
         name: new Date().toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }),
         'Pendapatan (Revenue)': Math.round(monthlyRevenue) || 0,
-        'HPP Terpadu (COGS)': Math.round(rawMaterialCost) || 0,
+        'Modal Produk (COGS)': Math.round(rawMaterialCost) || 0,
         'Laba Kotor (Gross Profit)': Math.max(0, Math.round(monthlyRevenue - rawMaterialCost)) || 0,
       }];
     }
@@ -156,7 +157,7 @@ export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDa
     return months.map(m => ({
       name: new Date(m + '-01').toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }),
       'Pendapatan (Revenue)': Math.round(monthMap[m].revenue),
-      'HPP Terpadu (COGS)': Math.round(monthMap[m].cogs),
+      'Modal Produk (COGS)': Math.round(monthMap[m].cogs),
       'Laba Kotor (Gross Profit)': Math.max(0, Math.round(monthMap[m].revenue - monthMap[m].cogs)),
     }));
   };
@@ -256,7 +257,7 @@ export default function EnterpriseDashboard({ calculatedProducts }: EnterpriseDa
 
   const handleExportCSV = () => {
     const headers = ['Bulan', 'Revenue', 'COGS', 'Gross Profit'];
-    const rows = chartData.map(d => [d.name, d['Pendapatan (Revenue)'], d['HPP Terpadu (COGS)'], d['Laba Kotor (Gross Profit)']]);
+    const rows = chartData.map(d => [d.name, d['Pendapatan (Revenue)'], d['Modal Produk (COGS)'], d['Laba Kotor (Gross Profit)']]);
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);

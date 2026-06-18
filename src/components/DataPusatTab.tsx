@@ -5,7 +5,6 @@ import {
 } from 'lucide-react';
 import DataPusatCabangSection from './DataPusatCabangSection';
 import DataPusatBahanSection from './DataPusatBahanSection';
-import DataPusatStokSection from './DataPusatStokSection';
 import DataPusatStokCabangSection from './DataPusatStokCabangSection';
 import DataPusatSupplierSection from './DataPusatSupplierSection';
 import DataPusatPengirimanSection from './DataPusatPengirimanSection';
@@ -41,7 +40,7 @@ export default function DataPusatTab({
   cabangStok, branchTransactions, wasteLogs,
   opnameDrafts, onApproveOpname, onRejectOpname, showConfirm,
 }: DataPusatTabProps) {
-  const [activeSection, setActiveSection] = useState<'cabang' | 'bahan' | 'stok' | 'stok_cabang' | 'supplier' | 'pengiriman' | 'stok_opname' | 'rekap'>('cabang');
+  const [activeSection, setActiveSection] = useState<'cabang' | 'inventaris' | 'stok_cabang' | 'supplier' | 'pengiriman' | 'stok_opname' | 'rekap'>('cabang');
 
   const sectionBtn = (key: typeof activeSection, label: string, icon: React.ReactNode) => (
     <button
@@ -67,9 +66,8 @@ export default function DataPusatTab({
         </div>
         <div className="flex flex-wrap gap-2">
           {sectionBtn('cabang', `Cabang (${cabangList.length})`, <Building2 className="w-3.5 h-3.5 inline" />)}
-          {sectionBtn('bahan', `Bahan (${bahanBaku.length})`, <Package className="w-3.5 h-3.5 inline" />)}
-          {sectionBtn('stok', 'Stok Pusat', <Package className="w-3.5 h-3.5 inline" />)}
-          {sectionBtn('stok_cabang', 'Stok Cabang', <BarChart3 className="w-3.5 h-3.5 inline" />)}
+          {sectionBtn('inventaris', `Data Bahan + Stok Pusat (${bahanBaku.length})`, <Package className="w-3.5 h-3.5 inline" />)}
+          {sectionBtn('stok_cabang', 'Stok Per Cabang', <BarChart3 className="w-3.5 h-3.5 inline" />)}
           {sectionBtn('supplier', 'Supplier & PO', <Star className="w-3.5 h-3.5 inline" />)}
           {sectionBtn('pengiriman', `Pengiriman (${suratOrders.length})`, <Truck className="w-3.5 h-3.5 inline" />)}
           {sectionBtn('stok_opname', 'Stok Opname', <ClipboardCheck className="w-3.5 h-3.5 inline" />)}
@@ -87,18 +85,13 @@ export default function DataPusatTab({
         />
       )}
 
-      {activeSection === 'bahan' && (
+      {activeSection === 'inventaris' && (
         <DataPusatBahanSection
           bahanBaku={bahanBaku}
           onAddMaterial={onAddMaterial}
           onEditMaterial={onEditMaterial}
           onDeleteMaterial={onDeleteMaterial}
-        />
-      )}
-
-      {activeSection === 'stok' && (
-        <DataPusatStokSection
-          bahanBaku={bahanBaku}
+          showConfirm={showConfirm}
           cabangList={cabangList}
           suratOrders={suratOrders}
         />
@@ -131,6 +124,7 @@ export default function DataPusatTab({
           onAddSuratOrder={onAddSuratOrder}
           onUpdateSuratOrder={onUpdateSuratOrder}
           onReturSuratOrder={onReturSuratOrder}
+          showConfirm={showConfirm}
         />
       )}
 
@@ -147,6 +141,8 @@ export default function DataPusatTab({
       {activeSection === 'rekap' && (
         <DataPusatRekapSection
           bahanBaku={bahanBaku}
+          cabangList={cabangList}
+          cabangStok={cabangStok}
         />
       )}
     </div>

@@ -15,7 +15,7 @@ const formatCurrency = (val: number) => {
 
 interface AlertItem {
   id: string;
-  type: 'margin_danger' | 'margin_warning' | 'margin_high' | 'stock_critical' | 'stock_low' | 'system_error' | 'info';
+  type: 'margin_danger' | 'margin_warning' | 'margin_high' | 'stock_critical' | 'stock_low' | 'waste_alert' | 'system_error' | 'info';
   message: string;
   timestamp: string;
   dismissed: boolean;
@@ -101,6 +101,20 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList
       bahanBaku.filter(b => b.isiKemasan >= 50 && b.isiKemasan < 200).forEach(b => {
         newAlerts.push({ id: `stk-lw-${Date.now()}`, type: 'stock_low', message: `📦 Stok "${b.nama}" ${b.isiKemasan} ${b.satuan} — menipis`, timestamp: now, dismissed: false });
       });
+      // Waste > 5% sales per cabang
+      branchWasteData.forEach(w => {
+        const salesData = branchSalesData.find(b => b.cabang.id === w.cabangId);
+        if (salesData && salesData.totalRevenue > 0) {
+          const wastePct = (w.totalWasteLoss / salesData.totalRevenue) * 100;
+          if (wastePct > 5) {
+            newAlerts.push({
+              id: `wst-${Date.now()}`, type: 'waste_alert',
+              message: `🗑️ WASTE TINGGI! "${w.cabangNama}" waste ${wastePct.toFixed(1)}% dari revenue (${formatCurrency(w.totalWasteLoss)})`,
+              timestamp: now, dismissed: false,
+            });
+          }
+        }
+      });
       setAlerts(prev => {
         const existingIds = new Set<string>(prev.filter(a => !a.dismissed).map(a => a.id));
         const uniqueNew = newAlerts.filter(a => !Array.from(existingIds).some(eid => (eid as string).split('-').slice(0,-1).join('-') === a.id.split('-').slice(0,-1).join('-')));
@@ -166,6 +180,17 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList
 
   const totalBranchRevenue = branchSalesData.reduce((s, b) => s + b.totalRevenue, 0);
   const totalBranchOrders = branchSalesData.reduce((s, b) => s + b.totalOrders, 0);
+
+  // ─── WASTE DATA PER CABANG ───
+  const wasteLogs = safeGetLocalStorage<any[]>('waste_logs_data', []);
+  const branchWasteData = cabangList.map(cabang => {
+    const cabangWasteLogs = wasteLogs.filter((w: any) =>
+      (w.location || '').toLowerCase().includes(cabang.nama.toLowerCase())
+    );
+    const totalWasteLoss = cabangWasteLogs.reduce((s: number, w: any) => s + (w.lossValue || 0), 0);
+    const totalWasteQty = cabangWasteLogs.reduce((s: number, w: any) => s + (w.qtyWasted || 0), 0);
+    return { cabangId: cabang.id, cabangNama: cabang.nama, totalWasteLoss, totalWasteQty, logCount: cabangWasteLogs.length };
+  });
 
   const dismissAlert = (id: string) => setAlerts(prev => prev.map(a => a.id === id ? { ...a, dismissed: true } : a));
   const activeAlerts = alerts.filter(a => !a.dismissed);
@@ -725,6 +750,85 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList
         </div>
       )}
 
+      {/* ==================== SALES VS WASTE PER CABANG ==================== */}
+      {cabangList.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+          <div className="p-5 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+                  📊 Perbandingan Sales vs Waste per Cabang
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Bandingkan revenue dengan kerugian waste — waspada jika waste &gt; 5% dari sales.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="p-5 space-y-5">
+            {branchSalesData.map(b => {
+              const wData = branchWasteData.find(w => w.cabangId === b.cabang.id);
+              const wasteLoss = wData?.totalWasteLoss || 0;
+              const wastePct = b.totalRevenue > 0 ? (wasteLoss / b.totalRevenue) * 100 : 0;
+              const maxVal = Math.max(b.totalRevenue, wasteLoss, 100000);
+              const salesBarPct = (b.totalRevenue / maxVal) * 100;
+              const wasteBarPct = (wasteLoss / maxVal) * 100;
+              return (
+                <div key={b.cabang.id}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-emerald-600" /> {b.cabang.nama}
+                    </span>
+                    <div className="text-[10px] font-mono text-gray-500">
+                      {wastePct > 5 ? (
+                        <span className="text-red-600 font-bold">⚠️ Waste {wastePct.toFixed(1)}%</span>
+                      ) : wastePct > 0 ? (
+                        <span className="text-amber-600">Waste {wastePct.toFixed(1)}%</span>
+                      ) : (
+                        <span className="text-emerald-600">✅ Tidak ada waste</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-[10px]">
+                      <span className="w-16 text-right text-gray-500">Sales</span>
+                      <div className="flex-1 h-5 bg-gray-100 rounded-md relative overflow-hidden">
+                        <div style={{ width: `${Math.max(salesBarPct, 1)}%` }}
+                          className="bg-emerald-500 h-full rounded-md flex items-center px-2 text-[9px] text-white font-bold font-mono">
+                          {formatCurrency(b.totalRevenue)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px]">
+                      <span className="w-16 text-right text-gray-500">Waste</span>
+                      <div className="flex-1 h-5 bg-gray-100 rounded-md relative overflow-hidden">
+                        <div style={{ width: `${Math.max(wasteBarPct, wasteLoss > 0 ? 1 : 0)}%` }}
+                          className={`h-full rounded-md flex items-center px-2 text-[9px] text-white font-bold font-mono ${wastePct > 5 ? 'bg-red-500' : wasteLoss > 0 ? 'bg-amber-400' : 'bg-gray-200 text-gray-400'}`}>
+                          {wasteLoss > 0 ? formatCurrency(wasteLoss) : 'Rp 0'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {branchWasteData.some(w => w.totalWasteLoss > 0) && (
+            <div className="p-3 bg-amber-50 border-t border-amber-100 text-[10px] text-amber-800 flex items-center gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              Total waste semua cabang: {formatCurrency(branchWasteData.reduce((s, w) => s + w.totalWasteLoss, 0))}
+              {branchSalesData.some(b => {
+                const w = branchWasteData.find(w2 => w2.cabangId === b.cabang.id);
+                return w && b.totalRevenue > 0 && (w.totalWasteLoss / b.totalRevenue) * 100 > 5;
+              }) && <span className="font-bold text-red-700"> — Ada cabang dengan waste di atas 5%!</span>}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ==================== AUTOMATED AI MARKETING ASSISTANT MODULE ==================== */}
       <div 
         id="dashboard-ai-marketing-assistant" 
@@ -890,7 +994,7 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList
                   <div key={alert.id} className={`p-3 flex items-start gap-2.5 text-xs ${
                     alert.type === 'margin_danger' || alert.type === 'stock_critical' ? 'bg-red-50/50' : ''
                   }`}>
-                    <span>{alert.type === 'margin_danger' || alert.type === 'stock_critical' ? '🔴' : alert.type === 'stock_low' ? '🟡' : '💰'}</span>
+                    <span>{alert.type === 'margin_danger' || alert.type === 'stock_critical' || alert.type === 'waste_alert' ? '🔴' : alert.type === 'stock_low' ? '🟡' : '💰'}</span>
                     <p className="flex-1 text-gray-700">{alert.message}</p>
                     <button onClick={() => dismissAlert(alert.id)}
                       className="p-0.5 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-700 cursor-pointer shrink-0">

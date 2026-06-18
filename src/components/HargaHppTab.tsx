@@ -14,9 +14,10 @@ interface HargaHppTabProps {
   onUpdateProductPricing: (productName: string, hargaJual: number) => void;
   onDeleteProduct: (productName: string) => void;
   onEditMaterial?: (oldName: string, updated: BahanBaku) => void;
+  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
 }
 
-export default function HargaHppTab({ bahanBaku, calculatedProducts, detailResep, onUpdateProductPricing, onDeleteProduct, onEditMaterial }: HargaHppTabProps) {
+export default function HargaHppTab({ bahanBaku, calculatedProducts, detailResep, onUpdateProductPricing, onDeleteProduct, onEditMaterial, showConfirm }: HargaHppTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<'harga' | 'hpp' | 'substitusi'>('hpp');
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
@@ -28,10 +29,10 @@ export default function HargaHppTab({ bahanBaku, calculatedProducts, detailResep
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <TrendingUp className="w-6 h-6 text-emerald-600" /> Harga & HPP
+              <TrendingUp className="w-6 h-6 text-emerald-600" /> Harga & Modal Produk
             </h2>
             <p className="text-xs text-gray-500 mt-1">
-              Analisis harga bahan, HPP produk, dan penetapan harga jual — dalam satu tab.
+              Analisis harga bahan, modal produk, dan penetapan harga jual — dalam satu tab.
             </p>
           </div>
         </div>
@@ -49,7 +50,7 @@ export default function HargaHppTab({ bahanBaku, calculatedProducts, detailResep
           className={`px-4 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
             activeSubTab === 'hpp' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
           }`}>
-          <Calculator className="w-3.5 h-3.5 inline mr-1" /> HPP & Margin
+          <Calculator className="w-3.5 h-3.5 inline mr-1" /> Modal & Margin
         </button>
         <button onClick={() => setActiveSubTab('substitusi')}
           className={`px-4 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
@@ -69,6 +70,7 @@ export default function HargaHppTab({ bahanBaku, calculatedProducts, detailResep
         onDeleteProduct={onDeleteProduct}
         bahanBaku={bahanBaku}
         formatCurrency={formatCurrency}
+        showConfirm={showConfirm}
       />}
 
       {/* SUB-TAB: SUBSTITUSI */}
@@ -78,6 +80,7 @@ export default function HargaHppTab({ bahanBaku, calculatedProducts, detailResep
         calculatedProducts={calculatedProducts}
         formatCurrency={formatCurrency}
         onEditMaterial={onEditMaterial}
+        showConfirm={showConfirm}
       />}
     </div>
   );
@@ -230,7 +233,7 @@ function HargaPrediksiSection({ bahanBaku, calculatedProducts, formatCurrency }:
               <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Semua Record Harga</h4>
             </div>
             <div className="overflow-y-auto max-h-[200px]">
-              <table className="w-full text-left text-xs">
+              <table className="w-full text-left text-xs table-fixed">
                 <thead className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50/50">
                   <tr><th className="p-2.5">Tanggal</th><th className="p-2.5">Bahan</th><th className="p-2.5 text-right">Harga</th><th className="p-2.5">Catatan</th><th className="p-2.5"></th></tr>
                 </thead>
@@ -274,8 +277,8 @@ function HargaPrediksiSection({ bahanBaku, calculatedProducts, formatCurrency }:
             </div>
           </div>
           <div className="bg-slate-50 p-4 rounded-xl space-y-2 text-xs">
-            <div className="flex justify-between"><span>HPP Portofolio Awal:</span><span className="font-bold font-mono">{formatCurrency(rawPortfolioSum)}</span></div>
-            <div className="flex justify-between text-red-700 font-bold border-t border-dashed pt-2"><span>HPP Setelah Inflasi (+{commodityInflation}%):</span><span className="font-mono">{formatCurrency(inflatedPortfolio)}</span></div>
+            <div className="flex justify-between"><span>Modal Portofolio Awal:</span><span className="font-bold font-mono">{formatCurrency(rawPortfolioSum)}</span></div>
+            <div className="flex justify-between text-red-700 font-bold border-t border-dashed pt-2"><span>Modal Setelah Inflasi (+{commodityInflation}%):</span><span className="font-mono">{formatCurrency(inflatedPortfolio)}</span></div>
             <div className="flex justify-between"><span>Margin Rata-rata:</span><span className={`font-mono font-bold ${inflatedMargin < 20 ? 'text-red-600' : 'text-emerald-700'}`}>{inflatedMargin.toFixed(1)}%</span></div>
           </div>
         </div>
@@ -309,12 +312,13 @@ function HargaPrediksiSection({ bahanBaku, calculatedProducts, formatCurrency }:
 }
 
 // ===== SUB-TAB: HPP & MARGIN =====
-function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDeleteProduct, bahanBaku, formatCurrency }: {
+function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDeleteProduct, bahanBaku, formatCurrency, showConfirm }: {
   calculatedProducts: CalculationResult[];
   onUpdateProductPricing: (productName: string, hargaJual: number) => void;
   onDeleteProduct: (productName: string) => void;
   bahanBaku: BahanBaku[];
   formatCurrency: (v: number) => string;
+  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
 }) {
   const [selectedProductName, setSelectedProductName] = useState(calculatedProducts.length > 0 ? calculatedProducts[0].namaProduk : '');
   const [targetMargin, setTargetMargin] = useState(40);
@@ -416,11 +420,11 @@ function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDelete
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
+                <table className="w-full text-left text-xs table-fixed">
                   <thead>
                     <tr className="text-[10px] uppercase font-bold text-gray-500 bg-gray-50">
                       <th className="px-3 py-2.5">Produk</th>
-                      <th className="px-3 py-2.5 text-right">HPP/Porsi</th>
+                      <th className="px-3 py-2.5 text-right">Modal/Porsi</th>
                       <th className="px-3 py-2.5 text-right">Harga Jual</th>
                       <th className="px-3 py-2.5 text-right">Margin</th>
                       <th className="px-3 py-2.5 text-right">Rekomendasi</th>
@@ -491,12 +495,12 @@ function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDelete
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs sm:text-sm">
+            <table className="w-full text-left border-collapse text-xs sm:text-sm table-fixed">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/30 text-[11px] font-bold text-gray-500 uppercase">
                   <th className="px-5 py-3">Nama Produk</th>
                   <th className="px-4 py-3 text-right">Yield</th>
-                  <th className="px-4 py-3 text-right">HPP/Porsi</th>                      <th className="px-4 py-3 text-right">Harga Jual</th>
+                  <th className="px-4 py-3 text-right">Modal/Porsi</th>                      <th className="px-4 py-3 text-right">Harga Jual</th>
                   <th className="px-4 py-3 text-right">Laba/Porsi</th>
                   <th className="px-4 py-3 text-center">Margin</th>
                   <th className="px-4 py-3 text-center">Aksi</th>
@@ -505,30 +509,44 @@ function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDelete
               <tbody className="divide-y divide-gray-100 text-gray-700">
                 {calculatedProducts.map(p => {
                   const isSelected = p.namaProduk.toLowerCase().trim() === selectedProductName.toLowerCase().trim();
+                  const hasVariants = p.variants && p.variants.length > 0;
                   return (
-                    <tr key={p.namaProduk} onClick={() => setSelectedProductName(p.namaProduk)}
-                      className={`cursor-pointer transition-colors hover:bg-emerald-50/10 ${isSelected ? 'bg-emerald-50/30' : ''}`}>
-                      <td className="px-5 py-4 font-semibold text-gray-900">{p.namaProduk}</td>
-                      <td className="px-4 py-4 text-right font-mono text-gray-500">{p.porsiJual} porsi</td>
-                      <td className="px-4 py-4 text-right font-mono text-gray-900 font-semibold">{formatCurrency(p.hppPerPorsi)}</td>
-                      <td className="px-4 py-4 text-right">
-                        <span className="font-bold text-emerald-800 font-mono">{formatCurrency(p.hargaJual)}</span>
-                      </td>
-                      <td className={`px-4 py-4 text-right font-mono font-semibold ${p.profitPerPorsi >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-                        {formatCurrency(p.profitPerPorsi)}
-                      </td>
-                      <td className="px-4 py-4 text-center">
-                        <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold border ${getMarginBadgeClass(p.marginPersen)}`}>
-                          {p.marginPersen.toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-center">
-                        <button onClick={(e) => { e.stopPropagation(); showConfirm({ title: "Hapus Produk", message: `Hapus produk "${p.namaProduk}"?`, confirmLabel: "Hapus", cancelLabel: "Batal", variant: "danger", onConfirm: () => onDeleteProduct(p.namaProduk), }); }}
-                          className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-100 transition cursor-pointer">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
+                    <React.Fragment key={p.namaProduk}>
+                      <tr onClick={() => setSelectedProductName(p.namaProduk)}
+                        className={`cursor-pointer transition-colors hover:bg-emerald-50/10 ${isSelected ? 'bg-emerald-50/30' : ''}`}>
+                        <td className="px-5 py-4 font-semibold text-gray-900">{p.namaProduk}</td>
+                        <td className="px-4 py-4 text-right font-mono text-gray-500">{p.porsiJual} porsi</td>
+                        <td className="px-4 py-4 text-right font-mono text-gray-900 font-semibold">{formatCurrency(p.hppPerPorsi)}</td>
+                        <td className="px-4 py-4 text-right">
+                          <span className="font-bold text-emerald-800 font-mono">{formatCurrency(p.hargaJual)}</span>
+                        </td>
+                        <td className={`px-4 py-4 text-right font-mono font-semibold ${p.profitPerPorsi >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                          {formatCurrency(p.profitPerPorsi)}
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold border ${getMarginBadgeClass(p.marginPersen)}`}>
+                            {p.marginPersen.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <button onClick={(e) => { e.stopPropagation(); showConfirm({ title: "Hapus Produk", message: `Hapus produk "${p.namaProduk}"?`, confirmLabel: "Hapus", cancelLabel: "Batal", variant: "danger", onConfirm: () => onDeleteProduct(p.namaProduk), }); }}
+                            className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-100 transition cursor-pointer">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                      {hasVariants && p.variants!.map(v => (
+                        <tr key={v.id} className="bg-purple-50/30 text-[11px]">
+                          <td className="px-8 py-2.5 text-purple-700 font-medium">📐 {v.name}</td>
+                          <td className="px-4 py-2.5 text-right font-mono text-purple-700">{v.porsi} porsi</td>
+                          <td className="px-4 py-2.5 text-right font-mono font-semibold text-purple-800">{formatCurrency(v.hppPerPorsi)}</td>
+                          <td className="px-4 py-2.5 text-right font-mono text-purple-700">{formatCurrency(v.hargaJual)}</td>
+                          <td className="px-4 py-2.5 text-right font-mono text-purple-700">{formatCurrency(v.hppPerPorsi > 0 ? v.hppPerPorsi - v.hppPerPorsi : 0)}</td>
+                          <td className="px-4 py-2.5 text-center"></td>
+                          <td className="px-4 py-2.5 text-center"></td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
@@ -566,14 +584,14 @@ function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDelete
                 <h4 className="text-xs font-bold text-gray-700 uppercase">Struktur Komponen (per Porsi)</h4>
                 <div className="h-6 w-full rounded-lg overflow-hidden flex text-[10px] text-white font-bold font-mono">
                   <div style={{ width: `${Math.max(1, Math.min(100, (activeResult.hppPerPorsi / activeResult.hargaJualPerPorsi) * 100))}%` }}
-                    className="bg-emerald-600 h-full flex items-center justify-center truncate px-1">HPP Bahan</div>
+                    className="bg-emerald-600 h-full flex items-center justify-center truncate px-1">Modal Bahan</div>
                   {activeResult.profitPerPorsi > 0 && (
                     <div style={{ width: `${Math.max(1, Math.min(100, activeResult.marginPersen))}%` }}
                       className="bg-blue-600 h-full flex items-center justify-center truncate px-1">Laba</div>
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-50 text-[10px]">
-                  <div><span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-600 mr-1"></span>HPP Bahan: <span className="block font-bold font-mono">{formatCurrency(activeResult.hppPerPorsi)}</span></div>
+                  <div><span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-600 mr-1"></span>Modal Bahan: <span className="block font-bold font-mono">{formatCurrency(activeResult.hppPerPorsi)}</span></div>
                   <div><span className="inline-block w-2.5 h-2.5 rounded-sm bg-blue-600 mr-1"></span>Laba: <span className="block font-bold font-mono">{formatCurrency(activeResult.profitPerPorsi)}</span></div>
                 </div>
               </div>
@@ -593,7 +611,7 @@ function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDelete
                   className="w-full accent-emerald-600" />
               </div>
               <div className="p-3.5 bg-gray-50 border border-gray-100 rounded-xl space-y-2 text-xs">
-                <div className="flex justify-between"><span className="text-gray-500">HPP/Porsi:</span><span className="font-bold font-mono">{formatCurrency(activeResult.hppPerPorsi)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Modal/Porsi:</span><span className="font-bold font-mono">{formatCurrency(activeResult.hppPerPorsi)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Rekomendasi/Porsi:</span><span className="font-bold font-mono text-emerald-700">{formatCurrency(suggestedPricePerPortion)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Total Harga (1 Resep):</span><span className="font-bold font-mono text-emerald-800 text-sm">{formatCurrency(suggestedPriceTotal)}</span></div>
               </div>
@@ -610,9 +628,10 @@ function HppMarginSection({ calculatedProducts, onUpdateProductPricing, onDelete
 }
 
 // ===== SUB-TAB: SUBSTITUSI =====
-function SubstitusiSection({ bahanBaku, detailResep, calculatedProducts, formatCurrency, onEditMaterial }: {
+function SubstitusiSection({ bahanBaku, detailResep, calculatedProducts, formatCurrency, onEditMaterial, showConfirm }: {
   bahanBaku: BahanBaku[]; detailResep: DetailResep[]; calculatedProducts: CalculationResult[]; formatCurrency: (v: number) => string;
   onEditMaterial?: (oldName: string, updated: BahanBaku) => void;
+  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
 }) {
   const [subOriginalBahan, setSubOriginalBahan] = useState('');
   const [substituteQty, setSubstituteQty] = useState('');
@@ -734,8 +753,8 @@ function SubstitusiSection({ bahanBaku, detailResep, calculatedProducts, formatC
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 mt-2">
-                      <div><span className="text-gray-400 block text-[9px]">HPP Lama</span><span className="font-mono font-bold">{formatCurrency(r.oldHpp)}</span></div>
-                      <div><span className="text-gray-400 block text-[9px]">HPP Baru</span><span className={`font-mono font-bold ${r.costDiff > 0 ? 'text-red-700' : r.costDiff < 0 ? 'text-emerald-700' : ''}`}>{formatCurrency(r.newHpp)}</span></div>
+                      <div><span className="text-gray-400 block text-[9px]">Modal Lama</span><span className="font-mono font-bold">{formatCurrency(r.oldHpp)}</span></div>
+                      <div><span className="text-gray-400 block text-[9px]">Modal Baru</span><span className={`font-mono font-bold ${r.costDiff > 0 ? 'text-red-700' : r.costDiff < 0 ? 'text-emerald-700' : ''}`}>{formatCurrency(r.newHpp)}</span></div>
                       <div><span className="text-gray-400 block text-[9px]">Margin Lama</span><span className="font-mono font-bold">{r.oldMargin.toFixed(1)}%</span></div>
                       <div><span className="text-gray-400 block text-[9px]">Margin Baru</span><span className={`font-mono font-bold ${r.costDiff > 0 ? 'text-red-700' : r.costDiff < 0 ? 'text-emerald-700' : ''}`}>{r.newMargin.toFixed(1)}%</span></div>
                     </div>

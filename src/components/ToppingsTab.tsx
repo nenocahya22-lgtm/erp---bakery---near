@@ -8,12 +8,13 @@ interface Props {
   bahanBaku: BahanBaku[];
   onAddTopping: (t: ProductTopping) => void;
   onDeleteTopping: (id: string) => void;
+  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
 }
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
-export default function ToppingsTab({ toppings, productHpp, bahanBaku, onAddTopping, onDeleteTopping }: Props) {
+export default function ToppingsTab({ toppings, productHpp, bahanBaku, onAddTopping, onDeleteTopping, showConfirm }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [productFilter, setProductFilter] = useState<string>('semua');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -304,9 +305,9 @@ export default function ToppingsTab({ toppings, productHpp, bahanBaku, onAddTopp
             </p>
           </div>
         ) : (
-          <table className="w-full border-collapse text-left text-xs">
+          <table className="w-full border-collapse text-left text-xs table-fixed">
             <thead>
-              <tr className="border-b border-gray-100 bg-slate-900 text-[10px] font-bold uppercase text-white">
+              <tr className="border-b border-gray-100 bg-gray-50 text-[10px] font-bold uppercase text-gray-500">
                 <th className="px-4 py-3">Nama Topping</th>
                 <th className="px-4 py-3">Produk</th>
                 <th className="px-4 py-3">Bahan</th>
@@ -351,11 +352,11 @@ export default function ToppingsTab({ toppings, productHpp, bahanBaku, onAddTopp
         <div className="flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
           <div>
-            <h4 className="text-xs font-bold text-amber-900">Mengapa Topping Dipisah?</h4>
+            <h4 className="text-xs font-bold text-amber-900">Integrasi Topping dengan Resep</h4>
             <p className="text-[10px] text-amber-800 mt-1 leading-relaxed">
-              Dengan memisahkan manajemen add-on/topping dari resep, Anda menghindari <strong>double counting</strong> 
-              saat transaksi di POS. Topping tidak lagi masuk ke perhitungan HPP menu — topping adalah item terpisah 
-              yang ditambahkan saat kasir, sehingga harga jualnya murni tambahan, bukan bagian dari harga menu.
+              Topping & add-on sekarang dikelola di bawah <strong>🧪 Produksi</strong> — dekat dengan modul Resep. 
+              Setiap topping menggunakan bahan baku yang terdaftar, sehingga <strong>HPP topping otomatis terhitung</strong> 
+              dari takaran × harga satuan bahan. Tidak ada double counting dengan HPP menu utama.
             </p>
             <p className="text-[10px] text-amber-800 mt-1 leading-relaxed">
               Atur margin harga jual topping di sini. Nilai otomatis dari <strong>takaran × harga satuan bahan</strong>.

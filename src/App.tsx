@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useConfirmModal } from './hooks/useConfirmModal';
-import { ConfirmModal } from './components/ConfirmModal';
+import { ConfirmModal, type ConfirmState } from './components/ConfirmModal';
 import OwnerLogin from './components/OwnerLogin';
 import BranchLogin from './components/BranchLogin';
 import SmartKitchenTab from './components/SmartKitchenTab';
 import WasteControlTab from './components/WasteControlTab';
-import ToppingsTab from './components/ToppingsTab';
 import PesananOnlineTab from './components/PesananOnlineTab';
 import ProductionCenterTab from './components/ProductionCenterTab';
 import BranchDashboard from './components/BranchDashboard';
@@ -30,6 +29,30 @@ import {
 import { useAuth } from './hooks/useAuth';
 import { useERPData } from './hooks/useERPData';
 import { useFirestoreSync } from './hooks/useFirestoreSync';
+
+// Library imports
+import {
+  listenNewOrders,
+  listenOrderStatusChanges,
+  listenNotifications,
+  listenNewChats,
+  syncProductsToFirestore,
+  getFirestoreCategories,
+} from './lib/firestore-bridge';
+import {
+  extractSpreadsheetId,
+  loadProjectDataFromSheets,
+  saveProjectDataToSheets,
+  createAndInitializeTemplates,
+  saveRevenueToSheets,
+  enqueueFailedSync,
+  resetDataHashCache,
+} from './lib/sheets';
+import { calculateAllProducts } from './lib/calculations';
+import { saveAllToFirestore } from './lib/erp-firestore-sync';
+import { safeGetLocalStorage } from './lib/safe-json';
+import { googleSignIn } from './lib/firebase';
+import type { IoTDevice } from './types';
 
 export default function App() {
   // ─── HOOKS ───
@@ -177,7 +200,7 @@ export default function App() {
     }
   }, [token]);
 
-  // Robust Auto-Save background Sync with Google Sheets every 5 minutes
+  // Robust Auto-Save background Sync with Google Sheets — every 2 menit (diff sync cegah API overuse)
   const autoSaveDataRef = useRef({ bahanBaku, productHpp, detailResep, hasUnsavedChanges, token, spreadsheetId });
   useEffect(() => {
     autoSaveDataRef.current = { bahanBaku, productHpp, detailResep, hasUnsavedChanges, token, spreadsheetId };
@@ -243,7 +266,7 @@ export default function App() {
             }
           });
       }
-    }, 5 * 60 * 1000);
+    }, 2 * 60 * 1000); // 2 menit — lebih sering tapi diff sync cegah API overuse
 
     return () => clearInterval(interval);
   }, []);
@@ -734,17 +757,17 @@ export default function App() {
       )}
 
       {/* MOBILE SIDEBAR */}
-      <aside className={`md:hidden fixed top-0 left-0 z-40 h-full w-72 bg-slate-900 text-slate-300 border-r border-slate-800 flex flex-col shadow-2xl transition-all duration-300 ease-in-out ${
+      <aside className={`md:hidden fixed top-0 left-0 z-40 h-full w-72 bg-slate-800 text-slate-300 border-r border-slate-700 flex flex-col shadow-lg transition-all duration-300 ease-in-out ${
         isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
       }`}>
-        <SidebarContent isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} activeTab={activeTab} setActiveTab={setActiveTab} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} setSpreadsheetTitle={setSpreadsheetTitle} showToast={showToast} initiateGoogleConnect={initiateGoogleConnect} handleOwnerLogout={handleOwnerLogout} />
+        <SidebarContent isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} activeTab={activeTab} setActiveTab={setActiveTab} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} setSpreadsheetTitle={setSpreadsheetTitle} showToast={showToast} initiateGoogleConnect={initiateGoogleConnect} handleOwnerLogout={handleOwnerLogout} confirmState={confirmState} setConfirmState={setConfirmState} />
       </aside>
 
       {/* DESKTOP SIDEBAR */}
-      <aside className="hidden md:flex flex-shrink-0 bg-slate-900 text-slate-300 border-r border-slate-800 flex-col shadow-2xl transition-all duration-300 ease-in-out overflow-hidden h-full"
+      <aside className="hidden md:flex flex-shrink-0 bg-slate-800 text-slate-300 border-r border-slate-700 flex-col shadow-lg transition-all duration-300 ease-in-out overflow-hidden h-full"
         style={{ width: isSidebarOpen ? 288 : 0 }}>
         <div style={{ width: 288 }} className="flex flex-col h-full">
-          <SidebarContent isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} activeTab={activeTab} setActiveTab={setActiveTab} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} setSpreadsheetTitle={setSpreadsheetTitle} showToast={showToast} initiateGoogleConnect={initiateGoogleConnect} handleOwnerLogout={handleOwnerLogout} />
+          <SidebarContent isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} activeTab={activeTab} setActiveTab={setActiveTab} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} setSpreadsheetTitle={setSpreadsheetTitle} showToast={showToast} initiateGoogleConnect={initiateGoogleConnect} handleOwnerLogout={handleOwnerLogout} confirmState={confirmState} setConfirmState={setConfirmState} />
         </div>
       </aside>
 
@@ -808,7 +831,7 @@ export default function App() {
                 ) : (
                   <>
                     <RefreshCw className="w-3.5 h-3.5" />
-                    <span>SINKRONISASI KE GOOGLE SHEETS</span>
+                    <span>Sinkronisasi ke Google Sheets</span>
                   </>
                 )}
               </button>
@@ -829,8 +852,6 @@ export default function App() {
                 toppings={toppings}
                 onCompletePOSSale={handleCompletePOSSale}
                 onProductionComplete={handleProductionComplete}
-                onAddTopping={handleAddTopping}
-                onDeleteTopping={handleDeleteTopping}
                 wasteLogs={wasteLogs}
                 cabangList={cabangList}
                 suratOrders={suratOrders}
@@ -852,6 +873,10 @@ export default function App() {
                 onAddRD={handleAddRD}
                 onDeleteRD={handleDeleteRD}
                 onProductionComplete={handleProductionComplete}
+                showConfirm={showConfirm}
+                toppings={toppings}
+                onAddTopping={handleAddTopping}
+                onDeleteTopping={handleDeleteTopping}
               />
             )}
             {activeTab === 'logistik' && (
@@ -899,6 +924,7 @@ export default function App() {
                 onUpdateProductPricing={handleUpdateProductPricing}
                 onDeleteProduct={handleDeleteProduct}
                 onEditMaterial={handleEditMaterial}
+                showConfirm={showConfirm}
               />
             )}
             {activeTab === 'sistem' && (
@@ -925,6 +951,7 @@ export default function App() {
                 calculatedProducts={calculatedProducts}
                 detailResep={detailResep}
                 showConfirm={showConfirm}
+                onImportProduct={(product) => handleAddProduct(product, [])}
               />
             )}
             {activeTab === 'keuangan' && (
@@ -937,6 +964,7 @@ export default function App() {
                 rdTotalCost={rdTotalCost}
                 onWipeAllData={handleWipeAllData}
                 onSyncToFirestore={handleSyncToFirestore}
+                showConfirm={showConfirm}
               />
             )}
 
@@ -1028,7 +1056,7 @@ export default function App() {
 }
 
 // ===== SIDEBAR CONTENT COMPONENT =====
-function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveTab, spreadsheetId, setSpreadsheetId, setSpreadsheetTitle, showToast, initiateGoogleConnect, handleOwnerLogout }: {
+function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveTab, spreadsheetId, setSpreadsheetId, setSpreadsheetTitle, showToast, initiateGoogleConnect, handleOwnerLogout, confirmState, setConfirmState }: {
   isSidebarOpen: boolean;
   setIsSidebarOpen: (v: boolean) => void;
   activeTab: string;
@@ -1039,14 +1067,16 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
   showToast: (msg: string, type: 'success' | 'error' | 'info') => void;
   initiateGoogleConnect: () => void;
   handleOwnerLogout: () => void;
+  confirmState: ConfirmState;
+  setConfirmState: React.Dispatch<React.SetStateAction<ConfirmState>>;
 }) {
   const sidebarBtn = (tabKey: string, icon: React.ReactNode, label: string) => (
     <button
       onClick={() => { setActiveTab(tabKey); setIsSidebarOpen(false); }}
-      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
         activeTab === tabKey
-          ? 'bg-emerald-600 text-white font-extrabold shadow-sm'
-          : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+          ? 'bg-emerald-600 text-white shadow-sm'
+          : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
       }`}
     >
       <span className={`w-4 h-4 shrink-0 ${activeTab === tabKey ? 'text-white' : 'text-emerald-400'}`}>{icon}</span>
@@ -1056,72 +1086,72 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
 
   return (
     <>
-      <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950 shrink-0">
+      <div className="p-4 border-b border-slate-700 flex items-center justify-between bg-slate-800/50 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-black shadow-md">
-            <Layers className="w-5 h-5" />
+          <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold shadow-sm">
+            <Layers className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-[11px] font-black text-white tracking-wider uppercase mb-0.5">Near Bakery & Co. ERP</h2>
-            <p className="text-[9px] text-emerald-400 font-bold tracking-widest uppercase">Owner Console</p>
+            <h2 className="text-[11px] font-bold text-white tracking-wider uppercase">Near Bakery & Co.</h2>
+            <p className="text-[8px] text-emerald-400 font-semibold tracking-widest uppercase">ERP System</p>
           </div>
         </div>
         <button onClick={() => setIsSidebarOpen(false)}
-          className="p-1 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg cursor-pointer" title="Tutup Sidebar">
-          <PanelRightClose className="w-5 h-5" />
+          className="p-1 text-slate-500 hover:text-white hover:bg-slate-700 rounded-lg cursor-pointer" title="Tutup Sidebar">
+          <PanelRightClose className="w-4 h-4" />
         </button>
       </div>
 
-      <div className="p-4 bg-slate-900/60 border-b border-slate-800 text-xs flex items-center justify-between shrink-0">
+      <div className="p-3 bg-slate-800/30 border-b border-slate-700 text-xs flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className="w-7.5 h-7.5 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-bold font-mono text-emerald-400">OW</div>
+          <div className="w-7 h-7 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center text-[10px] font-bold font-mono text-emerald-400">OW</div>
           <div>
-            <p className="font-bold text-white text-[11px] truncate max-w-[100px]">Owner Toko</p>
-            <p className="text-[9px] text-gray-500 font-mono font-bold">owner@bakery.id</p>
+            <p className="font-semibold text-white text-[11px] truncate max-w-[100px]">Owner Toko</p>
+            <p className="text-[8px] text-gray-500 font-mono">owner@bakery.id</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
           <button onClick={initiateGoogleConnect} title="Hubungkan Google Sheets"
-            className="p-1.5 hover:bg-slate-800 text-gray-500 hover:text-white rounded-lg transition-colors cursor-pointer flex items-center">
+            className="p-1.5 hover:bg-slate-700 text-gray-500 hover:text-white rounded-lg transition-colors cursor-pointer flex items-center">
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
           </button>
           <button onClick={handleOwnerLogout} title="Logout"
-            className="p-1.5 hover:bg-slate-800 text-gray-500 hover:text-red-400 rounded-lg transition-colors cursor-pointer flex items-center">
+            className="p-1.5 hover:bg-slate-700 text-gray-500 hover:text-red-400 rounded-lg transition-colors cursor-pointer flex items-center">
             <LogOut className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-4 space-y-5 select-none scrollbar-thin">
+      <nav className="flex-1 overflow-y-auto p-3 space-y-4 select-none scrollbar-thin">
         <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">💰 PENJUALAN</span>
-          {sidebarBtn('penjualan', <ShoppingCart className="w-4 h-4" />, '💰 POS · Online · CRM · Chat')}
+          <span className="px-3 text-[8px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Penjualan</span>
+          {sidebarBtn('penjualan', <ShoppingCart className="w-4 h-4" />, 'Kasir · Online · CRM · Chat')}
         </div>
         <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">🧪 PRODUKSI</span>
-          {sidebarBtn('produksi', <ClipboardList className="w-4 h-4" />, '🧪 Resep · R&D · Kitchen · BOM')}
+          <span className="px-3 text-[8px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Produksi</span>
+          {sidebarBtn('produksi', <ClipboardList className="w-4 h-4" />, 'Resep · R&D · Kitchen')}
         </div>
         <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">📦 LOGISTIK</span>
-          {sidebarBtn('logistik', <Package className="w-4 h-4" />, '📦 Data Pusat · Stok · Expiry · Waste')}
+          <span className="px-3 text-[8px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Inventaris</span>
+          {sidebarBtn('logistik', <Package className="w-4 h-4" />, 'Data Pusat · Stok · Expiry · Waste')}
         </div>
         <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">📈 STRATEGI</span>
-          {sidebarBtn('strategi', <BarChart3 className="w-4 h-4" />, '📈 Ringkasan · HPP · Anggaran · BEP')}
+          <span className="px-3 text-[8px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Strategi</span>
+          {sidebarBtn('strategi', <BarChart3 className="w-4 h-4" />, 'Ringkasan · Modal · Anggaran')}
         </div>
         <div className="space-y-1">
-          <span className="px-3 text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2 font-mono">⚙️ SISTEM</span>
-          {sidebarBtn('sistem', <Settings className="w-4 h-4" />, '⚙️ Data Pusat · Web Store · Backup')}
-          {sidebarBtn('keuangan', <LineChart className="w-4 h-4" />, '📊 Dashboard Keuangan')}
+          <span className="px-3 text-[8px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Sistem</span>
+          {sidebarBtn('sistem', <Settings className="w-4 h-4" />, 'Data Pusat · Web Store · Backup')}
+          {sidebarBtn('keuangan', <LineChart className="w-4 h-4" />, 'Dashboard Keuangan')}
         </div>
       </nav>
 
-      <div className="p-4 border-t border-slate-800 bg-slate-950 flex flex-col gap-2 shrink-0">
+      <div className="p-3 border-t border-slate-700 bg-slate-800/30 flex flex-col gap-2 shrink-0">
         {spreadsheetId ? (
           <>
             <a href={`https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`} target="_blank" rel="noreferrer"
-              className="text-center font-mono text-[10px] text-emerald-400 bg-slate-905 border border-slate-800 hover:border-emerald-600/50 py-1.5 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer">
-              <FileSpreadsheet className="w-3.5 h-3.5" /> BUKA SPREADSHEET ↗
+              className="text-center text-[10px] text-emerald-400 bg-slate-800 border border-slate-700 hover:border-emerald-600/50 py-1.5 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+              <FileSpreadsheet className="w-3 h-3" /> Buka Spreadsheet ↗
             </a>
             <button onClick={() => {
               localStorage.removeItem('spreadsheet_url');
@@ -1129,14 +1159,14 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
               setSpreadsheetTitle('');
               showToast('Koneksi Google Sheets diputuskan.', 'info');
             }}
-              className="w-full py-1.5 text-center text-[10px] font-extrabold uppercase bg-slate-800 hover:bg-rose-700 hover:text-white text-slate-400 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5">
-              <LogOut className="w-3.5 h-3.5" /> Putus Koneksi
+              className="w-full py-1.5 text-center text-[10px] font-bold uppercase bg-slate-700 hover:bg-rose-700 hover:text-white text-slate-400 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5">
+              <LogOut className="w-3 h-3" /> Putus Koneksi
             </button>
           </>
         ) : (
           <button onClick={initiateGoogleConnect}
-            className="w-full py-1.5 text-center text-[10px] font-extrabold uppercase bg-emerald-600/10 hover:bg-emerald-700 hover:text-white text-emerald-400 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-emerald-800/30">
-            <FileSpreadsheet className="w-3.5 h-3.5" /> HUBUNGKAN GOOGLE SHEETS
+            className="w-full py-1.5 text-center text-[10px] font-bold uppercase bg-emerald-600/10 hover:bg-emerald-700 hover:text-white text-emerald-400 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-emerald-800/30">
+            <FileSpreadsheet className="w-3 h-3" /> Hubungkan Google Sheets
           </button>
         )}
 <ConfirmModal state={confirmState} setState={setConfirmState} />

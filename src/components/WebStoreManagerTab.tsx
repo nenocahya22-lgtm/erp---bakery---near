@@ -43,6 +43,7 @@ import {
 } from '../lib/firestore-bridge';
 import { safeGetLocalStorage } from '../lib/safe-json';
 import { getSharedCategories, setSharedCategories } from '../lib/category-store';
+import WebStoreFirestoreSection from './WebStoreFirestoreSection';
 
 const STORAGE_KEY = 'storenear_web_config';
 
@@ -95,12 +96,10 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
   const [config, setConfig] = useState<WebStoreConfig>(() => {
     const saved = safeGetLocalStorage<WebStoreConfig | null>(STORAGE_KEY, null);
     if (saved) {
-      // Merge kategori dari shared store (single source of truth)
-      const shared = getSharedCategories();
-      if (shared.categories.length > 0) {
-        saved.categories = shared.categories;
-        saved.categoryIcons = shared.categoryIcons;
-      }
+      // ⚠️ JANGAN override kategori dari shared store / category-store!
+      // Jika user sudah menghapus kategori di Web Store Manager,
+      // shared store mungkin masih menyimpan data lama dan akan mengembalikannya.
+      // Biarkan kategori dari saved config (localStorage) sebagai sumber kebenaran.
       return saved;
     }
     return createDefaultWebStoreConfig(productHpp.filter(p => p.status !== 'draft'));
@@ -161,13 +160,15 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
     }
   }, [config]);
 
-  // Auto-save kategori ke Firestore ketika berubah
+  // Auto-save kategori ke Firestore ketika berubah — HANYA kategori, bukan full config
+  // Catatan: auto-save ini hanya untuk menjaga konsistensi dengan collection categories/{cabangId}
+  // Config lengkap disimpan via PUBLISH PERUBAHAN (handleSaveToFirestore)
   useEffect(() => {
     if (!isFirestoreConnected || !config.categories) return;
     const cabangId = config.cabangId || 'pusat';
     const timer = setTimeout(() => {
       saveCategoriesToFirestore(cabangId, config.categories || [], config.categoryIcons || {});
-    }, 1000);
+    }, 2000);
     return () => clearTimeout(timer);
   }, [config.categories, config.categoryIcons, config.cabangId, isFirestoreConnected]);
 
@@ -216,23 +217,14 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
   }, [config.cabangId]);
 
   // Import categories from Firestore ke local config
-  const handleImportCategoriesFromFirestore = useCallback(() => {
-    if (!firestoreCategories || !firestoreCategories.categories.length) {
-      showToast('Tidak ada kategori di Firestore untuk diimpor.', 'info');
-      return;
+  const handleImportCategory = useCallback((category: string) => {
+    const icon = firestoreCategories?.categoryIcons?.[category] || 'package';
+    if (!(config.categories || []).includes(category)) {
+      updateConfig({
+        categories: [...(config.categories || []), category],
+        categoryIcons: { ...(config.categoryIcons || {}), [category]: icon },
+      });
     }
-    // Merge categories — tambah yang belum ada
-    const existingCats = new Set(config.categories || []);
-    const newCats = firestoreCategories.categories.filter(c => !existingCats.has(c));
-    if (newCats.length === 0) {
-      showToast('Semua kategori sudah terdaftar di ERP.', 'info');
-      return;
-    }
-    updateConfig({
-      categories: [...(config.categories || []), ...newCats],
-      categoryIcons: { ...(config.categoryIcons || {}), ...firestoreCategories.categoryIcons },
-    });
-    showToast(`✅ ${newCats.length} kategori berhasil diimpor dari Firestore!`, 'success');
   }, [firestoreCategories, config.categories, config.categoryIcons]);
 
   useEffect(() => {
@@ -288,14 +280,46 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
     });
   };
 
-  // ─── SAVE TO FIRESTORE ───
+  // ─── SAVE TO FIRESTORE + AUTO SYNC PRODUK & KATEGORI ───
   const handleSaveToFirestore = async () => {
     setIsSavingToFirestore(true);
     try {
       const cabangId = config.cabangId || 'pusat';
+      // 1. Simpan konfigurasi web store
       await saveWebStoreConfig(cabangId, config);
       setIsFirestoreConnected(true);
-      showToast('✅ Konfigurasi tersimpan ke Firestore! Web Store akan update otomatis.', 'success');
+      
+      // 2. Auto-sync kategori ke collection categories/{cabangId}
+      // ⚠️ HARUS selalu save, termasuk array kosong! Kalau tidak, kategori
+      //    yang sudah dihapus user tetap ada di Firestore dan web store
+      //    akan terus menampilkannya.
+      try {
+        await saveCategoriesToFirestore(cabangId, config.categories || [], config.categoryIcons || {});
+      } catch (e) {
+        console.warn('Category sync error (non-critical):', e);
+      }
+      
+      // 3. Auto-sync produk ke collection products (jika data tersedia)
+      if (calculatedProducts && productHpp && detailResep && bahanBaku) {
+        try {
+          const count = await syncProductsToFirestore(
+            calculatedProducts,
+            productHpp.filter(p => p.status !== 'draft'),
+            detailResep,
+            bahanBaku,
+            cabangId,
+            config // Kirim config langsung (hindari race condition)
+          );
+          setLastSynced(new Date().toLocaleTimeString('id-ID'));
+          showToast(`✅ ${count} produk + kategori tersinkronisasi! Web Store akan update.`, 'success');
+        } catch (e) {
+          console.warn('Product sync error (non-critical):', e);
+          const imgCount = calculatedProducts ? calculatedProducts.filter(c => localStorage.getItem(`recipe_img_${c.namaProduk.toLowerCase().trim()}`)).length : 0;
+          showToast(`⚠️ Konfigurasi tersimpan. Gagal sync ${imgCount > 0 ? `(${imgCount} gambar AI siap)` : ''} — coba Sync Manual di tab Katalog Produk.`, 'warning');
+        }
+      } else {
+        showToast('⚠️ Konfigurasi tersimpan. Data produk belum siap — buka tab Formulasi Resep dulu, lalu PUBLISH ulang.', 'warning');
+      }
     } catch (err: any) {
       console.error('Firestore save error:', err);
       showToast('❌ Gagal simpan ke Firestore: ' + (err.message || 'Unknown'), 'error');
@@ -313,7 +337,7 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
     setIsSyncing(true);
     try {
       const cabangId = config.cabangId || 'pusat';
-      const count = await syncProductsToFirestore(calculatedProducts, productHpp.filter(p => p.status !== 'draft'), detailResep, bahanBaku, cabangId);
+      const count = await syncProductsToFirestore(calculatedProducts, productHpp.filter(p => p.status !== 'draft'), detailResep, bahanBaku, cabangId, config);
       setLastSynced(new Date().toLocaleTimeString('id-ID'));
       await fetchFirestoreProducts();
       showToast(`✅ ${count} produk + kategori berhasil disinkronisasi ke Firestore! Web Store akan update.`, 'success');
@@ -1251,7 +1275,7 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
                   <div className="flex items-center gap-3 mt-1">
                     {(() => {
                       const cp = (calculatedProducts || []).find(c => c.namaProduk === p.productName);
-                      if (cp) return <><span className="text-[9px] text-gray-400">HPP: {formatCurrency(cp.hppPerPorsi)}</span><span className="text-[10px] font-bold text-emerald-700">Jual: {formatCurrency(cp.hargaJualPerPorsi)}</span></>;
+                      if (cp) return <><span className="text-[9px] text-gray-400">Modal: {formatCurrency(cp.hppPerPorsi)}</span><span className="text-[10px] font-bold text-emerald-700">Jual: {formatCurrency(cp.hargaJualPerPorsi)}</span></>;
                       return <span className="text-[9px] text-gray-400 italic">Harga belum diatur</span>;
                     })()}
                   </div>
@@ -1282,13 +1306,31 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
                       <Image className="w-3 h-3 inline mr-1" />Gambar
                       <input type="file" accept="image/*" className="hidden" onChange={e => handleUploadProductImage(idx, e)} />
                     </label>
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Hapus produk "${p.productName}" dari Web Store?`)) {
+                          setConfig(prev => ({
+                            ...prev,
+                            products: prev.products.filter((_, i) => i !== idx),
+                          }));
+                          showToast(`"${p.productName}" dihapus dari Web Store.`, 'info');
+                        }
+                      }}
+                      className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 cursor-pointer shrink-0 self-end"
+                      title="Hapus produk dari Web Store"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
                   </div>
                 </div>
               </div>
             ))}
           </div>
           {config.products.length === 0 && (
-            <p className="text-xs text-gray-400 text-center py-8">Belum ada produk. Tambahkan produk di tab Formulasi Resep terlebih dahulu.</p>
+            <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-xl">
+              <ShoppingBag className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-xs text-gray-400">Belum ada produk di Web Store. Tambahkan produk di tab Formulasi Resep, lalu sync ke Firestore.</p>
+            </div>
           )}
         </div>
       )}
@@ -1628,7 +1670,7 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
                           Rp {fp.price.toLocaleString('id-ID')}
                         </span>
                         {fp.hpp && fp.hpp > 0 && (
-                          <span className="text-[9px] text-gray-400">HPP: Rp {fp.hpp.toLocaleString('id-ID')}</span>
+                          <span className="text-[9px] text-gray-400">Modal: Rp {fp.hpp.toLocaleString('id-ID')}</span>
                         )}
                         {fp.discountPercent && fp.discountPercent > 0 && (
                           <span className="text-[9px] text-amber-600 font-bold">-{fp.discountPercent}%</span>
@@ -1655,6 +1697,13 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
                                   hargaJual: fp.price,
                                   kategori: fp.category || 'Lainnya',
                                 });
+                                // Simpan gambar dari Firestore ke localStorage ERP
+                                if (fp.imageUrl) {
+                                  try {
+                                    const savedKey = `recipe_img_${fp.name.toLowerCase().trim()}`;
+                                    localStorage.setItem(savedKey, fp.imageUrl);
+                                  } catch (_) {}
+                                }
                                 showToast(`✅ "${fp.name}" berhasil diimpor ke ERP! Atur resep di Formulasi Resep.`, 'success');
                               }
                             }}

@@ -142,7 +142,7 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
             </div>
 
             <div>
-              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Total HPP (Rp) <span className="text-blue-500">*auto dr bahan</span></label>
+              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Total Modal (Rp) <span className="text-blue-500">*auto dr bahan</span></label>
               <div className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono bg-gray-100 text-gray-500">
                 {formatCurrency(rdIngredients.reduce((s, i) => s + getIngredientCost(i.bahanName, i.takaran), 0))}
               </div>
@@ -177,7 +177,7 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
               {/* Ingredients table */}
               {rdIngredients.length > 0 ? (
                 <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                  <table className="w-full text-left text-[10px]">
+                  <table className="w-full text-left text-[10px] table-fixed">
                     <thead>
                       <tr className="bg-gray-100 text-gray-500 uppercase font-bold">
                         <th className="p-2">Nama Bahan</th>
@@ -322,7 +322,7 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
                         <span className="font-bold font-mono text-emerald-700">{formatCurrency(hppPerUnit)}</span>
                       </div>
                       <div className="bg-gray-50 p-2.5 rounded-lg text-center">
-                        <span className="text-[9px] text-gray-500 block uppercase font-bold">Total HPP</span>
+                        <span className="text-[9px] text-gray-500 block uppercase font-bold">Total Modal</span>
                         <span className="font-bold font-mono text-emerald-700">{formatCurrency(hppPerUnit * activeExp.targetOutputPorsi)}</span>
                       </div>
                       <div className="bg-gray-50 p-2.5 rounded-lg text-center">
@@ -336,7 +336,7 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
                 {/* Tabel Bahan */}
                 <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Komposisi Bahan</h4>
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full text-left text-xs table-fixed">
                     <thead>
                       <tr className="bg-gray-100 text-[10px] uppercase font-bold text-gray-500">
                         <th className="px-3 py-2">Nama Bahan</th>

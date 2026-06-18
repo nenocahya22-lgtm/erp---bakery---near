@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { BahanBaku, Cabang, SuratOrder, BranchStock, BranchTransaction, WasteLog, OpnameDraft, ProductHpp, CalculationResult, DetailResep } from '../types';
 import DataPusatTab from './DataPusatTab';
 import WebStoreManagerTab from './WebStoreManagerTab';
@@ -26,6 +27,7 @@ interface SistemDashboardProps {
   productHpp: ProductHpp[];
   calculatedProducts: CalculationResult[];
   detailResep: DetailResep[];
+  onImportProduct?: (product: ProductHpp) => void;
   showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
 }
 
@@ -45,7 +47,7 @@ export default function SistemDashboard(props: SistemDashboardProps) {
           <button
             key={t.key}
             onClick={() => setSubTab(t.key)}
-            className={`px-4 py-2 rounded-xl text-xs font-extrabold uppercase tracking-wider cursor-pointer transition-all ${
+            className={`px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider cursor-pointer transition-all ${
               subTab === t.key
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-white'
@@ -86,6 +88,7 @@ export default function SistemDashboard(props: SistemDashboardProps) {
           bahanBaku={props.bahanBaku}
           detailResep={props.detailResep}
           cabangList={props.cabangList}
+          onImportProduct={props.onImportProduct}
         />
       )}
       {subTab === 'backup' && (

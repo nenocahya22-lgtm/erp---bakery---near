@@ -11,6 +11,9 @@ import {
   serverTimestamp,
   getDoc,
   setDoc,
+  deleteDoc,
+  getDocs,
+  writeBatch,
 } from 'firebase/firestore';
 import { MessageSquare, Send, Trash2, RefreshCw, Plus, X } from 'lucide-react';
 
@@ -201,28 +204,22 @@ export default function ChatTab() {
   };
 
   const handleDeleteRoom = async (roomId: string) => {
-    const confirmed_204 = await new Promise<boolean>((resolve) => {
-      showConfirm({
-        title: 'Konfirmasi',
-        message: 'Hapus seluruh percakapan ini?',
-        confirmLabel: 'Ya',
-        cancelLabel: 'Batal',
-        variant: 'warning',
-        onConfirm: () => resolve(true),
-        onCancel: () => resolve(false),
-      });
-    });
+    const confirmed_204 = window.confirm('Hapus seluruh percakapan ini beserta semua pesannya? Tindakan ini tidak bisa dibatalkan.');
     if (!confirmed_204) return;
     try {
-      const msgsSnap = await getDoc(doc(db, 'chats', roomId));
-      if (msgsSnap.exists()) {
-        await updateDoc(doc(db, 'chats', roomId), {
-          lastMessage: '[Percakapan dihapus]',
-          unreadBySeller: false,
-          unreadByBuyer: false,
-        });
+      // Hapus semua subcollection messages dalam batch
+      const msgsSnap = await getDocs(collection(db, 'chats', roomId, 'messages'));
+      if (!msgsSnap.empty) {
+        const batch = writeBatch(db);
+        msgsSnap.forEach(msgDoc => batch.delete(msgDoc.ref));
+        await batch.commit();
       }
-    } catch (_) {}
+      // Hapus dokumen chat room
+      await deleteDoc(doc(db, 'chats', roomId));
+      if (activeChatId === roomId) setActiveChatId(null);
+    } catch (_) {
+      console.warn('Failed to delete chat room');
+    }
   };
 
   const unreadCount = chatRooms.filter(r => r.unreadBySeller).length;

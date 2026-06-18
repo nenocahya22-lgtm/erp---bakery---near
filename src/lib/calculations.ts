@@ -18,6 +18,8 @@ const SATUAN_CONVERSIONS: Record<string, { toBase: (v: number) => number; fromBa
   'krat':  { toBase: v => v,                    fromBase: v => v,                    group: 'count' },
   'ikat':  { toBase: v => v,                    fromBase: v => v,                    group: 'count' },
   'ekor':  { toBase: v => v,                    fromBase: v => v,                    group: 'count' },
+  'karung': { toBase: v => v,                   fromBase: v => v,                    group: 'count' },
+  'dus':   { toBase: v => v,                    fromBase: v => v,                    group: 'count' },
 };
 
 /**
@@ -36,7 +38,6 @@ export function convertSatuan(value: number, fromSatuan: string, toSatuan: strin
   const to = SATUAN_CONVERSIONS[toSatuan];
   if (!from || !to) return value;
   if (from.group !== to.group) {
-    // Incompatible groups — return as-is dan beri warning
     if (warnIncompatible) {
       console.warn(`⚠️ Konversi satuan tidak kompatibel: ${fromSatuan} (${from.group}) → ${toSatuan} (${to.group}). Nilai digunakan apa adanya.`);
     }
@@ -228,26 +229,31 @@ function calculateVariantHPP(
   let biayaBahanTotal = 0;
   const bahanListMapped = variantDetails.map((detail) => {
     const material = bahanMap.get(detail.namaBahan.toLowerCase().trim());
-    const hargaSatuan = material ? material.hargaSatuan : 0;
+    const hargaSatuan = material ? (material.hargaSatuanReal > 0 ? material.hargaSatuanReal : material.hargaSatuan) : 0;
     // Normalisasi satuan (sama seperti calculateAllProducts)
     const materialSatuan = material?.satuan || 'gr';
     const conv = SATUAN_CONVERSIONS[materialSatuan];
     let takaranEffective: number;
     if (conv?.group === 'mass') {
-      takaranEffective = convertSatuan(detail.takaran, 'gr', materialSatuan);
+      takaranEffective = convertSatuan(detail.takaran, 'gr', materialSatuan, true);
     } else if (conv?.group === 'volume') {
-      takaranEffective = convertSatuan(detail.takaran, 'ml', materialSatuan);
+      takaranEffective = convertSatuan(detail.takaran, 'ml', materialSatuan, true);
+    } else if (conv?.group === 'count' && material?.konversiGram && material.konversiGram > 0) {
+      takaranEffective = detail.takaran / material.konversiGram;
     } else {
+      if (materialSatuan && !['gr','kg','ons','ml','liter'].includes(materialSatuan)) {
+        console.warn(`Bahan "${detail.namaBahan}" dalam satuan "${materialSatuan}" — pastikan takaran resep (${detail.takaran}) sudah dalam satuan yang sama.`);
+      }
       takaranEffective = detail.takaran;
     }
-    const totalBiayaBahan = takaranEffective * hargaSatuan;
+    const totalBiayaBahan = Math.round((takaranEffective * hargaSatuan) * 100) / 100;
     biayaBahanTotal += totalBiayaBahan;
 
     return {
       namaBahan: detail.namaBahan,
       takaran: detail.takaran,
       satuan: material ? material.satuan : 'gr',
-      hargaBeli: material ? material.hargaBeli : 0,
+      hargaBeli: material ? (material.hargaBeliReal > 0 ? material.hargaBeliReal : material.hargaBeli) : 0,
       isiKemasan: material ? material.isiKemasan : 1,
       hargaSatuan,
       totalBiayaBahan,
@@ -256,10 +262,10 @@ function calculateVariantHPP(
 
   const variantPorsi = variant.porsi || 1;
   return {
-    biayaBahanTotal,
+    biayaBahanTotal: Math.round(biayaBahanTotal * 100) / 100,
     bahanList: bahanListMapped,
-    hppTotal: biayaBahanTotal,
-    hppPerPorsi: biayaBahanTotal / variantPorsi,
+    hppTotal: Math.round(biayaBahanTotal * 100) / 100,
+    hppPerPorsi: Math.round((biayaBahanTotal / variantPorsi) * 100) / 100,
   };
 }
 
@@ -282,7 +288,7 @@ export function calculateAllProducts(
     let biayaBahanTotal = 0;
     const bahanListMapped = productDetailRows.map((detail) => {
       const material = bahanMap.get(detail.namaBahan.toLowerCase().trim());
-      const hargaSatuan = material ? material.hargaSatuan : 0;
+      const hargaSatuan = material ? (material.hargaSatuanReal > 0 ? material.hargaSatuanReal : material.hargaSatuan) : 0;
       // 🔧 Normalisasi satuan — tentukan asal satuan takaran berdasarkan grup material:
       // - Mass (gr/kg/ons) → takaran diasumsikan dalam gram, konversi ke satuan material
       // - Volume (ml/liter) → takaran diasumsikan dalam ml, konversi ke satuan material
@@ -290,22 +296,28 @@ export function calculateAllProducts(
       const materialSatuan = material?.satuan || 'gr';
       const conv = SATUAN_CONVERSIONS[materialSatuan];
       let takaranInMaterialUnit: number;
+      let conversionWarning: string | undefined;
       if (conv?.group === 'mass') {
-        takaranInMaterialUnit = convertSatuan(detail.takaran, 'gr', materialSatuan);
+        takaranInMaterialUnit = convertSatuan(detail.takaran, 'gr', materialSatuan, true);
       } else if (conv?.group === 'volume') {
-        takaranInMaterialUnit = convertSatuan(detail.takaran, 'ml', materialSatuan);
+        takaranInMaterialUnit = convertSatuan(detail.takaran, 'ml', materialSatuan, true);
+      } else if (conv?.group === 'count' && material?.konversiGram && material.konversiGram > 0) {
+        takaranInMaterialUnit = detail.takaran / material.konversiGram;
+        conversionWarning = `Bahan "${detail.namaBahan}" (${materialSatuan}) — resep ${detail.takaran}gr × konversi ${material.konversiGram}gr/${materialSatuan} = ${takaranInMaterialUnit.toFixed(2)} ${materialSatuan}`;
       } else {
-        // Count group — gunakan takaran langsung (harus dalam satuan material)
+        if (materialSatuan && !['gr','kg','ons','ml','liter'].includes(materialSatuan)) {
+          conversionWarning = `Bahan "${detail.namaBahan}" dalam satuan "${materialSatuan}" — pastikan takaran resep (${detail.takaran}) sudah dalam satuan yang sama.`;
+        }
         takaranInMaterialUnit = detail.takaran;
       }
-      const totalBiayaBahan = takaranInMaterialUnit * hargaSatuan;
+      const totalBiayaBahan = Math.round((takaranInMaterialUnit * hargaSatuan) * 100) / 100;
       biayaBahanTotal += totalBiayaBahan;
 
       return {
         namaBahan: detail.namaBahan,
         takaran: detail.takaran,
         satuan: material ? material.satuan : 'gr',
-        hargaBeli: material ? material.hargaBeli : 0,
+        hargaBeli: material ? (material.hargaBeliReal > 0 ? material.hargaBeliReal : material.hargaBeli) : 0,
         isiKemasan: material ? material.isiKemasan : 1,
         hargaSatuan,
         totalBiayaBahan,
@@ -325,11 +337,11 @@ export function calculateAllProducts(
     const biayaKemasan = 0;
     
     const hppBeforeWaste = biayaBahanTotal;
-    const hppTotalResep = biayaBahanTotal * wasteMultiplier; // Biaya bahan + waste/shrinkage
-    const hppPerPorsi = hppTotalResep / (product.porsiJual || 1);
-    const hargaJualPerPorsi = product.hargaJual / (product.porsiJual || 1);
-    const profitPerPorsi = hargaJualPerPorsi - hppPerPorsi;
-    const marginPersen = hargaJualPerPorsi > 0 ? (profitPerPorsi / hargaJualPerPorsi) * 100 : 0;
+    const hppTotalResep = Math.round((biayaBahanTotal * wasteMultiplier) * 100) / 100;
+    const hppPerPorsi = Math.round((hppTotalResep / (product.porsiJual || 1)) * 100) / 100;
+    const hargaJualPerPorsi = Math.round((product.hargaJual / (product.porsiJual || 1)) * 100) / 100;
+    const profitPerPorsi = Math.round((hargaJualPerPorsi - hppPerPorsi) * 100) / 100;
+    const marginPersen = hargaJualPerPorsi > 0 ? Math.round(((profitPerPorsi / hargaJualPerPorsi) * 100) * 100) / 100 : 0;
 
     // ─── HITUNG VARIAN jika ada ───
     const variantResults = (product.variants || [])

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { safeGetLocalStorage } from '../lib/safe-json';
 import { calculateAllProducts } from '../lib/calculations';
-import { syncProductsToFirestore } from '../lib/firestore-bridge';
+import { syncProductsToFirestore, db, hashProductName } from '../lib/firestore-bridge';
+import { doc, deleteDoc } from 'firebase/firestore';
 import type {
   BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, WasteLog,
   Cabang, SuratOrder, BranchStock, BranchTransaction, ProductTopping,
@@ -11,7 +12,11 @@ import type { RDExperiment } from '../components/RdSandboxTab';
 
 export function useERPData(showConfirm?: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void) {
   const [bahanBaku, setBahanBaku] = useState<BahanBaku[]>(() =>
-    safeGetLocalStorage<BahanBaku[]>('bahan_baku_data', [])
+    (safeGetLocalStorage<any[]>('bahan_baku_data', [])).map(b => ({
+      ...b,
+      stok: b.stok ?? b.isiKemasan ?? 0,
+      isiKemasan: b.isiKemasan ?? b.stok ?? 0,
+    }))
   );
   const [productHpp, setProductHpp] = useState<ProductHpp[]>(() =>
     safeGetLocalStorage<ProductHpp[]>('product_hpp_data', [])
@@ -134,7 +139,6 @@ export function useERPData(showConfirm?: (opts: { title: string; message: string
   const bahanBakuRef = useRef(bahanBaku);
   const productHppRef = useRef(productHpp);
   const detailResepRef = useRef(detailResep);
-  const autoDeductedProductsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => { bahanBakuRef.current = bahanBaku; }, [bahanBaku]);
   useEffect(() => { productHppRef.current = productHpp; }, [productHpp]);
@@ -186,7 +190,8 @@ export function useERPData(showConfirm?: (opts: { title: string; message: string
       setBahanBaku(prev => prev.map(b => {
         const used = exp.components.find(c => c.bahanName === b.nama);
         if (used) {
-          return { ...b, isiKemasan: Math.max(0, b.isiKemasan - used.takaran) };
+          const newStok = Math.max(0, b.isiKemasan - used.takaran);
+          return { ...b, isiKemasan: newStok, stok: newStok };
         }
         return b;
       }));
@@ -323,6 +328,29 @@ export function useERPData(showConfirm?: (opts: { title: string; message: string
     setDetailResep((prev) => prev.filter((r) => r.namaProduk.toLowerCase().trim() !== productName.toLowerCase().trim()));
     setHasUnsavedChanges(true);
     showToast(`Produk "${productName}" dihapus!`, 'info');
+
+    // 🔥 HAPUS LANGSUNG dari Firestore — tidak pakai setTimeout!
+    // Biar kalaupun user refresh halaman, delete sudah terkirim sebelum JS mati.
+    // Hapus dari 2 kemungkinan ID: hash baru (hashProductName) + legacy lama (PRD- + slug)
+    const newId = hashProductName(productName);
+    const legacyId = 'PRD-' + productName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    Promise.allSettled([
+      deleteDoc(doc(db, 'products', newId)),
+      deleteDoc(doc(db, 'products', legacyId)),
+    ]).catch(err => {
+      console.warn('Failed to delete product from Firestore:', err);
+    });
+
+    // Auto-sync penghapusan ke Firestore — update data produk yang tersisa
+    setTimeout(() => {
+      const updatedCalc = calculateAllProducts(bahanBakuRef.current, productHppRef.current.filter(p => p.namaProduk.toLowerCase().trim() !== productName.toLowerCase().trim()), detailResepRef.current);
+      const publishedProducts = productHppRef.current.filter(p => p.status !== 'draft' && p.namaProduk.toLowerCase().trim() !== productName.toLowerCase().trim());
+      if (publishedProducts.length > 0 || productHppRef.current.filter(p => p.status !== 'draft').length !== publishedProducts.length) {
+        syncProductsToFirestore(updatedCalc, publishedProducts, detailResepRef.current, bahanBakuRef.current, 'pusat').catch((err) => {
+          console.warn('Auto-sync after product deletion failed:', err);
+        });
+      }
+    }, 1000);
   };
 
   const handleUpdateProductPricing = (productName: string, hargaJual: number) => {
@@ -405,26 +433,6 @@ export function useERPData(showConfirm?: (opts: { title: string; message: string
       console.error('Failed to record revenue:', err);
     }
 
-    if (cabangId && source?.startsWith('POS Cabang')) {
-      const ingredientsForProduct = detailResep.filter(
-        (r) => r.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
-      );
-      const productInfo = productHpp.find(
-        (p) => p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
-      );
-      const yieldPortions = productInfo?.porsiJual || 1;
-
-      ingredientsForProduct.forEach(ing => {
-        const consumedAmount = (ing.takaran / yieldPortions) * soldQty;
-        const bahan = bahanBaku.find(b => b.nama.toLowerCase().trim() === ing.namaBahan.toLowerCase().trim());
-        updateBranchStock(cabangId, ing.namaBahan, -consumedAmount, bahan?.satuan || 'gr');
-        addBranchTransaction({
-          cabangId, tipe: 'pos_jual', bahanNama: ing.namaBahan, qty: consumedAmount,
-          satuan: bahan?.satuan || 'gr', tanggal: new Date().toISOString(), refId: `pos-${Date.now()}`,
-        });
-      });
-    }
-
     setHasUnsavedChanges(true);
     const revStr = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(totalRevenue);
     showToast(`Transaksi Sukses! Menjual ${soldQty} pcs "${productName}" (${revStr}).`, 'success');
@@ -440,13 +448,6 @@ export function useERPData(showConfirm?: (opts: { title: string; message: string
       return;
     }
 
-    const alreadyDeducted = [...autoDeductedProductsRef.current].some(
-      (p) => p.toLowerCase().trim() === productName.toLowerCase().trim()
-    );
-    if (alreadyDeducted) {
-      console.warn(`[Double-Deduction] Produk "${productName}" sudah dipotong otomatis dari Web Store!`);
-      showToast(`Stok "${productName}" sudah dipotong dari Web Store! Yakin catat produksi?`, 'warning');
-    }
     const productInfo = productHpp.find(
       (p) => p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
     );
@@ -463,13 +464,14 @@ export function useERPData(showConfirm?: (opts: { title: string; message: string
           if (currentUnitStock < 50 && b.isiKemasan >= 50) {
             showToast(`⚠️ Stok ${b.nama} menipis (sisa ~${Math.round(currentUnitStock)} ${b.satuan}) — segera order!`, 'info');
           }
-          return { ...b, isiKemasan: Math.max(0, Number(currentUnitStock.toFixed(2))) };
+          const newStok = Math.max(0, Number(currentUnitStock.toFixed(2)));
+          return { ...b, isiKemasan: newStok, stok: newStok };
         }
         return b;
       })
     );
     setHasUnsavedChanges(true);
-    showToast(`🏭 Produksi ${batchQty}x "${productName}" dicatat! Stok bahan baku otomatis dipotong.`, 'success');
+    showToast(`🏭 Produksi ${batchQty}x "${productName}" dicatat! Bahan baku dikurangi dari stok pusat.`, 'success');
   };
 
   const handleBranchProductionComplete = (productName: string, batchQty: number) => {
@@ -526,7 +528,8 @@ export function useERPData(showConfirm?: (opts: { title: string; message: string
       setBahanBaku(prev => prev.map(b => {
         const item = so.items.find(i => i.bahanNama === b.nama);
         if (item) {
-          return { ...b, isiKemasan: Math.max(0, b.isiKemasan - item.qty) };
+          const newStok = Math.max(0, b.isiKemasan - item.qty);
+          return { ...b, isiKemasan: newStok, stok: newStok };
         }
         return b;
       }));
@@ -557,7 +560,8 @@ export function useERPData(showConfirm?: (opts: { title: string; message: string
       setBahanBaku(prev => prev.map(b => {
         const item = so.items.find(i => i.bahanNama === b.nama);
         if (item) {
-          return { ...b, isiKemasan: Math.max(0, b.isiKemasan - item.qty) };
+          const newStok = Math.max(0, b.isiKemasan - item.qty);
+          return { ...b, isiKemasan: newStok, stok: newStok };
         }
         return b;
       }));
@@ -567,6 +571,17 @@ export function useERPData(showConfirm?: (opts: { title: string; message: string
     if (so.status === 'diterima' && prevStatus !== 'diterima') {
       const original = suratOrders.find(s => s.id === id);
       const items = original?.items || so.items;
+      // Jika langsung 'minta' → 'diterima' (skip 'dikirim'), kurangi stok pusat juga
+      if (prevStatus === 'minta') {
+        setBahanBaku(prev => prev.map(b => {
+          const item = items.find(i => i.bahanNama === b.nama);
+          if (item) {
+            const newStok = Math.max(0, b.isiKemasan - (item.qtyTerima ?? item.qty));
+            return { ...b, isiKemasan: newStok, stok: newStok };
+          }
+          return b;
+        }));
+      }
       items.forEach(item => {
         const actualQty = item.qtyTerima ?? item.qty;
         const bahan = bahanBaku.find(b => b.nama === item.bahanNama);
@@ -602,7 +617,8 @@ export function useERPData(showConfirm?: (opts: { title: string; message: string
     setBahanBaku(prev => prev.map(b => {
       const item = so.items.find(i => i.bahanNama === b.nama);
       if (item) {
-        return { ...b, isiKemasan: b.isiKemasan + item.qty };
+        const newStok = b.isiKemasan + item.qty;
+        return { ...b, isiKemasan: newStok, stok: newStok };
       }
       return b;
     }));
@@ -690,7 +706,6 @@ export function useERPData(showConfirm?: (opts: { title: string; message: string
 
     // refs
     bahanBakuRef, productHppRef, detailResepRef, calculatedProductsRef,
-    autoDeductedProductsRef,
 
     // helpers
     updateBranchStock, addBranchTransaction,

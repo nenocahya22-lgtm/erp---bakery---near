@@ -37,7 +37,7 @@ function generateLocalAnswer(question: string, data: {
   // ─── MARGIN / PROFIT ───
   if (q.includes('margin') || q.includes('profit') || q.includes('untung') || q.includes('hpp') || q.includes('laba')) {
     if (calculatedProducts.length === 0) return '📝 Belum ada produk terdaftar. Buat resep dulu di Formulasi Resep.';
-    let ans = '📊 **ANALISIS MARGIN & HPP LENGKAP**\n\n';
+    let ans = '📊 **ANALISIS MARGIN & MODAL LENGKAP**\n\n';
     const lowMargin = calculatedProducts.filter(p => p.marginPersen < 20);
     const healthyMargin = calculatedProducts.filter(p => p.marginPersen >= 20 && p.marginPersen <= 40);
     const highMargin = calculatedProducts.filter(p => p.marginPersen > 40);
@@ -651,25 +651,46 @@ export default function CrmMarketingTab({
   };
 
   // ─── FREE-FORM Q&A — Tanya apa saja tentang bisnis ───
-  const handleFreeQuestion = () => {
+  const handleFreeQuestion = async () => {
     if (!freeQuestion.trim()) return;
     setQaLoading(true);
     const q = freeQuestion.trim();
     setFreeQuestion('');
 
-    // Small delay agar loading spinner visible
-    setTimeout(() => {
-      const answer = generateLocalAnswer(q, {
-        bahanBaku, productHpp, detailResep, calculatedProducts,
-        wasteLogs, cabangList, suratOrders, revenueData, autoAnalysis,
+    try {
+      const res = await fetch('/api/marketing/consult', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: q,
+          products: calculatedProducts,
+          bahanBaku,
+          detailResep,
+          wasteLogs,
+          cabangList,
+          revenueData,
+          history: qaHistory
+        }),
       });
 
-      const newEntry = { question: q, answer };
-      const updated = [...qaHistory, newEntry].slice(-20);
-      setQaHistory(updated);
-      localStorage.setItem('crm_qa_history', JSON.stringify(updated));
+      if (res.ok) {
+        const data = await res.json();
+        if (data.text) {
+          const newEntry = { question: q, answer: data.text };
+          const updated = [...qaHistory, newEntry].slice(-20);
+          setQaHistory(updated);
+          localStorage.setItem('crm_qa_history', JSON.stringify(updated));
+          return;
+        }
+      }
+      throw new Error('Gagal terhubung ke AI Marketing');
+    } catch (err: any) {
+      console.error('QA Error:', err);
+      const errorEntry = { question: q, answer: '⚠️ Maaf, saya sedang tidak bisa berpikir jernih (Gagal koneksi). Pastikan GEMINI_API_KEY sudah benar.' };
+      setQaHistory([...qaHistory, errorEntry]);
+    } finally {
       setQaLoading(false);
-    }, 150);
+    }
   };
 
   const clearQaHistory = () => {

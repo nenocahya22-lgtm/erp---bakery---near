@@ -1,0 +1,27 @@
+rules_version = '2';
+
+// ──────────────────────────────────────────────────────────────
+// Firestore Security Rules — Near Bakery & Co. ERP + Web Store
+// ──────────────────────────────────────────────────────────────
+// MODE AUTHENTICATED:
+// Semua koleksi ERP + Web Store hanya dapat diakses oleh user
+// yang sudah terautentikasi (Anonymous Auth atau Google Auth).
+// ──────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── FUNGSI VALIDASI ──
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // ── AKSES UNTUK USER TERAUTENTIKASI ──
+    // Anonymous Auth sudah aktif di Firebase Console,
+    // sehingga semua user ERP yang sudah login anonim
+    // dapat mengakses koleksi-koleksi di bawah ini.
+    match /{document=**} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}
