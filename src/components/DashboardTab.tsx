@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CalculationResult, BahanBaku, Cabang, BranchTransaction } from '../types';
 import { TrendingUp, FolderTree, Package, DollarSign, AlertCircle, Sparkles, AlertTriangle, Lightbulb, RefreshCw, Copy, Check, FileDown, Rocket, ArrowRight, Bell, X, Trash2, MessageSquare, Send, Settings, CheckCircle2, Building2, ShoppingCart } from 'lucide-react';
+import { showToast } from '../lib/toast';
 import { safeGetLocalStorage } from '../lib/safe-json';
 import { jsPDF } from 'jspdf';
 
@@ -400,10 +401,10 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList
       });
       
       doc.save("near-bakery-ai-marketing-rekomendasi.pdf");
-      alert("✅ Berhasil mengunduh dokumen laporan AI Marketing PDF!");
+      showToast("✅ Berhasil mengunduh dokumen laporan AI Marketing PDF!", 'success');
     } catch (e: any) {
       console.error(e);
-      alert("Terjadi kegagalan pembuatan PDF: " + e.message);
+      showToast("Terjadi kegagalan pembuatan PDF: " + e.message, 'error');
     }
   };
 

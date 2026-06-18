@@ -1,6 +1,7 @@
 import React from 'react';
 import { BahanBaku, Cabang, BranchStock } from '../types';
 import { FileText, Printer, Building2, Package } from 'lucide-react';
+import { showToast } from '../lib/toast';
 
 interface DataPusatRekapSectionProps {
   bahanBaku: BahanBaku[];
@@ -54,7 +55,7 @@ export default function DataPusatRekapSection({ bahanBaku, cabangList = [], caba
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      alert('📄 Popup terblokir! File HTML berhasil di-download.\n\n🔹 Buka file tersebut di browser\n🔹 Tekan Ctrl+P atau klik menu File → Print\n🔹 Pilih "Save as PDF" sebagai printer\n🔹 Klik Simpan untuk menyimpan sebagai PDF.');
+      showToast('📄 Popup terblokir! File HTML di-download — buka file lalu Ctrl+P untuk print.', 'info');
       return;
     }
     pw.document.write(html);

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { CalculationResult, BahanBaku, ProductHpp, DetailResep, WasteLog, Cabang, SuratOrder } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
 import { Megaphone, RefreshCw, Sparkles, Send, Users, Mail, TrendingUp, ShoppingCart, BarChart3, AlertTriangle, Tag, Globe, Brain, Lightbulb, ClipboardList, MessageCircle, HelpCircle } from 'lucide-react';
+import { showToast } from '../lib/toast';
 
 // ─── GENERATE LOCAL ANSWER untuk Free-Form Q&A ───
 function generateLocalAnswer(question: string, data: {
@@ -702,7 +703,7 @@ export default function CrmMarketingTab({
     setBlastSending(true);
     setTimeout(() => {
       setBlastSending(false);
-      alert(`✅ Promosi terkirim ke segmen "${blastTarget}"!\n\n🔥 PROMO SPESIAL NEAR BAKERY!\n${autoAnalysis.topProducts.length > 0 ? `Produk terlaris kami: ${autoAnalysis.topProducts[0].name}` : 'Diskon spesial untuk Anda!'}\nKunjungi toko kami sekarang!`);
+      showToast(`Promosi terkirim ke segmen "${blastTarget}"!`, 'success');
     }, 1500);
   };
 

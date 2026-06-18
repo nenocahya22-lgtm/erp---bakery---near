@@ -571,8 +571,17 @@ export default function App() {
       if (catData && catData.categories.length > 0) {
         localStorage.setItem('firestore_categories', JSON.stringify(catData.categories));
         localStorage.setItem('firestore_category_icons', JSON.stringify(catData.categoryIcons));
-      }
-    }).catch(() => {});
+      }  }).catch(() => { });
+  }, []);
+
+  // ─── GLOBAL TOAST LISTENER — event-based alert() replacement ───
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ message: string; type: 'success' | 'error' | 'info' | 'warning' }>).detail;
+      showToast(detail.message, detail.type);
+    };
+    window.addEventListener('app:toast', handler);
+    return () => window.removeEventListener('app:toast', handler);
   }, []);
 
   // ─── GLOBAL IoT SIMULATION ───
@@ -877,6 +886,7 @@ export default function App() {
                 toppings={toppings}
                 onAddTopping={handleAddTopping}
                 onDeleteTopping={handleDeleteTopping}
+                showToast={showToast}
               />
             )}
             {activeTab === 'logistik' && (

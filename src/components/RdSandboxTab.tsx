@@ -22,9 +22,10 @@ interface RdSandboxTabProps {
   rdExperiments: RDExperiment[];
   onAddRD: (exp: RDExperiment) => void;
   onDeleteRD: (id: string) => void;
+  showToast?: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
-export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDeleteRD }: RdSandboxTabProps) {
+export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDeleteRD, showToast }: RdSandboxTabProps) {
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
 
@@ -81,7 +82,8 @@ export default function RdSandboxTab({ bahanBaku, rdExperiments, onAddRD, onDele
     e.preventDefault();
     if (!newRDName.trim()) return;
     if (rdIngredients.length === 0) {
-      alert('Silakan tambahkan minimal satu bahan baku!');
+      if (showToast) showToast('Silakan tambahkan minimal satu bahan baku!', 'error');
+      else showToast('Silakan tambahkan minimal satu bahan baku!', 'warning');
       return;
     }
 

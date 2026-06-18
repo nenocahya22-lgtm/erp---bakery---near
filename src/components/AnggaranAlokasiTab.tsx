@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, DollarSign, Percent, TrendingUp, CheckCircle2, AlertTriangle, Coins, Sliders, Plus, Trash2, Clock, Printer, RefreshCw, X } from 'lucide-react';
 import { CalculationResult, BahanBaku } from '../types';
+import { showToast } from '../lib/toast';
 import { safeGetLocalStorage } from '../lib/safe-json';
 
 interface AllocationRule {
@@ -136,7 +137,7 @@ export default function AnggaranAlokasiTab({ calculatedProducts, bahanBaku, wast
   };
 
   const handleDeleteRule = async (id: string) => {
-    if (rules.length <= 1) { alert('Minimal harus ada 1 aturan.'); return; }
+    if (rules.length <= 1) { showToast('Minimal harus ada 1 aturan.', 'warning'); return; }
     const confirmed_139 = await new Promise<boolean>((resolve) => {
       showConfirm({
         title: 'Konfirmasi',

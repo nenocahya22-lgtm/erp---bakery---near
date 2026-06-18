@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Printer, Search, RefreshCw, AlertTriangle, Layers, ArrowRight, Package, Trash2, X, CheckCircle2, Thermometer, Droplets, Cpu } from 'lucide-react';
+import { showToast } from '../lib/toast';
 import { ProductHpp, IoTDevice } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
 
@@ -85,7 +86,7 @@ export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangL
     });
 
     if (expired.length === 0) {
-      alert('✅ Tidak ada bahan yang sudah expired.');
+      showToast('✅ Tidak ada bahan yang sudah expired.', 'info');
       return;
     }
 
@@ -637,7 +638,7 @@ export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangL
           {recallTempCount > 0 && (
             <button onClick={async () => {
               const flagged = batchItems.filter(b => b.status === 'recall_temp');
-              if (flagged.length === 0) { alert('✅ Tidak ada batch recall suhu.'); return; }
+              if (flagged.length === 0) { showToast('✅ Tidak ada batch recall suhu.', 'info'); return; }
               const confirmed_620 = await new Promise<boolean>((resolve) => {
                 showConfirm({
                   title: 'Konfirmasi',
@@ -668,7 +669,7 @@ export default function ComplianceSafetyTab({ productHpp, onAddWasteLog, cabangL
           <button onClick={async () => {
             const expired = batchItems.filter(b => getDaysLeft(b.expiredDate) <= 0);
             if (expired.length === 0) {
-              alert('✅ Tidak ada batch expired yang perlu di-recall.');
+              showToast('✅ Tidak ada batch expired yang perlu di-recall.', 'info');
               return;
             }
             const confirmed_642 = await new Promise<boolean>((resolve) => {

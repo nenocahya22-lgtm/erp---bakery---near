@@ -23,6 +23,7 @@ interface ProduksiDashboardProps {
   onDeleteRD: (id: string) => void;
   onProductionComplete?: (productName: string, batchQty: number) => void;
   showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
+  showToast?: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
   toppings?: ProductTopping[];
   onAddTopping?: (t: ProductTopping) => void;
   onDeleteTopping?: (id: string) => void;
@@ -71,6 +72,7 @@ export default function ProduksiDashboard(props: ProduksiDashboardProps) {
           onUpdateVariant={props.onUpdateVariant}
           onDeleteVariant={props.onDeleteVariant}
           showConfirm={props.showConfirm}
+          showToast={props.showToast}
         />
       )}
       {subTab === 'production' && (
@@ -88,6 +90,7 @@ export default function ProduksiDashboard(props: ProduksiDashboardProps) {
           rdExperiments={props.rdExperiments}
           onAddRD={props.onAddRD}
           onDeleteRD={props.onDeleteRD}
+          showToast={props.showToast}
         />
       )}
       {subTab === 'smartkitchen' && (
@@ -95,6 +98,7 @@ export default function ProduksiDashboard(props: ProduksiDashboardProps) {
           bahanBaku={props.bahanBaku}
           productHpp={props.productHpp}
           detailResep={props.detailResep}
+          showToast={props.showToast}
         />
       )}
       {subTab === 'toppings' && (

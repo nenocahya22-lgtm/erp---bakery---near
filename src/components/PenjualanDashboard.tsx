@@ -15,6 +15,8 @@ interface PenjualanDashboardProps {
   suratOrders: SuratOrder[];
   onCompletePOSSale: (productName: string, qty: number, totalRevenue: number, source?: string) => void;
   onProductionComplete?: (productName: string, batchQty: number) => void;
+  showToast?: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
+  toppings?: any[];
 }
 
 export default function PenjualanDashboard(props: PenjualanDashboardProps) {
@@ -51,6 +53,7 @@ export default function PenjualanDashboard(props: PenjualanDashboardProps) {
           onCompletePOSSale={props.onCompletePOSSale}
           toppings={props.toppings}
           detailResep={props.detailResep}
+          showToast={props.showToast}
         />
       )}
       {subTab === 'online' && (
@@ -61,6 +64,7 @@ export default function PenjualanDashboard(props: PenjualanDashboardProps) {
           bahanBaku={props.bahanBaku}
           onCompletePOSSale={props.onCompletePOSSale}
           onProductionComplete={props.onProductionComplete}
+          showToast={props.showToast}
         />
       )}
       {subTab === 'crm' && (
@@ -72,6 +76,7 @@ export default function PenjualanDashboard(props: PenjualanDashboardProps) {
           wasteLogs={props.wasteLogs}
           cabangList={props.cabangList}
           suratOrders={props.suratOrders}
+          showToast={props.showToast}
         />
       )}
       {subTab === 'chat' && (

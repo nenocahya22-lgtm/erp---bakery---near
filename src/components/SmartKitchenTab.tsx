@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Gauge, Thermometer, Droplets, Cpu, Wifi, WifiOff, ShieldCheck, RefreshCw, AlertTriangle, CheckCircle2, Plus, Trash2, Users, Calendar } from 'lucide-react';
+import { showToast } from '../lib/toast';
 import { IoTDevice } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
 
@@ -11,7 +12,14 @@ interface WorkOrder {
   targetDate: string;
 }
 
-export default function SmartKitchenTab() {
+interface SmartKitchenTabProps {
+  bahanBaku: any[];
+  productHpp: any[];
+  detailResep: any[];
+  showToast?: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
+}
+
+export default function SmartKitchenTab({ showToast }: SmartKitchenTabProps) {
   // ─── IOT DEVICES ───
   const [devices, setDevices] = useState<IoTDevice[]>(() =>
     safeGetLocalStorage<IoTDevice[]>('smartkitchen_devices', [])
@@ -108,7 +116,9 @@ export default function SmartKitchenTab() {
 
   const handleMaintenanceComplete = (asset: string) => {
     setWorkOrders(prev => prev.map(w => w.assetName === asset ? { ...w, opHours: 0, status: 'Aman' } : w));
-    alert(`✅ Perawatan ${asset} selesai! Jam operasional di-reset ke 0.`);
+    if (showToast) {
+      showToast(`✅ Perawatan ${asset} selesai! Jam operasional di-reset ke 0.`, 'success');
+    }
   };
 
   const getStaffRecommendation = () => Math.max(1, Math.ceil(dailyDonutsTarget / 150));
@@ -307,7 +317,9 @@ export default function SmartKitchenTab() {
               <span className="font-mono font-bold text-emerald-800">Rp {(getStaffRecommendation() * 150000).toLocaleString('id-ID')}</span>
             </div>
           </div>
-          <button onClick={() => alert(`Jadwal shift untuk ${dailyDonutsTarget} produk berhasil dipublikasikan!`)}
+          <button onClick={() => {
+            showToast(`Jadwal shift untuk ${dailyDonutsTarget} produk berhasil dipublikasikan!`, 'success');
+          }}
             className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-2.5 rounded-lg transition cursor-pointer">
             Publikasikan Jadwal
           </button>

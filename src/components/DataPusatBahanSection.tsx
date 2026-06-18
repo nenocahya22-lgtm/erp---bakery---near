@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BahanBaku, Cabang, SuratOrder } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
 import { Package, Search, Plus, Trash2, Edit2, Printer, FileText, X, Building2, Truck } from 'lucide-react';
+import { showToast } from '../lib/toast';
 
 interface DataPusatBahanSectionProps {
   bahanBaku: BahanBaku[];
@@ -43,7 +44,7 @@ export default function DataPusatBahanSection({
     const name = newKategoriName.trim();
     if (!name) return;
     if (bahanKategoriList.some(c => c.toLowerCase() === name.toLowerCase())) {
-      alert(`Kategori "${name}" sudah ada!`);
+      showToast(`Kategori "${name}" sudah ada!`, 'warning');
       return;
     }
     setBahanKategoriList(prev => {
@@ -79,7 +80,7 @@ export default function DataPusatBahanSection({
     const newName = editingKategori.trim();
     if (!newName || oldName === 'Semua') return;
     if (bahanKategoriList.some(c => c.toLowerCase() === newName.toLowerCase() && c !== oldName)) {
-      alert(`Kategori "${newName}" sudah ada!`);
+      showToast(`Kategori "${newName}" sudah ada!`, 'warning');
       return;
     }
     setBahanKategoriList(prev => prev.map(c => c === oldName ? newName : c));
@@ -137,7 +138,7 @@ export default function DataPusatBahanSection({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      alert('📄 Popup terblokir! File HTML berhasil di-download.\n\n🔹 Buka file tersebut di browser\n🔹 Tekan Ctrl+P atau klik menu File → Print\n🔹 Pilih "Save as PDF" sebagai printer\n🔹 Klik Simpan untuk menyimpan sebagai PDF.');
+      showToast('📄 Popup terblokir! File HTML di-download — buka file lalu Ctrl+P untuk print.', 'info');
       return;
     }
     pw.document.write(html);

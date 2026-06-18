@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShoppingCart, ChefHat, Printer, X, Coins, RefreshCw, Calendar, Clock, TrendingUp, BarChart3, Image } from 'lucide-react';
+import { showToast } from '../lib/toast';
 import { CalculationResult } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
 import { getSavedRecipeImage } from '../lib/image-generator';
@@ -112,7 +113,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
 
   const handleCreatePOSOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProduct) { alert('Silakan pilih produk terlebih dahulu!'); return; }
+    if (!selectedProduct) { showToast('Silakan pilih produk terlebih dahulu!', 'warning'); return; }
 
     // Validasi: produk harus punya resep (BOM) agar stok bisa otomatis terpotong
     const hasRecipe = detailResep && detailResep.some(
@@ -193,7 +194,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
       cashierName: name,
     };
     setShiftLogs(prev => [log, ...prev]);
-    alert(`✅ End Shift — ${name}\n\nTotal Pendapatan: ${formatCurrency(log.totalRevenue)}\nTotal Transaksi: ${log.totalOrders}\n\nShift telah dicatat. Pesanan tetap tersimpan.`);
+    showToast(`✅ End Shift — ${name} — Total: ${formatCurrency(log.totalRevenue)} — ${log.totalOrders} transaksi`, 'success');
   };
 
   const handleEndDay = async () => {
@@ -224,7 +225,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
     // Cetak laporan otomatis
     setTimeout(() => handlePrintLaporan(todayActive, today), 500);
 
-    alert(`✅ END DAY — ${today}\n\nTotal Pendapatan: ${formatCurrency(log.totalRevenue)}\nTotal Transaksi: ${log.totalOrders}\n\nData telah diarsipkan. Laporan siap dicetak.`);
+    showToast(`✅ END DAY — ${today} — Total: ${formatCurrency(log.totalRevenue)} — ${log.totalOrders} transaksi`, 'success');
   };
 
   const handlePrintLaporan = (orderList: RetailOrder[], dateLabel: string) => {

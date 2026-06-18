@@ -32,6 +32,7 @@ interface RecipesTabProps {
   onUpdateVariant?: (productName: string, variantId: string, updates: Partial<ProductVariant>) => void;
   onDeleteVariant?: (productName: string, variantId: string) => void;
   showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
+  showToast?: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
 export default function RecipesTab({
@@ -47,6 +48,7 @@ export default function RecipesTab({
   onUpdateVariant,
   onDeleteVariant,
   showConfirm,
+  showToast,
 }: RecipesTabProps) {
   const [selectedProductName, setSelectedProductName] = useState<string>(
     productHpp.length > 0 ? productHpp[0].namaProduk : ''
@@ -87,7 +89,8 @@ export default function RecipesTab({
     const name = newCategoryName.trim();
     if (!name) return;
     if (categoriesList.some(c => c.toLowerCase() === name.toLowerCase())) {
-      alert(`Kategori "${name}" sudah ada!`);
+      if (showToast) showToast(`Kategori "${name}" sudah ada!`, 'error');
+      else showToast(`Kategori "${name}" sudah ada!`, 'warning');
       return;
     }
     // Juga daftarkan ke shared store agar Web Store dapat ikon otomatis
@@ -135,7 +138,8 @@ export default function RecipesTab({
     const newName = editingCategory.trim();
     if (!newName || oldName === 'Semua') return;
     if (categoriesList.some(c => c.toLowerCase() === newName.toLowerCase() && c !== oldName)) {
-      alert(`Kategori "${newName}" sudah ada!`);
+      if (showToast) showToast(`Kategori "${newName}" sudah ada!`, 'error');
+      else showToast(`Kategori "${newName}" sudah ada!`, 'warning');
       return;
     }
     // Rename juga di shared store agar Web Store ikut update
@@ -392,7 +396,8 @@ export default function RecipesTab({
       (p) => p.namaProduk.toLowerCase().trim() === newProductName.toLowerCase().trim()
     );
     if (duplicate) {
-      alert(`Produk dengan nama "${newProductName}" sudah ada!`);
+      if (showToast) showToast(`Produk dengan nama "${newProductName}" sudah ada!`, 'error');
+      else showToast(`Produk dengan nama "${newProductName}" sudah ada!`, 'warning');
       return;
     }
 

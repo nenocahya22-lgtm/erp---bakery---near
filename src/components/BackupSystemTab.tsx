@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Cloud, Download, Mail, Settings, Clock, CheckCircle2, AlertTriangle, Trash2, Send, RefreshCw, Database } from 'lucide-react';
+import { showToast } from '../lib/toast';
 import { BahanBaku, ProductHpp, DetailResep, CalculationResult } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
 
@@ -183,12 +184,12 @@ export default function BackupSystemTab({ bahanBaku, productHpp, detailResep, ca
 
   const handleSendEmailBackup = async () => {
     if (!settings.toEmail || !settings.smtpUser) {
-      alert('⚠️ Email tujuan dan SMTP User harus diisi terlebih dahulu!\n\nAtur di tab Pengaturan.');
+      showToast('⚠️ Email tujuan dan SMTP User harus diisi terlebih dahulu! Atur di tab Pengaturan.', 'warning');
       return;
     }
 
     if (!settings.smtpPass) {
-      alert('⚠️ Password SMTP harus diisi!\n\nAtur di tab Pengaturan — untuk Gmail gunakan App Password 16 karakter.');
+      showToast('Password SMTP harus diisi! Untuk Gmail gunakan App Password 16 karakter.', 'warning');
       return;
     }
 
@@ -220,7 +221,7 @@ export default function BackupSystemTab({ bahanBaku, productHpp, detailResep, ca
         };
         setHistory(prev => [entry, ...prev]);
         localStorage.setItem('last_backup_date', new Date().toISOString());
-        alert(`✅ Backup berhasil dikirim ke email!\n\nTujuan: ${settings.toEmail}\nUkuran: ${size}`);
+        showToast(`✅ Backup berhasil dikirim ke email! Tujuan: ${settings.toEmail} Ukuran: ${size}`, 'success');
       } else {
         throw new Error(result.error || 'Gagal mengirim email');
       }
@@ -234,7 +235,7 @@ export default function BackupSystemTab({ bahanBaku, productHpp, detailResep, ca
         message: err.message || 'Gagal mengirim',
       };
       setHistory(prev => [entry, ...prev]);
-      alert(`❌ Gagal mengirim backup: ${err.message}\n\nPeriksa pengaturan SMTP di tab Pengaturan.`);
+      showToast(`❌ Gagal mengirim backup: ${err.message} — Periksa pengaturan SMTP.`, 'error');
     } finally {
       setIsSending(false);
     }

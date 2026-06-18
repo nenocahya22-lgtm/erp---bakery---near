@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BahanBaku, PurchaseOrder, SATUAN_OPTIONS } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
 import { Star, Plus, Trash2, FileText, Printer, Search, CheckCircle2, Package, X } from 'lucide-react';
+import { showToast } from '../lib/toast';
 
 interface DataPusatSupplierSectionProps {
   bahanBaku: BahanBaku[];
@@ -208,9 +209,9 @@ export default function DataPusatSupplierSection({ bahanBaku, onEditMaterial, sh
         doc.text(footer,14,y);
       }
       doc.save(`${judul.replace(/[^a-zA-Z0-9]/g,'_')}.pdf`);
-      alert('✅ PDF berhasil didownload!');
+      showToast('✅ PDF berhasil didownload!', 'success');
     }catch(e:any){
-      alert('Gagal export PDF: '+e.message+'\nGunakan Cetak (Ctrl+P) sebagai alternatif.');
+      showToast('Gagal export PDF: '+e.message+' — Gunakan Cetak (Ctrl+P) sebagai alternatif.', 'error');
     }
   };
 
@@ -226,7 +227,7 @@ export default function DataPusatSupplierSection({ bahanBaku, onEditMaterial, sh
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      alert('📄 Popup terblokir! File HTML berhasil di-download.\n\n🔹 Buka file tersebut di browser\n🔹 Tekan Ctrl+P atau klik menu File → Print\n🔹 Pilih "Save as PDF" sebagai printer\n🔹 Klik Simpan untuk menyimpan sebagai PDF.');
+      showToast('📄 Popup terblokir! File HTML di-download — buka file lalu Ctrl+P untuk print.', 'info');
       return;
     }
     pw.document.write(html);
