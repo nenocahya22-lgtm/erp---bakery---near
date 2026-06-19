@@ -283,7 +283,9 @@ export async function syncProductsToFirestore(
       firestoreData.discountPercent = discountPercent;
       firestoreData.originalPrice = Math.round(calc.hargaJual);
     }
-    if (madeToOrder) firestoreData.stock = 9999;
+    // 🔥 SELALU set field stock — web store baca field ini untuk tampilkan "tersedia" / "habis"
+    //    Kalau field stock tidak ada (undefined), web store akan interpretasi sebagai 0 → "habis"!
+    firestoreData.stock = madeToOrder ? 9999 : 0;
 
     batch.set(doc(db, 'products', productId), firestoreData);
 
@@ -309,6 +311,35 @@ export async function syncProductsToFirestore(
     }
   }
 
+  // ─── 🧹 CLEANUP: Hapus produk STALE dari Firestore ───
+  //    Produk yang sudah dihapus dari ERP tetap ada di collection 'products'
+  //    karena syncProductsToFirestore hanya ADD/UPDATE, tidak PERNAH DELETE.
+  //    Akibatnya: web store masih menampilkan produk yang sudah dihapus!
+  //
+  //    Solusi: setelah sync, ambil SEMUA dokumen di collection 'products',
+  //    lalu hapus yang tidak ada di calculatedProducts.
+  try {
+    const allProductsSnap = await getDocs(collection(db, 'products'));
+    const activeProductIds = new Set(productRefs.map(p => p.productId));
+    const staleBatch = writeBatch(db);
+    let staleCount = 0;
+    
+    allProductsSnap.forEach(productDoc => {
+      if (!activeProductIds.has(productDoc.id)) {
+        staleBatch.delete(productDoc.ref);
+        staleCount++;
+      }
+    });
+    
+    if (staleCount > 0) {
+      await staleBatch.commit();
+      console.log(`[Sync ${cabangId}] 🧹 ${staleCount} produk stale dihapus dari Firestore.`);
+    }
+  } catch (e) {
+    // Jangan gagalkan sync utama kalau cleanup stale gagal
+    console.warn('[Sync] Gagal cleanup stale products:', e);
+  }
+
   // ─── SYNC KATEGORI — hanya pakai dari webstore_config ───
   // ⚠️ JANGAN merge dari productHpp dan jangan fallback ke default!
   //    Jika webstore_config.categories kosong (user sudah hapus semua),
@@ -330,6 +361,12 @@ export async function syncProductsToFirestore(
   } catch (e) {
     console.warn('Failed to sync categories:', e);
   }
+  
+  // ─── 🧹 CLEANUP — sync categories/{cabangId} dengan webstore_config ───
+  //    Jika categories/{cabangId} masih punya kategori yang sudah dihapus dari
+  //    webstore_config, web store akan tetap menampilkannya (karena web store
+  //    baca dari collection 'categories' sebagai fallback).
+  //    Sudah di-handle di atas (setDoc catDocRef).
 
   return synced;
 }
