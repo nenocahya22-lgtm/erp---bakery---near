@@ -60,14 +60,15 @@ interface Props {
   onImportProduct?: (product: ProductHpp) => void;
 }
 
-// Helper: load image as base64 with compression (max 800px, JPEG 0.7 quality)
+// Helper: load image as base64 with compression (max 400px, JPEG 0.5 quality)
+// 🔧 Ukuran diperkecil dari 800→400px, quality 0.7→0.5 agar base64 tidak overload localStorage (~5MB limit)
 const loadImageAsBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
       img.onload = () => {
-        const MAX = 800;
+        const MAX = 400;
         let { width, height } = img;
         if (width > MAX || height > MAX) {
           if (width > height) {
@@ -83,7 +84,7 @@ const loadImageAsBase64 = (file: File): Promise<string> => {
         canvas.height = height;
         const ctx = canvas.getContext('2d')!;
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.7));
+        resolve(canvas.toDataURL('image/jpeg', 0.5));
       };
       img.onerror = reject;
       img.src = reader.result as string;
@@ -104,6 +105,13 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
       // Jika user sudah menghapus kategori di Web Store Manager,
       // shared store mungkin masih menyimpan data lama dan akan mengembalikannya.
       // Biarkan kategori dari saved config (localStorage) sebagai sumber kebenaran.
+      // 🔧 Restore gambar dari localStorage key terpisah (recipe_img_*, store_logo)
+      //    untuk menghindari limit ~5MB localStorage — gambar tidak disimpan di config.
+      saved.products = saved.products.map(p => ({
+        ...p,
+        displayImage: localStorage.getItem(`recipe_img_${p.productName.toLowerCase().trim()}`) || p.displayImage || '',
+      }));
+      saved.logo = localStorage.getItem('store_logo') || saved.logo || '';
       return saved;
     }
     return createDefaultWebStoreConfig(productHpp.filter(p => p.status !== 'draft'));
@@ -138,7 +146,16 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
         const remoteConfig = await getWebStoreConfig(cabangId);
         if (remoteConfig) {
           setConfig(remoteConfig);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(remoteConfig));
+          // 🔧 Simpan ke localStorage tanpa gambar (gambar sudah di products/{id} Firestore)
+          const remoteConfigWithoutImages = {
+            ...remoteConfig,
+            logo: '',
+            products: remoteConfig.products.map(p => ({
+              ...p,
+              displayImage: '',
+            })),
+          };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(remoteConfigWithoutImages));
           setIsFirestoreConnected(true);
           showToast('✅ Config Firestore berhasil dimuat!', 'success');
         } else {
@@ -152,9 +169,21 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
     loadFromFirestore();
   }, []);
 
-  // Auto-save to localStorage + sync kategori ke shared store
+  // Auto-save to localStorage (tanpa gambar agar tidak overflow ~5MB) + sync kategori ke shared store
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...config, lastUpdated: new Date().toISOString() }));
+    // 🔧 Strip displayImage & logo sebelum simpan ke localStorage — gambar disimpan
+    //    terpisah di key 'recipe_img_<productName>' dan 'store_logo'.
+    //    Dengan begini, config tetap kecil meskipun ada 50+ produk dengan gambar.
+    const configWithoutImages = {
+      ...config,
+      logo: '',
+      products: config.products.map(p => ({
+        ...p,
+        displayImage: '',
+      })),
+      lastUpdated: new Date().toISOString(),
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(configWithoutImages));
     // Sync kategori dari config ke shared store agar Formulasi Resep juga update
     if (config.categories && config.categories.length > 0) {
       setSharedCategories({
@@ -176,10 +205,11 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
     return () => clearTimeout(timer);
   }, [config.categories, config.categoryIcons, config.cabangId, isFirestoreConnected]);
 
-  // ─── 🧹 AUTO-CLEANUP: Hapus stale products saat komponen dimuat ───
+  // ─── 🧹 AUTO-CLEANUP: Hapus stale products — jalan saat mount & saat jumlah produk berubah ───
   //    Tanpa ini, produk yang sudah dihapus dari ERP tetap ada di collection
   //    'products' Firestore, dan Web Store akan terus menampilkannya.
-  //    Dengan auto-cleanup ini, user TIDAK PERLU klik Sync manual.
+  //    🔧 Sekarang juga jalan ulang saat calculatedProducts?.length berubah (produk ditambah/dihapus),
+  //    tidak hanya saat mount. Jadi hapus produk dari Formulasi Resep → langsung cleanup.
   useEffect(() => {
     if (!isFirestoreConnected || !calculatedProducts || calculatedProducts.length === 0) return;
     const cabangId = config.cabangId || 'pusat';
@@ -190,7 +220,7 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
         fetchFirestoreProducts();
       }
     }).catch(e => console.warn('Auto-cleanup error:', e));
-  }, [isFirestoreConnected, config.cabangId]); // Hanya jalan sekali saat koneksi Firestore siap
+  }, [isFirestoreConnected, config.cabangId, calculatedProducts?.length]); // 🔧 Tambah dependensi jumlah produk
 
   // Fetch all products from Firestore (web store) — untuk panel Data Web Store
   const fetchFirestoreProducts = useCallback(async () => {
@@ -382,15 +412,27 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
     }
   };
 
-  // Image upload handlers
+  // Image upload handlers — 🔧 simpan gambar ke key terpisah agar tidak overload localStorage
   const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) { const b64 = await loadImageAsBase64(file); updateConfig({ logo: b64 }); showToast('Logo berhasil diupload!', 'success'); }
+    if (file) {
+      const b64 = await loadImageAsBase64(file);
+      updateConfig({ logo: b64 });
+      localStorage.setItem('store_logo', b64); // Simpan terpisah dari config
+      showToast('Logo berhasil diupload!', 'success');
+    }
   };
 
   const handleUploadProductImage = async (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) { const b64 = await loadImageAsBase64(file); updateProduct(idx, { displayImage: b64 }); showToast('Gambar produk berhasil diupload!', 'success'); }
+    if (file) {
+      const b64 = await loadImageAsBase64(file);
+      updateProduct(idx, { displayImage: b64 });
+      // 🔧 Simpan di localStorage key terpisah — syncProductsToFirestore sudah baca dari sini priority #1
+      const productName = config.products[idx].productName;
+      localStorage.setItem(`recipe_img_${productName.toLowerCase().trim()}`, b64);
+      showToast('Gambar produk berhasil diupload!', 'success');
+    }
   };
   const handleUploadPromoImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
