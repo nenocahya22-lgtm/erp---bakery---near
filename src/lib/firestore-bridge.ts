@@ -260,16 +260,15 @@ export async function syncProductsToFirestore(
     if (!wsConfig) {
       console.warn(`⚠️ [Sync ${cabangId}] WebStoreConfig tidak terbaca — default madeToOrder=true (safe mode).`);
     }
-    batch.set(doc(db, 'products', productId), {
+
+    // 🔥 FIRESTORE: Build object tanpa undefined — karena WriteBatch.set() TIDAK TERIMA undefined!
+    // Error "Function WriteBatch.set() called with invalid data" muncul kalau ada field bernilai undefined.
+    const firestoreData: Record<string, any> = {
       id: productId,
       name: calc.namaProduk,
       description,
       price: Math.round(calc.hargaJual),
-      variants: webVariants,
-      discountPercent: discountPercent > 0 ? discountPercent : undefined,
-      originalPrice: discountPercent > 0 ? Math.round(calc.hargaJual) : undefined,
-      stock: madeToOrder ? 9999 : undefined,
-      imageUrl: displayImage,
+      imageUrl: displayImage || '',
       category: kategori,
       rating: existingData?.rating || 5.0,
       reviewCount: existingData?.reviewCount || 0,
@@ -277,7 +276,16 @@ export async function syncProductsToFirestore(
       preOrderLabel: wsConfig?.preOrderLabel || 'Pre-Order — Produksi Setiap Hari',
       preOrderBadge: wsConfig?.preOrderBadge || 'MADE-TO-ORDER',
       updatedAt: serverTimestamp(),
-    });
+    };
+    // Hanya tambah field yang nilainya valid (Firestore tolak undefined)
+    if (webVariants) firestoreData.variants = webVariants;
+    if (discountPercent > 0) {
+      firestoreData.discountPercent = discountPercent;
+      firestoreData.originalPrice = Math.round(calc.hargaJual);
+    }
+    if (madeToOrder) firestoreData.stock = 9999;
+
+    batch.set(doc(db, 'products', productId), firestoreData);
 
     synced++;
   }

@@ -8,6 +8,7 @@ import WasteControlTab from './components/WasteControlTab';
 import PesananOnlineTab from './components/PesananOnlineTab';
 import ProductionCenterTab from './components/ProductionCenterTab';
 import BranchDashboard from './components/BranchDashboard';
+import LandingPage from './components/LandingPage';
 
 // Lazy-loaded wrappers
 const KeuanganDashboard = lazy(() => import('./components/KeuanganDashboard'));
@@ -55,6 +56,19 @@ import { googleSignIn } from './lib/firebase';
 import type { IoTDevice } from './types';
 
 export default function App() {
+  // ─── LANDING PAGE ───
+  const [showLanding, setShowLanding] = useState(() => {
+    return localStorage.getItem('hide_landing') !== 'true';
+  });
+
+  const handleEnterERP = () => {
+    setShowLanding(false);
+  };
+
+  const handleEnterWebstore = () => {
+    window.open('/webstore', '_blank');
+  };
+
   // ─── HOOKS ───
   const {
     isOwnerAuthenticated,
@@ -670,6 +684,11 @@ export default function App() {
       }
     }
   }, [isOwnerAuthenticated]);
+
+  // ─── LANDING PAGE ───
+  if (showLanding) {
+    return <LandingPage onEnterERP={handleEnterERP} onEnterWebstore={handleEnterWebstore} />;
+  }
 
   // ─── AUTH GATE ───
   if (!isOwnerAuthenticated && !branchAuth) {

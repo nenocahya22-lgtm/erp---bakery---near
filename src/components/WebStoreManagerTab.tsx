@@ -39,8 +39,11 @@ import {
   getAllFirestoreProducts,
   getFirestoreCategories,
   saveCategoriesToFirestore,
+  hashProductName,
+  db,
   FirestoreProductSummary,
 } from '../lib/firestore-bridge';
+import { deleteDoc, doc } from 'firebase/firestore';
 import { safeGetLocalStorage } from '../lib/safe-json';
 import { getSharedCategories, setSharedCategories } from '../lib/category-store';
 import WebStoreFirestoreSection from './WebStoreFirestoreSection';
@@ -811,7 +814,7 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
                 </div>
                 <span className="text-xs font-bold text-gray-800 flex-1">{cat}</span>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const newCats = (config.categories || []).filter((_, i) => i !== idx);
                     const newIcons = { ...(config.categoryIcons || {}) };
                     delete newIcons[cat];
@@ -822,6 +825,22 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
                       categories: newCats,
                       categoryIcons: newIcons,
                     });
+                    
+                    // 🔥 LANGSUNG simpan ke Firestore — biar tidak kembali saat reload!
+                    // (Pakai config langsung dari closure, bukan localStorage)
+                    try {
+                      const cabangId = config.cabangId || 'pusat';
+                      const updatedConfig = {
+                        ...config,
+                        categories: newCats,
+                        categoryIcons: newIcons,
+                      };
+                      await saveWebStoreConfig(cabangId, updatedConfig);
+                      // Juga sync ke collection categories/{cabangId}
+                      await saveCategoriesToFirestore(cabangId, newCats, newIcons);
+                    } catch (e) {
+                      console.warn('Gagal simpan kategori ke Firestore:', e);
+                    }
                   }}
                   className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 cursor-pointer"
                 >
@@ -1307,13 +1326,33 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
                       <input type="file" accept="image/*" className="hidden" onChange={e => handleUploadProductImage(idx, e)} />
                     </label>
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         if (window.confirm(`Hapus produk "${p.productName}" dari Web Store?`)) {
-                          setConfig(prev => ({
-                            ...prev,
-                            products: prev.products.filter((_, i) => i !== idx),
-                          }));
-                          showToast(`"${p.productName}" dihapus dari Web Store.`, 'info');
+                          const cabangId = config.cabangId || 'pusat';
+                          
+                          // 1. 🔥 Hapus dari Firestore products collection dulu
+                          try {
+                            const productId = hashProductName(p.productName);
+                            await deleteDoc(doc(db, 'products', productId));
+                          } catch (e) {
+                            console.warn('Gagal hapus produk dari Firestore:', e);
+                          }
+                          
+                          // 2. Buat config terbaru (langsung dari state, tanpa setTimeout)
+                          const updatedProducts = config.products.filter((_, i) => i !== idx);
+                          const updatedConfig = { ...config, products: updatedProducts };
+                          
+                          // 3. Update local state
+                          setConfig({ ...updatedConfig });
+                          
+                          // 4. Simpan konfigurasi terbaru ke Firestore — biar tidak kembali saat reload!
+                          try {
+                            await saveWebStoreConfig(cabangId, updatedConfig);
+                          } catch (e) {
+                            console.warn('Gagal simpan config ke Firestore:', e);
+                          }
+                          
+                          showToast(`"${p.productName}" dihapus dari Web Store & Firestore.`, 'info');
                         }
                       }}
                       className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 cursor-pointer shrink-0 self-end"

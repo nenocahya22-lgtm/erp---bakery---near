@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { safeGetLocalStorage } from '../lib/safe-json';
 import { calculateAllProducts } from '../lib/calculations';
-import { syncProductsToFirestore, db, hashProductName } from '../lib/firestore-bridge';
+import { syncProductsToFirestore, getWebStoreConfig, saveWebStoreConfig, db, hashProductName } from '../lib/firestore-bridge';
 import { doc, deleteDoc } from 'firebase/firestore';
 import type {
   BahanBaku, ProductHpp, DetailResep, CalculationResult, WriteOffLog, WasteLog,
@@ -340,6 +340,25 @@ export function useERPData(showConfirm?: (opts: { title: string; message: string
     ]).catch(err => {
       console.warn('Failed to delete product from Firestore:', err);
     });
+
+    // 🔥 Hapus juga dari webstore_config — biar tidak muncuk lagi saat reload Web Store Manager
+    Promise.allSettled([
+      (async () => {
+        try {
+          const config = await getWebStoreConfig('pusat');
+          if (config && config.products) {
+            const filteredProducts = config.products.filter(
+              (p: any) => p.productName.toLowerCase().trim() !== productName.toLowerCase().trim()
+            );
+            if (filteredProducts.length !== config.products.length) {
+              await saveWebStoreConfig('pusat', { ...config, products: filteredProducts });
+            }
+          }
+        } catch (e) {
+          console.warn('Gagal update webstore_config setelah hapus produk:', e);
+        }
+      })(),
+    ]);
 
     // Auto-sync penghapusan ke Firestore — update data produk yang tersisa
     setTimeout(() => {
