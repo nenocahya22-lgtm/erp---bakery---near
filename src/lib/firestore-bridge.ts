@@ -412,8 +412,6 @@ export async function cleanupStaleProducts(
     console.warn('[Cleanup] Gagal cleanup stale products:', e);
     return 0;
   }
-
-  return synced;
 }
 
 // ============================================================================
@@ -445,6 +443,7 @@ export async function getAllFirestoreProducts(): Promise<FirestoreProductSummary
         name: data.name || '',
         price: data.price || 0,
         category: data.category || 'Lainnya',
+        stock: data.stock ?? 0,
         imageUrl: data.imageUrl || '',
         hpp: data.hpp || 0,
         margin: data.margin || 0,
