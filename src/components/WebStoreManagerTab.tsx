@@ -34,6 +34,7 @@ import {
   getWebStoreConfig,
   getAllWebStoreConfigs,
   syncProductsToFirestore,
+  cleanupStaleProducts,
   registerSubdomain,
   getAllSubdomains,
   getAllFirestoreProducts,
@@ -174,6 +175,22 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
     }, 2000);
     return () => clearTimeout(timer);
   }, [config.categories, config.categoryIcons, config.cabangId, isFirestoreConnected]);
+
+  // ─── 🧹 AUTO-CLEANUP: Hapus stale products saat komponen dimuat ───
+  //    Tanpa ini, produk yang sudah dihapus dari ERP tetap ada di collection
+  //    'products' Firestore, dan Web Store akan terus menampilkannya.
+  //    Dengan auto-cleanup ini, user TIDAK PERLU klik Sync manual.
+  useEffect(() => {
+    if (!isFirestoreConnected || !calculatedProducts || calculatedProducts.length === 0) return;
+    const cabangId = config.cabangId || 'pusat';
+    cleanupStaleProducts(calculatedProducts, cabangId).then(count => {
+      if (count > 0) {
+        console.log(`🧹 Auto-cleanup: ${count} stale products removed from Firestore`);
+        // Refresh tampilan data web store
+        fetchFirestoreProducts();
+      }
+    }).catch(e => console.warn('Auto-cleanup error:', e));
+  }, [isFirestoreConnected, config.cabangId]); // Hanya jalan sekali saat koneksi Firestore siap
 
   // Fetch all products from Firestore (web store) — untuk panel Data Web Store
   const fetchFirestoreProducts = useCallback(async () => {

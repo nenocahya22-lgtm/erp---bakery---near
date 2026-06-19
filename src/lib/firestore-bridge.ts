@@ -372,6 +372,51 @@ export async function syncProductsToFirestore(
 }
 
 // ============================================================================
+// 🧹 CLEANUP — Hapus semua stale products dari Firestore secara mandiri
+// ============================================================================
+
+/**
+ * Hapus SEMUA produk dari collection 'products' yang tidak ada di calculatedProducts.
+ * Fungsi ini bisa dipanggil secara independen (tanpa sync) — misalnya saat app startup,
+ * agar produk yang sudah dihapus dari ERP tidak muncul terus di Web Store.
+ * 
+ * @returns Jumlah produk stale yang berhasil dihapus
+ */
+export async function cleanupStaleProducts(
+  calculatedProducts: CalculationResult[],
+  cabangId: string = 'pusat'
+): Promise<number> {
+  try {
+    const allProductsSnap = await getDocs(collection(db, 'products'));
+    const activeIds = new Set(
+      calculatedProducts.map(c => hashProductName(c.namaProduk))
+    );
+    
+    const staleBatch = writeBatch(db);
+    let staleCount = 0;
+    
+    allProductsSnap.forEach(productDoc => {
+      if (!activeIds.has(productDoc.id)) {
+        staleBatch.delete(productDoc.ref);
+        staleCount++;
+      }
+    });
+    
+    if (staleCount > 0) {
+      await staleBatch.commit();
+      console.log(`[Cleanup ${cabangId}] 🧹 ${staleCount} produk stale dihapus dari Firestore.`);
+    }
+    
+    return staleCount;
+  } catch (e) {
+    console.warn('[Cleanup] Gagal cleanup stale products:', e);
+    return 0;
+  }
+
+  return synced;
+}
+
+// ============================================================================
 // PRODUCT FETCH — baca semua produk yang ada di Firestore (dari web store)
 // ============================================================================
 
