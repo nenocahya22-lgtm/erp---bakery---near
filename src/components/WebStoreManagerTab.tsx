@@ -1838,7 +1838,20 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
                   <RefreshCw className={`w-3 h-3 ${isFetchingCategories ? 'animate-spin' : ''}`} />
                   Refresh
                 </button>
-                <button onClick={handleImportCategoriesFromFirestore}
+                <button onClick={() => {
+                  if (!firestoreCategories || !firestoreCategories.categories.length) {
+                    showToast("Tidak ada kategori di Firestore untuk diimpor.", "info");
+                    return;
+                  }
+                  const existingCats = new Set(config.categories || []);
+                  const newCats = firestoreCategories.categories.filter((c) => !existingCats.has(c));
+                  if (newCats.length === 0) {
+                    showToast("Semua kategori sudah terdaftar di ERP.", "info");
+                    return;
+                  }
+                  newCats.forEach((cat) => handleImportCategory(cat));
+                  showToast("✅ " + newCats.length + " kategori berhasil diimpor dari Firestore!", "success");
+                }}
                   className="px-2 py-1 text-[9px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg transition-all cursor-pointer flex items-center gap-1">
                   <Plus className="w-3 h-3" />
                   Import ke ERP
