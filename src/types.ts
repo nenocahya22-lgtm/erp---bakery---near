@@ -356,10 +356,78 @@ export interface WebStoreConfig {
   madeToOrder: boolean;
   preOrderLabel: string;
   preOrderBadge: string;
+
+  // ─── FEATURED PRODUCTS (produk unggulan di hero) ───
+  featuredProductNames: string[]; // nama produk yang ditampilkan sebagai unggulan
+  featuredSectionTitle: string;
+  featuredSectionSubtitle: string;
+  featuredSectionEnabled: boolean;
   
-  // Timestamp
+  // ─── ABOUT SECTION (tentang toko) ───
+  aboutEnabled: boolean;
+  aboutTitle: string;
+  aboutDescription: string;
+  aboutImage: string; // base64
+  aboutButtonText: string;
+  aboutButtonLink: string;
+  aboutStatsEnabled: boolean;
+  aboutStats: { label: string; value: string }[];
+  
+  // ─── LOCATION / MAPS (lokasi cabang) ───
+  locationEnabled: boolean;
+  locationAddress: string;
+  locationCity: string;
+  locationMapsUrl: string; // Google Maps embed URL
+  locationLat?: number;
+  locationLng?: number;
+  locationPhone: string;
+  
+  // ─── SOCIAL MEDIA LINKS ───
+  socialMedia: { platform: string; url: string; icon: string; active: boolean }[];
+  
+  // ─── OPERATING HOURS (jam buka) ───
+  operatingHoursEnabled: boolean;
+  operatingHoursNote: string;
+  operatingHours: { day: string; open: string; close: string; active: boolean }[];
+  
+  // ─── Timestamp
   lastUpdated: string;
 }
+
+export const SOCIAL_MEDIA_PLATFORMS = [
+  { value: 'instagram', label: 'Instagram', icon: '📷' },
+  { value: 'facebook', label: 'Facebook', icon: '👍' },
+  { value: 'twitter', label: 'Twitter / X', icon: '🐦' },
+  { value: 'tiktok', label: 'TikTok', icon: '🎵' },
+  { value: 'youtube', label: 'YouTube', icon: '▶️' },
+  { value: 'whatsapp', label: 'WhatsApp', icon: '💬' },
+  { value: 'line', label: 'LINE', icon: '💚' },
+  { value: 'shopee', label: 'Shopee', icon: '🛒' },
+  { value: 'tokopedia', label: 'Tokopedia', icon: '🛍️' },
+  { value: 'gofood', label: 'GoFood', icon: '🛵' },
+  { value: 'grabfood', label: 'GrabFood', icon: '🚗' },
+  { value: 'website', label: 'Website', icon: '🌐' },
+];
+
+export const DAYS_OF_WEEK = [
+  'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'
+];
+
+export const createDefaultSocialMedia = () => [
+  { platform: 'instagram', url: 'https://instagram.com/nearbakery', icon: '📷', active: true },
+  { platform: 'facebook', url: '', icon: '👍', active: false },
+  { platform: 'whatsapp', url: 'https://wa.me/6281234567890', icon: '💬', active: true },
+];
+
+export const createDefaultOperatingHours = () => [
+  { day: 'Senin', open: '08:00', close: '20:00', active: true },
+  { day: 'Selasa', open: '08:00', close: '20:00', active: true },
+  { day: 'Rabu', open: '08:00', close: '20:00', active: true },
+  { day: 'Kamis', open: '08:00', close: '20:00', active: true },
+  { day: 'Jumat', open: '08:00', close: '20:00', active: true },
+  { day: 'Sabtu', open: '09:00', close: '21:00', active: true },
+  { day: 'Minggu', open: '09:00', close: '18:00', active: true },
+];
 
 // Default config factory
 export const createDefaultPaymentMethods = (): PaymentMethod[] => [
@@ -529,6 +597,43 @@ export const createDefaultWebStoreConfig = (products: { namaProduk: string; kate
   madeToOrder: true,
   preOrderLabel: 'Pre-Order — Produksi Setiap Hari',
   preOrderBadge: 'MADE-TO-ORDER',
+  
+  // ─── Featured Products ───
+  featuredProductNames: products.slice(0, 4).map(p => p.namaProduk),
+  featuredSectionTitle: 'Produk Unggulan Kami',
+  featuredSectionSubtitle: 'Rekomendasi terbaik dari baker kami — fresh baked every day!',
+  featuredSectionEnabled: true,
+  
+  // ─── About Section ───
+  aboutEnabled: true,
+  aboutTitle: 'Cerita Kami',
+  aboutDescription: 'Near Bakery & Co. adalah bakery artisan yang berdiri sejak 2020. Kami percaya bahwa roti terbaik lahir dari bahan alami, ragi sourdough liar, dan sentuhan tangan baker yang penuh dedikasi. Setiap produk kami buat dengan resep tradisional yang diwariskan turun-temurun, dipadukan dengan inovasi modern untuk menciptakan cita rasa yang tak terlupakan.',
+  aboutImage: '',
+  aboutButtonText: 'Pelajari Lebih Lanjut',
+  aboutButtonLink: '#',
+  aboutStatsEnabled: true,
+  aboutStats: [
+    { label: 'Bahan Alami', value: '100%' },
+    { label: 'Tanpa Pengawet', value: '100%' },
+    { label: 'Kepuasan Pelanggan', value: '98%' },
+    { label: 'Produk Artisan', value: '50+' },
+  ],
+  
+  // ─── Location ───
+  locationEnabled: true,
+  locationAddress: 'Jl. Contoh No. 123',
+  locationCity: 'Kota Contoh',
+  locationMapsUrl: 'https://maps.google.com/?q=near+bakery',
+  locationPhone: '6281234567890',
+  
+  // ─── Social Media ───
+  socialMedia: createDefaultSocialMedia(),
+  
+  // ─── Operating Hours ───
+  operatingHoursEnabled: true,
+  operatingHoursNote: '* Jam operasional dapat berubah pada hari libur nasional',
+  operatingHours: createDefaultOperatingHours(),
+  
   lastUpdated: new Date().toISOString(),
 });
 
