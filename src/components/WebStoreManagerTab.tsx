@@ -30,6 +30,15 @@ import {
   Sparkles,
   Lightbulb,
   Zap,
+  Star,
+  Info,
+  MapPin,
+  Share2,
+  Clock,
+
+  Instagram,
+  Facebook,
+  Youtube,
 } from 'lucide-react';import { saveWebStoreConfig,
   getWebStoreConfig,
   getAllWebStoreConfigs,
@@ -721,6 +730,13 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
           {sidebarBtn('promos', <Megaphone className="w-4 h-4" />, 'Promo & Banner')}
           {sidebarBtn('texts', <FileJson className="w-4 h-4" />, 'Teks & Label')}
           {sidebarBtn('footer', <Globe className="w-4 h-4" />, 'Footer')}
+          
+          <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-3 mb-2 mt-4">🌐 Landing Page</div>
+          {sidebarBtn('featured', <Star className="w-4 h-4" />, 'Produk Unggulan')}
+          {sidebarBtn('about', <Info className="w-4 h-4" />, 'Tentang Toko')}
+          {sidebarBtn('location', <MapPin className="w-4 h-4" />, 'Lokasi & Maps')}
+          {sidebarBtn('social', <Share2 className="w-4 h-4" />, 'Media Sosial')}
+          {sidebarBtn('hours', <Clock className="w-4 h-4" />, 'Jam Operasional')}
           
           <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-3 mb-2 mt-4">💳 Bisnis</div>
           {sidebarBtn('payment', <CreditCard className="w-4 h-4" />, 'Pembayaran')}
@@ -1669,6 +1685,460 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
             <div className="md:col-span-2">
               <label className={labelClass}>Checkout Footer Text</label>
               <input className={inputClass} value={config.checkoutFooterText} onChange={e => updateConfig({ checkoutFooterText: e.target.value })} placeholder="Near Bakery & Co. — Kualitas Terjamin" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── SECTION: FEATURED PRODUCTS ─── */}
+      {activeSection === 'featured' && (
+        <div className={cardClass}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black text-gray-800">⭐ Produk Unggulan (Landing Page)</h3>
+            <button onClick={() => {
+              const newFeatured = [...(config.featuredProducts || [])];
+              const nextOrder = newFeatured.length + 1;
+              newFeatured.push({ productName: '', active: true, order: nextOrder, badgeText: '' });
+              updateConfig({ featuredProducts: newFeatured });
+            }} className="px-3 py-2 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer flex items-center gap-1">
+              <Plus className="w-3.5 h-3.5" /> Tambah
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-500">
+            Pilih produk unggulan yang tampil di hero landing page Web Store. Bisa diurutkan.
+          </p>
+
+          <div className="space-y-3">
+            {(config.featuredProducts || []).length === 0 && (
+              <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-xl">
+                <Star className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                <p className="text-xs text-gray-400">Belum ada produk unggulan. Klik Tambah untuk menambahkan produk unggulan yang tampil di hero landing page.</p>
+              </div>
+            )}
+            {(config.featuredProducts || []).sort((a, b) => a.order - b.order).map((fp, idx) => (
+              <div key={idx} className="flex items-center gap-3 p-3 bg-gradient-to-r from-amber-50 to-white rounded-xl border border-amber-200">
+                <div className="w-6 h-6 rounded-lg bg-amber-100 flex items-center justify-center text-xs font-bold text-amber-700 shrink-0">
+                  {fp.order || idx + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <select
+                      className={`${inputClass} flex-1`}
+                      value={fp.productName}
+                      onChange={e => {
+                        const newFeatured = [...(config.featuredProducts || [])];
+                        newFeatured[idx] = { ...newFeatured[idx], productName: e.target.value };
+                        updateConfig({ featuredProducts: newFeatured });
+                      }}
+                    >
+                      <option value="">— Pilih Produk —</option>
+                      {config.products.filter(p => p.active).map(p => (
+                        <option key={p.productName} value={p.productName}>{p.productName}</option>
+                      ))}
+                    </select>
+                    <input
+                      className={`${inputClass} w-40`}
+                      value={fp.badgeText}
+                      onChange={e => {
+                        const newFeatured = [...(config.featuredProducts || [])];
+                        newFeatured[idx] = { ...newFeatured[idx], badgeText: e.target.value };
+                        updateConfig({ featuredProducts: newFeatured });
+                      }}
+                      placeholder="Badge (contoh: BEST SELLER)"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3 mt-1.5">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="checkbox" checked={fp.active !== false}
+                        onChange={e => {
+                          const newFeatured = [...(config.featuredProducts || [])];
+                          newFeatured[idx] = { ...newFeatured[idx], active: e.target.checked };
+                          updateConfig({ featuredProducts: newFeatured });
+                        }}
+                        className="w-3.5 h-3.5 rounded accent-amber-600" />
+                      <span className="text-[10px] text-gray-500">Aktif</span>
+                    </label>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => {
+                          if (idx === 0) return;
+                          const newFeatured = [...(config.featuredProducts || [])];
+                          const temp = newFeatured[idx];
+                          newFeatured[idx] = { ...newFeatured[idx - 1], order: newFeatured[idx].order };
+                          newFeatured[idx - 1] = { ...temp, order: newFeatured[idx - 1].order };
+                          updateConfig({ featuredProducts: newFeatured });
+                        }}
+                        disabled={idx === 0}
+                        className="p-1 text-gray-400 hover:text-amber-600 disabled:opacity-30 cursor-pointer"
+                      >↑</button>
+                      <button
+                        onClick={() => {
+                          if (idx >= (config.featuredProducts?.length || 0) - 1) return;
+                          const newFeatured = [...(config.featuredProducts || [])];
+                          const temp = newFeatured[idx];
+                          newFeatured[idx] = { ...newFeatured[idx + 1], order: newFeatured[idx].order };
+                          newFeatured[idx + 1] = { ...temp, order: newFeatured[idx + 1].order };
+                          updateConfig({ featuredProducts: newFeatured });
+                        }}
+                        disabled={idx >= (config.featuredProducts?.length || 0) - 1}
+                        className="p-1 text-gray-400 hover:text-amber-600 disabled:opacity-30 cursor-pointer"
+                      >↓</button>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const newFeatured = (config.featuredProducts || []).filter((_, i) => i !== idx);
+                        updateConfig({ featuredProducts: newFeatured });
+                      }}
+                      className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ─── SECTION: ABOUT ─── */}
+      {activeSection === 'about' && (
+        <div className={cardClass}>
+          <h3 className="text-sm font-black text-gray-800">ℹ️ Tentang Toko</h3>
+          <p className="text-[10px] text-gray-500">
+            Informasi tentang toko yang tampil di halaman landing page Web Store. 
+            Ceritakan sejarah, misi, dan nilai-nilai Near Bakery.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <label className={labelClass}>Judul Section</label>
+              <input className={inputClass} value={config.aboutTitle} onChange={e => updateConfig({ aboutTitle: e.target.value })} placeholder="Tentang Near Bakery" />
+            </div>
+            <div className="md:col-span-2">
+              <label className={labelClass}>Deskripsi</label>
+              <textarea className={`${inputClass} h-24 resize-none`} value={config.aboutDescription} onChange={e => updateConfig({ aboutDescription: e.target.value })} placeholder="Near Bakery & Co. adalah bakery artisan yang berdedikasi menyajikan roti sourdough alami, croissant renyah, dan kue premium dengan bahan-bahan terbaik sejak 2025. Setiap produk kami buat dengan cinta dan resep turun-temurun." />
+            </div>
+            <div>
+              <label className={labelClass}>Misi</label>
+              <textarea className={`${inputClass} h-20 resize-none`} value={config.aboutMission} onChange={e => updateConfig({ aboutMission: e.target.value })} placeholder="Menghadirkan roti & pastry berkualitas tinggi dengan bahan alami, tanpa pengawet, dan penuh cinta." />
+            </div>
+            <div>
+              <label className={labelClass}>Visi</label>
+              <textarea className={`${inputClass} h-20 resize-none`} value={config.aboutVision} onChange={e => updateConfig({ aboutVision: e.target.value })} placeholder="Menjadi bakery artisan terdepan di Indonesia yang dikenal akan kualitas, inovasi, dan kehangatan." />
+            </div>
+            <div>
+              <label className={labelClass}>Gambar Section About</label>
+              <div className="flex items-center gap-3">
+                {config.aboutImage ? (
+                  <img src={config.aboutImage} alt="About" className="w-20 h-20 object-cover rounded-xl border border-gray-200" />
+                ) : (
+                  <div className="w-20 h-20 bg-slate-100 rounded-xl flex items-center justify-center text-gray-400"><Image className="w-6 h-6" /></div>
+                )}
+                <label className="px-3 py-2 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer">
+                  Upload Gambar
+                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const b64 = await loadImageAsBase64(file);
+                      updateConfig({ aboutImage: b64 });
+                      showToast('Gambar About berhasil diupload!', 'success');
+                    }
+                  }} />
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── SECTION: LOCATION ─── */}
+      {activeSection === 'location' && (
+        <div className={cardClass}>
+          <h3 className="text-sm font-black text-gray-800">📍 Lokasi & Maps</h3>
+          <p className="text-[10px] text-gray-500">
+            Atur informasi lokasi toko yang tampil di landing page Web Store. 
+            Pengunjung bisa melihat peta dan alamat lengkap.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <label className={labelClass}>Alamat Lengkap</label>
+              <textarea className={`${inputClass} h-16 resize-none`} value={config.locationAddress} onChange={e => updateConfig({ locationAddress: e.target.value })} placeholder="Jl. Contoh No. 123, Kelurahan, Kecamatan, Kota, Provinsi" />
+            </div>
+            <div>
+              <label className={labelClass}>Latitude (Google Maps)</label>
+              <input className={inputClass} value={config.locationLat?.toString() || ''} onChange={e => updateConfig({ locationLat: parseFloat(e.target.value) || 0 })} placeholder="-6.2088" />
+            </div>
+            <div>
+              <label className={labelClass}>Longitude (Google Maps)</label>
+              <input className={inputClass} value={config.locationLng?.toString() || ''} onChange={e => updateConfig({ locationLng: parseFloat(e.target.value) || 0 })} placeholder="106.8456" />
+            </div>
+            <div>
+              <label className={labelClass}>URL Google Maps (embed/link)</label>
+              <input className={inputClass} value={config.locationGoogleMapsUrl} onChange={e => updateConfig({ locationGoogleMapsUrl: e.target.value })} placeholder="https://maps.google.com/?q=..." />
+            </div>
+            <div>
+              <label className={labelClass}>Gambar Peta / Toko</label>
+              <div className="flex items-center gap-3">
+                {config.locationImage ? (
+                  <img src={config.locationImage} alt="Location" className="w-20 h-20 object-cover rounded-xl border border-gray-200" />
+                ) : (
+                  <div className="w-20 h-20 bg-slate-100 rounded-xl flex items-center justify-center text-gray-400"><MapPin className="w-6 h-6" /></div>
+                )}
+                <label className="px-3 py-2 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer">
+                  Upload Gambar
+                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const b64 = await loadImageAsBase64(file);
+                      updateConfig({ locationImage: b64 });
+                      showToast('Gambar lokasi berhasil diupload!', 'success');
+                    }
+                  }} />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Preview map */}
+          {config.locationLat && config.locationLng && (
+            <div className="mt-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <p className="text-[9px] text-gray-500 mb-1">🔄 Preview koordinat — embed map akan tampil di Web Store:</p>
+              <div className="w-full h-32 rounded-lg bg-slate-200 flex items-center justify-center">
+                <div className="text-center">
+                  <MapPin className="w-8 h-8 text-emerald-600 mx-auto" />
+                  <p className="text-[10px] text-gray-500 mt-1">{config.locationLat}, {config.locationLng}</p>
+                  <p className="text-[9px] text-gray-400">{config.locationAddress || 'Alamat belum diisi'}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── SECTION: SOCIAL MEDIA ─── */}
+      {activeSection === 'social' && (
+        <div className={cardClass}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black text-gray-800">📱 Media Sosial</h3>
+            <button onClick={() => {
+              const newSocial = [...(config.socialMedia || [])];
+              newSocial.push({ platform: 'instagram', url: '', active: true });
+              updateConfig({ socialMedia: newSocial });
+            }} className="px-3 py-2 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer flex items-center gap-1">
+              <Plus className="w-3.5 h-3.5" /> Tambah
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-500">
+            Tautan media sosial yang tampil di footer dan landing page Web Store.
+          </p>
+
+          {(!config.socialMedia || config.socialMedia.length === 0) ? (
+            <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-xl">
+              <Share2 className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-xs text-gray-400">Belum ada media sosial. Klik "Tambah" untuk menambahkan tautan Instagram, Facebook, YouTube, dll.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {(config.socialMedia || []).map((sm, idx) => (
+                <div key={idx} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                    {sm.platform === 'instagram' ? <Instagram className="w-4 h-4 text-pink-600" /> :
+                     sm.platform === 'facebook' ? <Facebook className="w-4 h-4 text-blue-600" /> :
+                     sm.platform === 'youtube' ? <Youtube className="w-4 h-4 text-red-600" /> :
+                     sm.platform === 'tiktok' ? <span className="text-sm">🎵</span> :
+                     sm.platform === 'twitter' ? <span className="text-sm">🐦</span> :
+                     <Share2 className="w-4 h-4 text-gray-600" />}
+                  </div>
+                  <select
+                    className={`${inputClass} w-32`}
+                    value={sm.platform}
+                    onChange={e => {
+                      const newSocial = [...(config.socialMedia || [])];
+                      newSocial[idx] = { ...newSocial[idx], platform: e.target.value };
+                      updateConfig({ socialMedia: newSocial });
+                    }}
+                  >
+                    <option value="instagram">📸 Instagram</option>
+                    <option value="facebook">👍 Facebook</option>
+                    <option value="youtube">▶️ YouTube</option>
+                    <option value="tiktok">🎵 TikTok</option>
+                    <option value="twitter">🐦 Twitter / X</option>
+                    <option value="whatsapp">💬 WhatsApp</option>
+                    <option value="telegram">✈️ Telegram</option>
+                    <option value="linkedin">💼 LinkedIn</option>
+                    <option value="other">🔗 Lainnya</option>
+                  </select>
+                  <input
+                    className={`${inputClass} flex-1`}
+                    value={sm.url}
+                    onChange={e => {
+                      const newSocial = [...(config.socialMedia || [])];
+                      newSocial[idx] = { ...newSocial[idx], url: e.target.value };
+                      updateConfig({ socialMedia: newSocial });
+                    }}
+                    placeholder="https://instagram.com/nearbakery"
+                  />
+                  <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
+                    <input type="checkbox" checked={sm.active !== false}
+                      onChange={e => {
+                        const newSocial = [...(config.socialMedia || [])];
+                        newSocial[idx] = { ...newSocial[idx], active: e.target.checked };
+                        updateConfig({ socialMedia: newSocial });
+                      }}
+                      className="w-3.5 h-3.5 rounded accent-emerald-600" />
+                    <span className="text-[9px] text-gray-500">Aktif</span>
+                  </label>
+                  <button
+                    onClick={() => {
+                      const newSocial = (config.socialMedia || []).filter((_, i) => i !== idx);
+                      updateConfig({ socialMedia: newSocial });
+                    }}
+                    className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 cursor-pointer"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── SECTION: OPERATING HOURS ─── */}
+      {activeSection === 'hours' && (
+        <div className={cardClass}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black text-gray-800">🕐 Jam Operasional</h3>
+            <button onClick={() => {
+              const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', "Jum'at", 'Sabtu', 'Minggu'];
+              const existing = (config.operatingHours || []).map(h => h.day);
+              const missingDay = days.find(d => !existing.includes(d));
+              if (missingDay) {
+                const newHours = [...(config.operatingHours || [])];
+                newHours.push({ day: missingDay, open: '08:00', close: '21:00', isOpen: true });
+                updateConfig({ operatingHours: newHours });
+              } else {
+                showToast('Semua hari sudah terdaftar!', 'info');
+              }
+            }} className="px-3 py-2 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer flex items-center gap-1">
+              <Plus className="w-3.5 h-3.5" /> Tambah Hari
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-500">
+            Atur jam buka & tutup toko yang tampil di landing page Web Store.
+          </p>
+
+          {(!config.operatingHours || config.operatingHours.length === 0) ? (
+            <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-xl">
+              <Clock className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-xs text-gray-400">Belum ada jam operasional. Klik "Tambah Hari" untuk mengatur jam buka setiap hari.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {(config.operatingHours || []).sort((a, b) => {
+                const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', "Jum'at", 'Sabtu', 'Minggu'];
+                return days.indexOf(a.day) - days.indexOf(b.day);
+              }).map((oh, idx) => (
+                <div key={idx} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${oh.isOpen ? 'bg-emerald-500' : 'bg-red-400'}`} />
+                  <span className="text-xs font-bold text-gray-700 w-20 shrink-0">{oh.day}</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="time"
+                      className={`${inputClass} w-28`}
+                      value={oh.open}
+                      onChange={e => {
+                        const newHours = [...(config.operatingHours || [])];
+                        newHours[idx] = { ...newHours[idx], open: e.target.value };
+                        updateConfig({ operatingHours: newHours });
+                      }}
+                    />
+                    <span className="text-xs text-gray-400">—</span>
+                    <input
+                      type="time"
+                      className={`${inputClass} w-28`}
+                      value={oh.close}
+                      onChange={e => {
+                        const newHours = [...(config.operatingHours || [])];
+                        newHours[idx] = { ...newHours[idx], close: e.target.value };
+                        updateConfig({ operatingHours: newHours });
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="checkbox" checked={oh.isOpen}
+                        onChange={e => {
+                          const newHours = [...(config.operatingHours || [])];
+                          newHours[idx] = { ...newHours[idx], isOpen: e.target.checked };
+                          updateConfig({ operatingHours: newHours });
+                        }}
+                        className="w-3.5 h-3.5 rounded accent-emerald-600" />
+                      <span className="text-[9px] text-gray-500">{oh.isOpen ? 'Buka' : 'Tutup'}</span>
+                    </label>
+                    <button
+                      onClick={() => {
+                        const newHours = (config.operatingHours || []).filter((_, i) => i !== idx);
+                        updateConfig({ operatingHours: newHours });
+                      }}
+                      className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Quick-add buttons */}
+          <div className="border-t border-gray-100 pt-3 mt-3">
+            <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">🔄 Set Default Jam</h4>
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => {
+                const defaultHours = [
+                  { day: 'Senin', open: '08:00', close: '21:00', isOpen: true },
+                  { day: 'Selasa', open: '08:00', close: '21:00', isOpen: true },
+                  { day: 'Rabu', open: '08:00', close: '21:00', isOpen: true },
+                  { day: 'Kamis', open: '08:00', close: '21:00', isOpen: true },
+                  { day: "Jum'at", open: '08:00', close: '21:00', isOpen: true },
+                  { day: 'Sabtu', open: '09:00', close: '22:00', isOpen: true },
+                  { day: 'Minggu', open: '09:00', close: '22:00', isOpen: true },
+                ];
+                updateConfig({ operatingHours: defaultHours });
+              }} className="px-3 py-1.5 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer">
+                🏪 Setiap Hari (08:00-21:00)
+              </button>
+              <button onClick={() => {
+                const defaultHours = [
+                  { day: 'Senin', open: '07:00', close: '22:00', isOpen: true },
+                  { day: 'Selasa', open: '07:00', close: '22:00', isOpen: true },
+                  { day: 'Rabu', open: '07:00', close: '22:00', isOpen: true },
+                  { day: 'Kamis', open: '07:00', close: '22:00', isOpen: true },
+                  { day: "Jum'at", open: '07:00', close: '22:00', isOpen: true },
+                  { day: 'Sabtu', open: '08:00', close: '23:00', isOpen: true },
+                  { day: 'Minggu', open: '08:00', close: '22:00', isOpen: true },
+                ];
+                updateConfig({ operatingHours: defaultHours });
+              }} className="px-3 py-1.5 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer">
+                ☕ Jam Panjang (07:00-22:00)
+              </button>
+              <button onClick={() => {
+                const defaultHours = [
+                  { day: 'Senin', open: '10:00', close: '18:00', isOpen: true },
+                  { day: 'Selasa', open: '10:00', close: '18:00', isOpen: true },
+                  { day: 'Rabu', open: '10:00', close: '18:00', isOpen: true },
+                  { day: 'Kamis', open: '10:00', close: '18:00', isOpen: true },
+                  { day: "Jum'at", open: '10:00', close: '18:00', isOpen: true },
+                  { day: 'Sabtu', open: '10:00', close: '20:00', isOpen: true },
+                  { day: 'Minggu', open: '10:00', close: '18:00', isOpen: false },
+                ];
+                updateConfig({ operatingHours: defaultHours });
+              }} className="px-3 py-1.5 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer">
+                🔒 Standar (10:00-18:00, Minggu Tutup)
+              </button>
             </div>
           </div>
         </div>
