@@ -97,6 +97,18 @@ const loadImageAsBase64 = (file: File): Promise<string> => {
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
+/** 🆕 Auto-detect icon berdasarkan keyword nama kategori */
+const autoDetectCategoryIcon = (catName: string): string => {
+  const lower = catName.toLowerCase();
+  // Urutan prioritas: dari spesifik ke umum
+  if (/roti|sourdough|bread/i.test(lower)) return 'wheat';
+  if (/croissant|viennoiserie|pastry|danis?h/i.test(lower)) return 'croissant';
+  if (/kue|tart|cake|cheesecake|bolu|brownies/i.test(lower)) return 'cake';
+  if (/kue kering|cookies?|biscuit|kukis/i.test(lower)) return 'cookie';
+  if (/kopi|coffee|minuman|teh|drink|susu|jus|smoothie|mocktail/i.test(lower)) return 'coffee';
+  return 'package'; // default untuk lainnya
+};
+
 export default function WebStoreManagerTab({ productHpp, calculatedProducts, bahanBaku, detailResep, cabangList, onImportProduct }: Props) {
   const [config, setConfig] = useState<WebStoreConfig>(() => {
     const saved = safeGetLocalStorage<WebStoreConfig | null>(STORAGE_KEY, null);
@@ -266,10 +278,22 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
           const products = await getAllFirestoreProducts();
           const uniqueCats = [...new Set(products.map(p => p.category).filter(Boolean))];
           if (uniqueCats.length > 0) {
+            // Auto-detect icon berdasarkan keyword nama kategori
+            const catIcons: Record<string, string> = {};
+            uniqueCats.forEach(cat => {
+              catIcons[cat] = autoDetectCategoryIcon(cat);
+            });
             cats = {
               categories: uniqueCats,
-              categoryIcons: {},
+              categoryIcons: catIcons,
             };
+            // 🔥 Auto-sync kategori ke Firestore agar tidak hilang saat refresh berikutnya
+            try {
+              await saveCategoriesToFirestore(cabangId, uniqueCats, catIcons);
+              console.log(`🔄 ${uniqueCats.length} kategori auto-sync ke Firestore dari produk`);
+            } catch (e) {
+              console.warn('Auto-sync categories to Firestore failed:', e);
+            }
           }
         } catch (e) {
           console.warn('Fallback products categories failed:', e);
