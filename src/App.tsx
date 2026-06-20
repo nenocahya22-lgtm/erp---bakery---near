@@ -686,8 +686,58 @@ export default function App() {
   }, [isOwnerAuthenticated]);
 
   // ─── LANDING PAGE ───
+  // Hitung data real dari ERP untuk ditampilkan di landing page
+  const landingData = React.useMemo(() => {
+    const publishedProducts = productHpp.filter(p => p.status !== 'draft');
+    const realProductCount = publishedProducts.length || calculatedProducts.length || productHpp.length || 0;
+    const realBranchCount = cabangList.filter(c => c.isActive).length || cabangList.length || 0;
+    const realLowStockCount = bahanBaku.filter(b => b.isiKemasan < 100).length || 0;
+
+    // Revenue & orders dari localStorage
+    let realTransactionCount = 0;
+    let realRevenueToday = 0;
+    let realTodayOrders = 0;
+    try {
+      const raw = localStorage.getItem('revenue_tracker_data');
+      if (raw) {
+        const data = JSON.parse(raw);
+        realTransactionCount = data.transactions?.length || 0;
+        const today = new Date().toISOString().substring(0, 10);
+        realRevenueToday = data.dailyTotals?.[today]?.total || 0;
+      }
+    } catch {}
+    try {
+      const raw = localStorage.getItem('pos_orders_data');
+      if (raw) {
+        const orders = JSON.parse(raw);
+        const today = new Date().toISOString().substring(0, 10);
+        realTodayOrders = orders.filter((o: any) => o.date === today).length || 0;
+      }
+    } catch {}
+
+    return {
+      productCount: realProductCount || undefined,
+      branchCount: realBranchCount || undefined,
+      transactionCount: realTransactionCount || undefined,
+      revenueToday: realRevenueToday || undefined,
+      lowStockCount: realLowStockCount || undefined,
+      todayOrders: realTodayOrders || undefined,
+    };
+  }, [productHpp, calculatedProducts, cabangList, bahanBaku]);
+
   if (showLanding) {
-    return <LandingPage onEnterERP={handleEnterERP} onEnterWebstore={handleEnterWebstore} />;
+    return (
+      <LandingPage
+        onEnterERP={handleEnterERP}
+        onEnterWebstore={handleEnterWebstore}
+        productCount={landingData.productCount}
+        branchCount={landingData.branchCount}
+        transactionCount={landingData.transactionCount}
+        revenueToday={landingData.revenueToday}
+        lowStockCount={landingData.lowStockCount}
+        todayOrders={landingData.todayOrders}
+      />
+    );
   }
 
   // ─── AUTH GATE ───
