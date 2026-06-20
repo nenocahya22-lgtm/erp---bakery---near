@@ -257,6 +257,24 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
           console.warn('Fallback webstore_config categories failed:', e);
         }
       }
+
+      // 🆕 Fallback ketiga: ekstrak kategori UNIK dari produk di Firestore
+      // Ini penting karena kategori mungkin hanya ada sebagai field 'category' di setiap produk,
+      // tanpa disimpan terpisah di collection categories/{cabangId} atau webstore_config.
+      if (!cats || !cats.categories.length) {
+        try {
+          const products = await getAllFirestoreProducts();
+          const uniqueCats = [...new Set(products.map(p => p.category).filter(Boolean))];
+          if (uniqueCats.length > 0) {
+            cats = {
+              categories: uniqueCats,
+              categoryIcons: {},
+            };
+          }
+        } catch (e) {
+          console.warn('Fallback products categories failed:', e);
+        }
+      }
       
       setFirestoreCategories(cats);
     } catch (e) {
