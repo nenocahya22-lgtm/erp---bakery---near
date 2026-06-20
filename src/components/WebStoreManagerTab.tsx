@@ -287,13 +287,10 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
               categories: uniqueCats,
               categoryIcons: catIcons,
             };
-            // 🔥 Auto-sync kategori ke Firestore agar tidak hilang saat refresh berikutnya
-            try {
-              await saveCategoriesToFirestore(cabangId, uniqueCats, catIcons);
-              console.log(`🔄 ${uniqueCats.length} kategori auto-sync ke Firestore dari produk`);
-            } catch (e) {
-              console.warn('Auto-sync categories to Firestore failed:', e);
-            }
+            // 🚫 HAPUS: Auto-sync kategori ke Firestore — ini menyebabkan kategori yang sudah
+            //    dihapus user dari Web Store Manager muncul lagi. Fallback ini hanya untuk DISPLAY
+            //    di panel Data Web Store. User bisa import manual via tombol "Import ke ERP".
+            //    Dulu ada: await saveCategoriesToFirestore(...)
           }
         } catch (e) {
           console.warn('Fallback products categories failed:', e);
@@ -326,15 +323,9 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
     }
   }, [isFirestoreConnected, fetchFirestoreProducts, fetchFirestoreCategories]);
 
-  // Auto-import kategori dari Firestore ke local config jika local masih kosong
-  useEffect(() => {
-    if (firestoreCategories && firestoreCategories.categories.length > 0 && (!config.categories || config.categories.length === 0)) {
-      updateConfig({
-        categories: firestoreCategories.categories,
-        categoryIcons: { ...(config.categoryIcons || {}), ...firestoreCategories.categoryIcons },
-      });
-    }
-  }, [firestoreCategories]);
+  // 🚫 HAPUS: Auto-import kategori dari Firestore — ini menyebabkan kategori yang sudah dihapus
+  //    user kembali lagi saat refresh. User harus import manual via tombol "Import ke ERP".
+  //    Dulu ada: useEffect yang auto-import waktu config.categories kosong.
 
   // Sync products from productHpp
   useEffect(() => {
