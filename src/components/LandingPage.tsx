@@ -96,17 +96,16 @@ export default function LandingPage({ onEnterERP, onEnterWebstore, productCount,
     return () => observer.disconnect();
   }, []);
 
-  const realProductCount = productCount ?? 150;
-  const realBranchCount = branchCount ?? 12;
-  const realTransactionCount = transactionCount ?? 15000;
-  const realRevenueToday = revenueToday ?? 2400000;
-  const realLowStockCount = lowStockCount ?? 3;
-  const realTodayOrders = todayOrders ?? 12;
+  const realProductCount = productCount ?? 0;
+  const realBranchCount = branchCount ?? 0;
+  const realTransactionCount = transactionCount ?? 0;
+  const realRevenueToday = revenueToday ?? 0;
+  const realLowStockCount = lowStockCount ?? 0;
+  const realTodayOrders = todayOrders ?? 0;
 
   const productCountAnim = useCountUp(realProductCount, 2500, statsVisible);
   const branchCountAnim = useCountUp(realBranchCount, 2500, statsVisible);
   const transactionCountAnim = useCountUp(realTransactionCount, 2500, statsVisible);
-  const satisfactionCountAnim = useCountUp(98, 2500, statsVisible);
 
   // Format revenue
   const formattedRevenue = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(realRevenueToday);
@@ -115,10 +114,10 @@ export default function LandingPage({ onEnterERP, onEnterWebstore, productCount,
     ? `Rp ${(realRevenueToday / 1000000).toFixed(1)}jt`
     : formattedRevenue;
 
-  // Change indicators
-  const orderChange = realTodayOrders > 0 ? `+${Math.min(realTodayOrders, 9)}` : '0';
-  const productChange = realProductCount > 0 ? `+${Math.min(Math.ceil(realProductCount * 0.05), 10)}` : '0';
-  const lowStockIndicator = realLowStockCount > 0 ? '⚠️' : '✓';
+  // Change indicators — hanya tampil jika ada data
+  const orderChange = realTodayOrders > 0 ? `+${Math.min(realTodayOrders, 9)}` : '';
+  const productChange = realProductCount > 0 ? `+${Math.min(Math.ceil(realProductCount * 0.05), 10)}` : '';
+  const lowStockIndicator = realLowStockCount > 0 ? '⚠️' : '';
 
   const features = [
     { icon: <Package className="w-6 h-6" />, title: 'Manajemen Stok & Bahan', desc: 'Pantau bahan baku, stok cabang, dan expiry date secara real-time multi-cabang.', gradient: 'from-emerald-500 to-teal-600' },
@@ -137,12 +136,6 @@ export default function LandingPage({ onEnterERP, onEnterWebstore, productCount,
     { num: '02', title: 'Buat Resep & HPP', desc: 'Tentukan komposisi resep, porsi jual, dan waste factor. HPP otomatis terkalkulasi dari bahan baku.', color: 'bg-amber-600' },
     { num: '03', title: 'Produksi & Jual', desc: 'Jalankan production planner, kelola work order, dan proses penjualan via POS atau web store.', color: 'bg-blue-600' },
     { num: '04', title: 'Pantau & Optimasi', desc: 'Analisis margin, waste, dan performa penjualan per cabang. Optimasi harga & strategi bisnis.', color: 'bg-purple-600' },
-  ];
-
-  const testimonials = [
-    { name: 'Ibu Sari', role: 'Owner — Bakery Sari Rasa', text: 'Sebelumnya stok sering kacau dan susah tracking HPP. Sekarang semua otomatis — dari resep sampai web store. Pesanan online juga langsung masuk ke sistem.', rating: 5 },
-    { name: 'Pak Budi', role: 'Operational Manager — Roti Nusantara', text: 'Fitur multi-cabang sangat membantu. Setiap toko bisa manage stok mandiri distribusi dari pusat jadi jauh lebih efisien.', rating: 5 },
-    { name: 'Mbak Dewi', role: 'Head Baker — Pastry Delights', text: 'Kalkulasi HPP otomatis mengubah cara kami menentukan harga. Sekarang kami tahu persis margin setiap produk.', rating: 5 },
   ];
 
   return (
@@ -328,27 +321,28 @@ export default function LandingPage({ onEnterERP, onEnterWebstore, productCount,
                       ))}
                     </div>
 
-                    {/* Recent Activity */}
-                    <div className="bg-slate-900/40 rounded-xl p-4 border border-slate-700/30">
-                      <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-3">Aktivitas Terbaru</p>
-                      <div className="space-y-2.5">
-                        {[
-                          { time: '10:32', text: 'Pesanan #WS-2384 dikonfirmasi', type: 'success' },
-                          { time: '10:15', text: 'Stok Cabang A diperbarui', type: 'info' },
-                          { time: '09:48', text: 'Produksi Sourdough selesai', type: 'info' },
-                          { time: '09:20', text: '⚠️ Chiller Utama suhu naik', type: 'warning' },
-                        ].map((act, i) => (
-                          <div key={i} className="flex items-center gap-3">
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                              act.type === 'success' ? 'bg-emerald-500' :
-                              act.type === 'warning' ? 'bg-amber-500' : 'bg-blue-500'
-                            }`} />
-                            <span className="text-[10px] font-mono text-slate-500 w-10">{act.time}</span>
-                            <span className="text-[11px] text-slate-300">{act.text}</span>
-                          </div>
-                        ))}
+                    {/* Recent Activity — hanya muncul jika ada data real */}
+                    {realTodayOrders > 0 || realLowStockCount > 0 ? (
+                      <div className="bg-slate-900/40 rounded-xl p-4 border border-slate-700/30">
+                        <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-3">Aktivitas Terbaru</p>
+                        <div className="space-y-2.5">
+                          {realTodayOrders > 0 && (
+                            <div className="flex items-center gap-3">
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-500" />
+                              <span className="text-[10px] font-mono text-slate-500 w-10">Hari ini</span>
+                              <span className="text-[11px] text-slate-300">{realTodayOrders} pesanan baru masuk</span>
+                            </div>
+                          )}
+                          {realLowStockCount > 0 && (
+                            <div className="flex items-center gap-3">
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-500" />
+                              <span className="text-[10px] font-mono text-slate-500 w-10">Stok</span>
+                              <span className="text-[11px] text-slate-300">{realLowStockCount} bahan baku stok menipis</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    ) : null}
                   </div>
                 </div>
 
@@ -378,7 +372,7 @@ export default function LandingPage({ onEnterERP, onEnterWebstore, productCount,
               { value: productCountAnim, suffix: '+', label: 'Produk Dikelola', icon: <Package className="w-5 h-5" /> },
               { value: branchCountAnim, suffix: '', label: 'Cabang Aktif', icon: <Store className="w-5 h-5" /> },
               { value: transactionCountAnim, suffix: '+', label: 'Transaksi Diproses', icon: <TrendingUp className="w-5 h-5" /> },
-              { value: satisfactionCountAnim, suffix: '%', label: 'Kepuasan Pengguna', icon: <Award className="w-5 h-5" /> },
+              // { value: satisfactionCountAnim, suffix: '%', label: 'Kepuasan Pengguna', icon: <Award className="w-5 h-5" /> },  // DUMMY — dihapus
             ].map((stat, i) => (
               <div key={i} className="text-center space-y-2">
                 <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto text-emerald-400">
@@ -478,53 +472,7 @@ export default function LandingPage({ onEnterERP, onEnterWebstore, productCount,
         </div>
       </section>
 
-      {/* ─── TESTIMONIALS ─── */}
-      <section id="testimonials" className="relative py-24">
-        <FloatingOrb className="bottom-1/3 right-[-10%]" size="w-[400px] h-[400px]" color="bg-amber-500/5" />
-        
-        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6">
-          <Reveal>
-            <div className="text-center mb-16 space-y-4">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full">
-                <Quote className="w-3.5 h-3.5 text-blue-400" />
-                <span className="text-[10px] font-bold text-blue-300 uppercase tracking-widest">Testimoni</span>
-              </div>
-              <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight">
-                Dipercaya Baker Indonesia
-              </h2>
-            </div>
-          </Reveal>
-
-          <div className="grid md:grid-cols-3 gap-6">
-            {testimonials.map((t, i) => (
-              <Reveal key={i} delay={i * 100}>
-                <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-2xl p-6 space-y-4 hover:border-slate-700/50 transition-all duration-300 h-full flex flex-col">
-                  {/* Stars */}
-                  <div className="flex gap-1">
-                    {Array.from({ length: t.rating }).map((_, s) => (
-                      <Star key={s} className="w-4 h-4 fill-amber-400 text-amber-400" />
-                    ))}
-                  </div>
-                  
-                  <p className="text-xs text-slate-300 leading-relaxed flex-1 italic">
-                    "{t.text}"
-                  </p>
-                  
-                  <div className="flex items-center gap-3 pt-3 border-t border-slate-800/50">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-xs font-bold">
-                      {t.name.split(' ').map(n => n[0]).join('')}
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-white">{t.name}</p>
-                      <p className="text-[10px] text-slate-500">{t.role}</p>
-                    </div>
-                  </div>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* 🚫 TESTIMONIALS DIHAPUS — semua fiktif/dummy. Akan ditambahkan kembali jika ada testimoni real dari pengguna. */}
 
       {/* ─── CTA SECTION ─── */}
       <section className="relative py-32">
