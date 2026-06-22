@@ -2,135 +2,127 @@
 """
 Near Bakery & Co. — Thermal Printer 58mm ESC/POS
 =================================================
-Mencetak struk belanja ke printer thermal 58mm via serial.
+Mencetak struk belanja ke printer thermal 58mm via serial (Bluetooth COM4).
 
-Usage:
-  python cetak_struk.py <config_json>
+Menggunakan raw pyserial + ESC/POS commands langsung (tanpa python-escpos)
+untuk kompatibilitas Bluetooth SPP yang lebih baik.
 
-config_json format:
-{
-  "toko": {
-    "nama": "NEAR BAKERY & CO.",
-    "alamat": "Jl. Contoh No. 123",
-    "kontak": "0812-3456-7890",
-    "footer_1": "Terima kasih!",
-    "footer_2": "Near Bakery & Co."
-  },
-  "transaksi": {
-    "no_transaksi": "TX-123456",
-    "kasir": "Admin",
-    "pelanggan": "Budi",
-    "waktu": "22/06/2026 14:30",
-    "total_harga": 50000,
-    "metode_bayar": "Tunai",
-    "uang_dibayar": 100000,
-    "kembalian": 50000
-  },
-  "items": [
-    { "nama": "Roti Tawar", "qty": 2, "satuan": "pcs", "harga": 15000 },
-    { "nama": "Croissant", "qty": 1, "satuan": "pcs", "harga": 20000 }
-  ]
-}
+Usage: Kirim JSON via stdin ke script ini.
 """
 
 import sys
 import json
 import os
 import time
+import serial
 
 # ─── KONFIGURASI PRINTER ───
 PRINTER_PORT = os.environ.get('PRINTER_PORT', 'COM4')
 PRINTER_BAUD = int(os.environ.get('PRINTER_BAUD', '19200'))
 
 # Lebar struk 58mm = 32 karakter monospace
-LEBAR_STRUK = 32
+LEBAR = 32
+
+# ─── ESC/POS COMMANDS ───
+ESC = b'\x1b'
+GS = b'\x1d'
+
+def cmd(*args):
+    """Gabung bytes jadi satu command."""
+    return b''.join(bytes([a]) if isinstance(a, int) else a for a in args)
+
+INIT      = cmd(ESC, 0x40)        # ESC @ — Initialize printer
+BOLD_ON   = cmd(ESC, 0x45, 0x01)  # ESC E 1 — Bold ON
+BOLD_OFF  = cmd(ESC, 0x45, 0x00)  # ESC E 0 — Bold OFF
+CENTER    = cmd(ESC, 0x61, 0x01)  # ESC a 1 — Center align
+LEFT      = cmd(ESC, 0x61, 0x00)  # ESC a 0 — Left align
+RIGHT     = cmd(ESC, 0x61, 0x02)  # ESC a 2 — Right align
+SIZE_NORMAL = cmd(ESC, 0x21, 0x00) # ESC ! 0 — Normal size
+SIZE_BIG    = cmd(ESC, 0x21, 0x30) # ESC ! 0x30 — Double width + height
+LINE_SP   = cmd(ESC, 0x33, 36)    # ESC 3 36 — Line spacing 36 dots
+CUT       = cmd(ESC, 0x6D)        # ESC m — Partial cut
 
 
 def cetak_struk(config: dict) -> bool:
-    """
-    Mencetak struk thermal 58mm menggunakan ESC/POS protocol via serial.
-    """
-    # Bisa di-override dari config JSON (dari relay server)
+    """Cetak struk thermal 58mm via serial (Bluetooth COM4)."""
     port = config.get('printer_port', PRINTER_PORT)
     baud = int(config.get('printer_baud', PRINTER_BAUD))
-
-    try:
-        from escpos.printer import Serial
-
-        p = Serial(
-            devfile=port,
-            baudrate=baud,
-            bytesize=8,
-            parity='N',
-            stopbits=1,
-            xonxoff=False,
-            rtscts=False,
-            dsrdtr=True,         # DTR signal — penting untuk Bluetooth SPP
-        )
-        # Tunggu koneksi Bluetooth establish
-        time.sleep(2)
-        # Kirim wake-up: LF + INIT
-        p._raw(b'\x0a\x0a')     # LF x2 — bangunkan Bluetooth
-        p.hw("INIT")             # Reset printer
-    except ImportError:
-        print("ERROR: python-escpos tidak terinstall. Jalankan: pip install python-escpos")
-        return False
-    except Exception as e:
-        print(f"ERROR: Gagal konek ke printer di {port}: {e}")
-        return False
-
     toko = config.get('toko', {})
     transaksi = config.get('transaksi', {})
     items = config.get('items', [])
 
+    # Format harga
+    def fmt(n):
+        if n >= 1000000:
+            return f"Rp{n // 1000}K"
+        return f"Rp{n:,}".replace(",", ".")
+
+    # Tulis teks + newline
+    def tulis(teks):
+        p.write(teks.encode('ascii', errors='replace') + b'\n')
+
+    # Tulis raw bytes
+    def raw(bytes_data):
+        p.write(bytes_data)
+
+    try:
+        # Buka port — minimal settings, tanpa flow control
+        p = serial.Serial(
+            port=port,
+            baudrate=baud,
+            timeout=5,
+            write_timeout=5,
+        )
+        # Set DTR high — penting untuk beberapa Bluetooth SPP
+        p.dtr = True
+        time.sleep(0.3)
+        # Tunggu koneksi Bluetooth establish
+        time.sleep(2)
+    except serial.SerialException as e:
+        print(f"ERROR: Gagal buka {port}: {e}", file=sys.stderr)
+        return False
+
     try:
         # ═══════════════════════════════════════════
-        # 0. INIT PRINTER — RESET + CODEPAGE
+        # 0. INIT
         # ═══════════════════════════════════════════
-        p.hw("INIT")                     # Reset printer ke default state
-        p.charcode(code='CP437')         # Codepage CP437 (Latin) — teks, angka, simbol benar
-        p._raw(b'\x1b\x32')             # ESC 2 = Set line spacing ke default (30 dots)
-        p._raw(b'\x1b\x33\x24')         # ESC 3 n = Set line spacing ke 36 dots (n=36)
+        raw(INIT)
+        raw(LINE_SP)
+        time.sleep(0.5)
 
         # ═══════════════════════════════════════════
         # 1. HEADER TOKO
         # ═══════════════════════════════════════════
-        p.set(align='center', height=2, width=2)
-        p.text(f"{toko.get('nama', 'NEAR BAKERY & CO.')}\n")
+        raw(CENTER + SIZE_BIG)
+        tulis(toko.get('nama', 'NEAR BAKERY & CO.'))
 
-        p.set(align='center', height=1, width=1)
+        raw(CENTER + SIZE_NORMAL)
         if toko.get('alamat'):
-            p.text(f"{toko['alamat']}\n")
+            tulis(toko['alamat'])
         if toko.get('kontak'):
-            p.text(f"{toko['kontak']}\n")
+            tulis(toko['kontak'])
 
-        p.text("-" * LEBAR_STRUK + "\n")
+        tulis('-' * LEBAR)
 
         # ═══════════════════════════════════════════
         # 2. METADATA TRANSAKSI
         # ═══════════════════════════════════════════
-        p.set(align='left', height=1, width=1)
-        p._raw(b'\x1b\x45\x00')  # Bold OFF via ESC E 0
-
-        def label_value(label: str, value: str, label_len: int = 10) -> str:
-            return f"{label:<{label_len}}: {value}"
-
+        raw(LEFT + BOLD_OFF)
         if transaksi.get('no_transaksi'):
-            p.text(f"{label_value('No', transaksi['no_transaksi'])}\n")
+            tulis(f"No        : {transaksi['no_transaksi']}")
         if transaksi.get('pelanggan'):
-            p.text(f"{label_value('Customer', transaksi['pelanggan'])}\n")
+            tulis(f"Pelanggan : {transaksi['pelanggan']}")
         if transaksi.get('kasir'):
-            p.text(f"{label_value('Kasir', transaksi['kasir'])}\n")
+            tulis(f"Kasir     : {transaksi['kasir']}")
         if transaksi.get('waktu'):
-            p.text(f"{label_value('Waktu', transaksi['waktu'])}\n")
+            tulis(f"Waktu     : {transaksi['waktu']}")
 
-        p.text("-" * LEBAR_STRUK + "\n")
+        tulis('-' * LEBAR)
 
         # ═══════════════════════════════════════════
         # 3. ITEM BELANJA
         # ═══════════════════════════════════════════
-        p.set(align='left', height=1, width=1)
-        p._raw(b'\x1b\x45\x00')  # Bold OFF via ESC E 0
+        raw(LEFT + BOLD_OFF)
         for item in items:
             qty = item.get('qty', 1)
             satuan = item.get('satuan', 'pcs')
@@ -138,108 +130,92 @@ def cetak_struk(config: dict) -> bool:
             harga = item.get('harga', 0)
 
             teks_produk = f"{qty} {satuan} {nama}"
-            teks_harga = _format_harga(harga)
+            teks_harga = fmt(harga)
+            sisa = LEBAR - len(teks_produk) - len(teks_harga)
 
-            sisa_spasi = LEBAR_STRUK - len(teks_produk) - len(teks_harga)
-
-            if sisa_spasi >= 0:
-                baris = teks_produk + (" " * sisa_spasi) + teks_harga
+            if sisa >= 0:
+                baris = teks_produk + (' ' * sisa) + teks_harga
             else:
-                # Potong nama produk
-                max_nama_len = LEBAR_STRUK - len(teks_harga) - 3
-                potong = teks_produk[:max_nama_len] + ".."
-                sisa = LEBAR_STRUK - len(potong) - len(teks_harga)
-                baris = potong + (" " * sisa) + teks_harga
+                potong = teks_produk[:LEBAR - len(teks_harga) - 3] + '..'
+                sisa2 = LEBAR - len(potong) - len(teks_harga)
+                baris = potong + (' ' * sisa2) + teks_harga
 
-            p.text(f"{baris}\n")
+            tulis(baris)
 
-        p.text("-" * LEBAR_STRUK + "\n")
+        tulis('-' * LEBAR)
 
         # ═══════════════════════════════════════════
         # 4. TOTAL
         # ═══════════════════════════════════════════
-        p.set(align='right', height=1, width=1)
-        p._raw(b'\x1b\x45\x01')  # Bold ON via ESC E 1
+        raw(RIGHT + BOLD_ON)
         total = transaksi.get('total_harga', 0)
-        p.text(f"TOTAL: {_format_harga(total)}\n")
-        p._raw(b'\x1b\x45\x00')  # Bold OFF via ESC E 0
+        tulis(f"TOTAL     : {fmt(total)}")
+        raw(BOLD_OFF)
 
         # ═══════════════════════════════════════════
         # 5. PEMBAYARAN
         # ═══════════════════════════════════════════
-        p.set(align='right', height=1, width=1)
-        p._raw(b'\x1b\x45\x00')  # Bold OFF via ESC E 0
+        raw(RIGHT + BOLD_OFF)
         metode = transaksi.get('metode_bayar', '')
         if metode:
-            p.text(f"Bayar ({metode})\n")
-
+            tulis(f"Bayar ({metode})")
         dibayar = transaksi.get('uang_dibayar', 0)
         kembalian = transaksi.get('kembalian', 0)
         if dibayar > 0:
-            p.text(f"Tunai: {_format_harga(dibayar)}\n")
+            tulis(f"Tunai     : {fmt(dibayar)}")
         if kembalian > 0:
-            p.text(f"Kembali: {_format_harga(kembalian)}\n")
+            tulis(f"Kembali   : {fmt(kembalian)}")
 
-        p.text("\n")
+        tulis('')
 
         # ═══════════════════════════════════════════
         # 6. FOOTER
         # ═══════════════════════════════════════════
-        p.set(align='center', height=1, width=1)
-        p._raw(b'\x1b\x45\x00')  # Bold OFF via ESC E 0
+        raw(CENTER + BOLD_OFF)
         if toko.get('footer_1'):
-            p.text(f"{toko['footer_1']}\n")
+            tulis(toko['footer_1'])
         if toko.get('footer_2'):
-            p.text(f"{toko['footer_2']}\n")
+            tulis(toko['footer_2'])
 
         # ═══════════════════════════════════════════
         # 7. POTONG KERTAS
         # ═══════════════════════════════════════════
-        p.text("\n\n\n")
-        p.cut()
+        tulis('')
+        tulis('')
+        tulis('')
+        tulis('')  # Ekstra LF untuk eject
+        raw(CUT)
+
         p.close()
+        print("OK", file=sys.stderr)
         return True
 
-    except Exception as e:
-        print(f"ERROR: Gagal mencetak: {e}")
+    except serial.SerialException as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        p.close()
         return False
-
-
-def _format_harga(nilai: int) -> str:
-    """Format angka ke format Rupiah singkat (cocok untuk struk 32 char)."""
-    if nilai >= 1000000:
-        return f"Rp{nilai // 1000}K"
-    return f"Rp{nilai:,}".replace(",", ".")
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        p.close()
+        return False
 
 
 def main():
     # Baca JSON dari stdin
-    raw = sys.stdin.read()
+    raw_data = sys.stdin.read()
 
-    # Hapus BOM (Byte Order Mark) jika ada — Windows kadang nambah ini
-    if raw.startswith('\ufeff'):
-        raw = raw[1:]
+    # Hapus BOM jika ada
+    if raw_data.startswith('\ufeff'):
+        raw_data = raw_data[1:]
 
-    if not raw or not raw.strip():
-        # Fallback: coba baca dari argv (untuk backward compat/test manual)
-        if len(sys.argv) >= 2:
-            raw = sys.argv[1]
-            if raw.startswith('@'):
-                filepath = raw[1:]
-                try:
-                    with open(filepath, 'r', encoding='utf-8') as f:
-                        raw = f.read()
-                except FileNotFoundError:
-                    print(f"ERROR: File tidak ditemukan: {filepath}")
-                    sys.exit(1)
-        else:
-            print("ERROR: Tidak ada data diterima. Kirim JSON via stdin.")
-            sys.exit(1)
+    if not raw_data or not raw_data.strip():
+        print("ERROR: Tidak ada data. Kirim JSON via stdin.", file=sys.stderr)
+        sys.exit(1)
 
     try:
-        config = json.loads(raw)
+        config = json.loads(raw_data)
     except json.JSONDecodeError as e:
-        print(f"ERROR: JSON tidak valid: {e}")
+        print(f"ERROR: JSON tidak valid: {e}", file=sys.stderr)
         sys.exit(1)
 
     success = cetak_struk(config)
