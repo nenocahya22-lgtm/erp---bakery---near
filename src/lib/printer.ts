@@ -73,7 +73,8 @@ export async function cetakStrukThermal(
     console.warn('WebSerial gagal, fallback ke API server:', result.message);
   }
 
-  // ─── PRIORITAS 2: Server API (Python via localhost) ───
+  // ─── PRIORITAS 2: Relay Server (Python HTTP relay di localhost:3001) ───
+  const relayUrl = import.meta.env.VITE_PRINTER_RELAY_URL || 'http://localhost:3001';
   const payload: PrinterPayload = {
     toko: { ...DEFAULT_TOKO, ...toko },
     transaksi,
@@ -81,21 +82,38 @@ export async function cetakStrukThermal(
   };
 
   try {
+    const res = await fetch(`${relayUrl}/api/print`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(5000), // timeout 5 detik
+    });
+
+    const data = await res.json();
+    if (data.success) return { success: true, message: data.message || '✅ Struk berhasil dicetak via relay!' };
+    console.warn('Relay server gagal:', data.error);
+  } catch (err: any) {
+    console.warn('Relay server tidak tersedia (http://localhost:3001), fallback:', err.message);
+  }
+
+  // ─── PRIORITAS 3: Server API (Vite dev server / Python) ───
+  try {
     const res = await fetch('/api/printer/cetak', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(5000),
     });
 
     const data = await res.json();
     if (data.success) return data;
-    console.warn('API server gagal, fallback ke browser print:', data.error);
+    console.warn('API server gagal:', data.error);
   } catch (err: any) {
-    console.warn('API server tidak tersedia, fallback ke browser print:', err.message);
+    console.warn('API server tidak tersedia:', err.message);
   }
 
-  // ─── PRIORITAS 3: Browser print fallback ───
-  return { success: false, message: 'Printer Bluetooth tidak terhubung. Klik "🔗 Hubungkan Printer" dulu.' };
+  // ─── PRIORITAS 4: Browser print fallback ───
+  return { success: false, message: 'Printer tidak terhubung. Jalankan start-printer.bat dulu, atau klik "Hubungkan Printer" untuk WebSerial.' };
 }
 
 /**

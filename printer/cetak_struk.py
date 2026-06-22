@@ -49,12 +49,16 @@ def cetak_struk(config: dict) -> bool:
     """
     Mencetak struk thermal 58mm menggunakan ESC/POS protocol via serial.
     """
+    # Bisa di-override dari config JSON (dari relay server)
+    port = config.get('printer_port', PRINTER_PORT)
+    baud = int(config.get('printer_baud', PRINTER_BAUD))
+
     try:
         from escpos.printer import Serial
 
         p = Serial(
-            devfile=PRINTER_PORT,
-            baudrate=PRINTER_BAUD,
+            devfile=port,
+            baudrate=baud,
             bytesize=8,
             parity='N',
             stopbits=1,
@@ -65,7 +69,7 @@ def cetak_struk(config: dict) -> bool:
         print("ERROR: python-escpos tidak terinstall. Jalankan: pip install python-escpos")
         return False
     except Exception as e:
-        print(f"ERROR: Gagal konek ke printer di {PRINTER_PORT}: {e}")
+        print(f"ERROR: Gagal konek ke printer di {port}: {e}")
         return False
 
     toko = config.get('toko', {})
