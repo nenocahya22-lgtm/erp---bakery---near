@@ -73,8 +73,9 @@ def cetak_struk(config: dict) -> bool:
             timeout=5,
             write_timeout=5,
         )
-        # Set DTR high — penting untuk beberapa Bluetooth SPP
+        # Set DTR + RTS high — penting untuk Bluetooth SPP
         p.dtr = True
+        p.rts = True
         time.sleep(0.3)
         # Tunggu koneksi Bluetooth establish
         time.sleep(2)
@@ -186,8 +187,10 @@ def cetak_struk(config: dict) -> bool:
         tulis('')  # Ekstra LF untuk eject
         raw(CUT)
 
+        # Flush buffer — pastikan semua data terkirim lewat Bluetooth
+        p.flush()
+        time.sleep(0.5)
         p.close()
-        print("OK", file=sys.stderr)
         return True
 
     except serial.SerialException as e:
