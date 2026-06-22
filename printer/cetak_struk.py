@@ -36,6 +36,7 @@ config_json format:
 import sys
 import json
 import os
+import time
 
 # ─── KONFIGURASI PRINTER ───
 PRINTER_PORT = os.environ.get('PRINTER_PORT', 'COM4')
@@ -63,8 +64,14 @@ def cetak_struk(config: dict) -> bool:
             parity='N',
             stopbits=1,
             xonxoff=False,
-            rtscts=False
+            rtscts=False,
+            dsrdtr=True,         # DTR signal — penting untuk Bluetooth SPP
         )
+        # Tunggu koneksi Bluetooth establish
+        time.sleep(2)
+        # Kirim wake-up: LF + INIT
+        p._raw(b'\x0a\x0a')     # LF x2 — bangunkan Bluetooth
+        p.hw("INIT")             # Reset printer
     except ImportError:
         print("ERROR: python-escpos tidak terinstall. Jalankan: pip install python-escpos")
         return False
