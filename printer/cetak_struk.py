@@ -81,7 +81,7 @@ def cetak_struk(config: dict) -> bool:
         # 0. INIT PRINTER — RESET + CODEPAGE
         # ═══════════════════════════════════════════
         p.hw("INIT")                     # Reset printer ke default state
-        p.charcode(code='USA')           # Codepage CP437 (Latin) — teks, angka, simbol benar
+        p.charcode(code='CP437')         # Codepage CP437 (Latin) — teks, angka, simbol benar
         p._raw(b'\x1b\x32')             # ESC 2 = Set line spacing ke default (30 dots)
         p._raw(b'\x1b\x33\x24')         # ESC 3 n = Set line spacing ke 36 dots (n=36)
 
