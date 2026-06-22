@@ -2,10 +2,9 @@
 """
 Near Bakery & Co. — Thermal Printer 58mm ESC/POS
 =================================================
-Mencetak struk belanja ke printer thermal 58mm via serial (Bluetooth COM4).
+Mencetak struk belanja ke printer thermal 58mm via serial (Bluetooth COM11).
 
-Menggunakan raw pyserial + ESC/POS commands langsung (tanpa python-escpos)
-untuk kompatibilitas Bluetooth SPP yang lebih baik.
+Menggunakan raw pyserial + ESC/POS commands langsung (tanpa python-escpos).
 
 Usage: Kirim JSON via stdin ke script ini.
 """
@@ -17,8 +16,8 @@ import time
 import serial
 
 # ─── KONFIGURASI PRINTER ───
-PRINTER_PORT = os.environ.get('PRINTER_PORT', 'COM4')
-PRINTER_BAUD = int(os.environ.get('PRINTER_BAUD', '19200'))
+PRINTER_PORT = os.environ.get('PRINTER_PORT', 'COM11')
+PRINTER_BAUD = int(os.environ.get('PRINTER_BAUD', '9600'))
 
 # Lebar struk 58mm = 32 karakter monospace
 LEBAR = 32

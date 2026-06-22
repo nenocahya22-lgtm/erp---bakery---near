@@ -23,8 +23,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
 
 # ─── Konfigurasi ───
-PRINTER_PORT = os.environ.get('PRINTER_PORT', 'COM4')
-PRINTER_BAUD = os.environ.get('PRINTER_BAUD', '19200')
+PRINTER_PORT = os.environ.get('PRINTER_PORT', 'COM11')
+PRINTER_BAUD = os.environ.get('PRINTER_BAUD', '9600')
 RELAY_PORT = int(os.environ.get('RELAY_PORT', '3001'))
 
 # Path ke script cetak_struk.py (relatif ke file ini)

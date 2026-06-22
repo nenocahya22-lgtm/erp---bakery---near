@@ -46,14 +46,14 @@ if %errorlevel% neq 0 (
 )
 echo.
 
-REM ─── TEST 3: Printer (default COM4) ───
-echo  [3/4] Printer di COM4 (default)...
+REM ─── TEST 3: Printer (default COM11) ───
+echo  [3/4] Printer di COM11 (default)...
 set TEST_SCRIPT=%TEMP%\near_printer_test.py
 (
 echo import sys
 echo try:
 echo     from escpos.printer import Serial
-echo     p = Serial^(devfile='COM4', baudrate=19200, bytesize=8, parity='N', stopbits=1^)
+echo     p = Serial^(devfile='COM11', baudrate=9600, bytesize=8, parity='N', stopbits=1^)
 echo     p.hw^('INIT'^)
 echo     p.text^('NEAR BAKERY - TEST PRINT\n'^)
 echo     p.text^('Jika teks ini terbaca, printer OK!\n'^)
