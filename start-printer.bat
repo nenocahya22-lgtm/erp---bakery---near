@@ -52,7 +52,7 @@ if %errorlevel% neq 0 (
 
 echo.
 echo  Menjalankan relay server...
-echo  Printer: COM11 @ 19200 baud
+echo  Printer: COM4 @ 19200 baud
 echo  Server : http://localhost:3001
 echo.
 echo  Biarkan jendela ini terbuka!
