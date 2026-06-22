@@ -10,14 +10,44 @@ import ProductionCenterTab from './components/ProductionCenterTab';
 import BranchDashboard from './components/BranchDashboard';
 import LandingPage from './components/LandingPage';
 
-// Lazy-loaded wrappers
-const KeuanganDashboard = lazy(() => import('./components/KeuanganDashboard'));
-const InventarisTab = lazy(() => import('./components/InventarisTab'));
-const LogistikDashboard = lazy(() => import('./components/LogistikDashboard'));
-const ProduksiDashboard = lazy(() => import('./components/ProduksiDashboard'));
-const PenjualanDashboard = lazy(() => import('./components/PenjualanDashboard'));
-const StrategiDashboard = lazy(() => import('./components/StrategiDashboard'));
-const SistemDashboard = lazy(() => import('./components/SistemDashboard'));
+// ─── LAZY IMPORT dengan auto-retry ───
+// Mencegah error "dynamically imported module" setelah deploy,
+// karena browser masih pegang hash lama.
+function retryLazy<T extends React.ComponentType<any>>(
+  importer: () => Promise<{ default: T }>,
+  retries = 2,
+): React.LazyExoticComponent<T> {
+  return lazy(async () => {
+    for (let i = 0; i <= retries; i++) {
+      try {
+        return await importer();
+      } catch (err: any) {
+        if (i < retries && err?.message?.includes('dynamically imported')) {
+          console.warn(`[retryLazy] Chunk load failed, retry ${i + 1}/${retries}...`);
+          // Tunggu sebentar sebelum retry
+          await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+          continue;
+        }
+        // Kalau masih gagal setelah retry, trigger page reload
+        if (i === retries) {
+          console.error('[retryLazy] All retries failed, reloading page...');
+          setTimeout(() => window.location.reload(), 2000);
+        }
+        throw err;
+      }
+    }
+    throw new Error('Unexpected: retry loop exhausted');
+  });
+}
+
+// Lazy-loaded wrappers — pakai retryLazy
+const KeuanganDashboard = retryLazy(() => import('./components/KeuanganDashboard'));
+const InventarisTab = retryLazy(() => import('./components/InventarisTab'));
+const LogistikDashboard = retryLazy(() => import('./components/LogistikDashboard'));
+const ProduksiDashboard = retryLazy(() => import('./components/ProduksiDashboard'));
+const PenjualanDashboard = retryLazy(() => import('./components/PenjualanDashboard'));
+const StrategiDashboard = retryLazy(() => import('./components/StrategiDashboard'));
+const SistemDashboard = retryLazy(() => import('./components/SistemDashboard'));
 
 import {
   AlertTriangle, CheckCircle2, X, FileSpreadsheet, Globe, Layers, Sparkles,
