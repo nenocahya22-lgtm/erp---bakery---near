@@ -53,7 +53,7 @@ set TEST_SCRIPT=%TEMP%\near_printer_test.py
 echo import sys
 echo try:
 echo     from escpos.printer import Serial
-echo     p = Serial^(devfile='COM11', baudrate=9600, bytesize=8, parity='N', stopbits=1^)
+echo     p = Serial^(devfile='COM11', baudrate=19200, bytesize=8, parity='N', stopbits=1^)
 echo     p.hw^('INIT'^)
 echo     p.text^('NEAR BAKERY - TEST PRINT\n'^)
 echo     p.text^('Jika teks ini terbaca, printer OK!\n'^)

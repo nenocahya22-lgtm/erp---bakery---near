@@ -39,7 +39,7 @@ import os
 
 # ─── KONFIGURASI PRINTER ───
 PRINTER_PORT = os.environ.get('PRINTER_PORT', 'COM11')
-PRINTER_BAUD = int(os.environ.get('PRINTER_BAUD', '9600'))
+PRINTER_BAUD = int(os.environ.get('PRINTER_BAUD', '19200'))
 
 # Lebar struk 58mm = 32 karakter monospace
 LEBAR_STRUK = 32
