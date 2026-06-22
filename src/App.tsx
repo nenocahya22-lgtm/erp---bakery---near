@@ -66,7 +66,26 @@ export default function App() {
   };
 
   const handleEnterWebstore = () => {
-    window.open('/webstore', '_blank');
+    const webstoreUrl = import.meta.env.VITE_WEBSTORE_URL as string | undefined;
+    if (webstoreUrl && webstoreUrl.trim()) {
+      window.open(webstoreUrl.trim(), '_blank');
+    } else {
+      const savedUrl = localStorage.getItem('webstore_url');
+      if (savedUrl) {
+        window.open(savedUrl, '_blank');
+      } else {
+        const url = window.prompt(
+          '🌐 Masukkan URL Web Store Anda\n\nContoh: https://near-bakery-store.vercel.app\n\n(URL akan disimpan di localStorage)',
+          ''
+        );
+        if (url && url.trim()) {
+          localStorage.setItem('webstore_url', url.trim());
+          window.open(url.trim(), '_blank');
+        } else {
+          showToast('⚠️ URL Web Store belum dikonfigurasi. Atur di .env VITE_WEBSTORE_URL atau masukkan URL.', 'warning');
+        }
+      }
+    }
   };
 
   // ─── HOOKS ───

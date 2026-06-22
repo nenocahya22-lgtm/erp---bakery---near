@@ -54,28 +54,28 @@ const useReveal = (threshold: number = 0.15) => {
   return { ref, revealed };
 };
 
-// ─── REVEAL WRAPPER ───
+// ─── REVEAL WRAPPER — transisi ringan (hanya opacity + transform, bukan all) ───
 function Reveal({ children, className = '', delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
   const { ref, revealed } = useReveal();
   return (
     <div
       ref={ref}
-      className={`transition-all duration-700 ease-out ${
+      className={`transition-[opacity,transform] duration-700 ease-out ${
         revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
       } ${className}`}
-      style={{ transitionDelay: `${delay}ms` }}
+      style={{ transitionDelay: `${delay}ms`, willChange: revealed ? 'auto' : 'opacity, transform' }}
     >
       {children}
     </div>
   );
 }
 
-// ─── FLOATING DECORATION ───
+// ─── FLOATING DECORATION — light version untuk performa scroll ───
 function FloatingOrb({ className, size = 'w-96 h-96', color = 'bg-emerald-500/10' }: { className?: string; size?: string; color?: string }) {
   return (
     <div
-      className={`absolute rounded-full ${size} ${color} blur-[150px] animate-pulse ${className || ''}`}
-      style={{ animationDuration: '6s' }}
+      className={`absolute rounded-full ${size} ${color} blur-[80px] ${className || ''}`}
+      style={{ willChange: 'opacity' }}
     />
   );
 }
@@ -141,7 +141,7 @@ export default function LandingPage({ onEnterERP, onEnterWebstore, productCount,
   return (
     <div className="min-h-screen bg-slate-950 overflow-x-hidden text-slate-200">
       {/* ─── NAVBAR ─── */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800/50">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-slate-950/90 md:bg-slate-950/80 backdrop-blur-sm md:backdrop-blur-xl border-b border-slate-800/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-900/30">
@@ -196,16 +196,16 @@ export default function LandingPage({ onEnterERP, onEnterWebstore, productCount,
         <FloatingOrb className="bottom-[-10%] right-[-5%]" size="w-[700px] h-[700px]" color="bg-emerald-600/8" />
         <FloatingOrb className="top-1/3 right-1/4" size="w-96 h-96" color="bg-amber-500/5" />
 
-        {/* Grid Pattern */}
-        <div className="absolute inset-0 opacity-[0.03]" style={{
+        {/* Grid Pattern — disabled on mobile untuk performa */}
+        <div className="hidden md:block absolute inset-0 opacity-[0.03]" style={{
           backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
           backgroundSize: '60px 60px'
         }} />
 
         {/* Floating elements */}
-        <div className="absolute top-1/4 left-[15%] w-3 h-3 border border-emerald-400/30 rounded-sm animate-[spin_8s_linear_infinite] opacity-40" />
-        <div className="absolute top-1/3 right-[20%] w-2 h-2 bg-emerald-400/20 rounded-full animate-ping opacity-30" style={{ animationDuration: '3s' }} />
-        <div className="absolute bottom-1/3 left-[25%] w-4 h-4 border border-amber-400/20 rounded-full animate-[spin_12s_linear_infinite] opacity-30" />
+        {/* Floating elements — hanya desktop, tanpa animasi berat */}
+        <div className="hidden md:block absolute top-1/4 left-[15%] w-3 h-3 border border-emerald-400/30 rounded-sm opacity-40" />
+        <div className="hidden md:block absolute bottom-1/3 left-[25%] w-4 h-4 border border-amber-400/20 rounded-full opacity-30" />
 
         {/* Hero Content */}
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-20 md:py-32 w-full">
@@ -357,9 +357,9 @@ export default function LandingPage({ onEnterERP, onEnterWebstore, productCount,
         </div>
 
         {/* Scroll indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-slate-600 animate-bounce">
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-slate-600">
           <span className="text-[9px] font-bold uppercase tracking-widest">Scroll</span>
-          <ChevronDown className="w-4 h-4" />
+          <ChevronDown className="w-4 h-4 animate-bounce" />
         </div>
       </section>
 
