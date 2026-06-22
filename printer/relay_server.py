@@ -82,9 +82,10 @@ class PrinterRelayHandler(BaseHTTPRequestHandler):
         try:
             proc = subprocess.run(
                 [sys.executable, CETAK_STRUK_PATH],
-                input=json.dumps(data),
+                input=json.dumps(data, ensure_ascii=False),
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
                 timeout=20,  # Timeout 20 detik
             )
 
