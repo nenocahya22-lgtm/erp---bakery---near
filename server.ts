@@ -3,6 +3,7 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
+import { spawn } from 'child_process';
 
 dotenv.config();
 
@@ -40,6 +41,122 @@ function requireApiKey(req: express.Request, res: express.Response, next: expres
 }
 
 app.use('/api', requireApiKey);
+
+// ─── API: PRINTER CETAK STRUK ───
+// ─── UTILITY: spawn Python with data via stdin ───
+function spawnPython(scriptPath: string, jsonData: string): Promise<{ stdout: string; stderr: string; code: number | null }> {
+  return new Promise((resolve) => {
+    const pythonCmds = ['python', 'python3', 'py'];
+    let firstRealError = '';
+
+    function trySpawn(cmds: string[]) {
+      if (cmds.length === 0) {
+        // Semua perintah gagal — report error asli (bukan "Python not found")
+        const msg = firstRealError || 'Python tidak ditemukan. Install Python atau pastikan PATH benar.';
+        resolve({ stdout: '', stderr: msg, code: null });
+        return;
+      }
+      const cmd = cmds[0];
+      const proc = spawn(cmd, [scriptPath]);
+      let stdout = '';
+      let stderr = '';
+      let timedOut = false;
+
+      proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+      proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+
+      proc.on('error', () => {
+        // Python command not found — coba berikutnya
+        trySpawn(cmds.slice(1));
+      });
+
+      proc.on('close', (code) => {
+        if (timedOut) return;
+        if (code === null || code !== 0) {
+          if (stderr.includes('No module named escpos')) {
+            resolve({ stdout, stderr, code: 1 });
+            return;
+          }
+          // Simpan error asli (bukan "command not found")
+          if (stderr && !stderr.includes('not found') && !stderr.includes('not recognized')) {
+            firstRealError = stderr.trim();
+          }
+          trySpawn(cmds.slice(1));
+          return;
+        }
+        resolve({ stdout, stderr, code });
+      });
+
+      // Kirim data via stdin (lebih robust daripada argv)
+      proc.stdin.write(jsonData);
+      proc.stdin.end();
+
+      // Timeout — matikan process jika terlalu lama
+      setTimeout(() => {
+        timedOut = true;
+        proc.kill();
+        if (!stdout && !stderr) {
+          stderr = 'TIMEOUT: Printer tidak merespon dalam 15 detik. Periksa koneksi printer di COM11.';
+        }
+        resolve({ stdout, stderr, code: null });
+      }, 15000);
+    }
+
+    trySpawn(pythonCmds);
+  });
+}
+
+app.post('/api/printer/cetak', async (req, res) => {
+  try {
+    const { toko, transaksi, items } = req.body;
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Data items tidak valid atau kosong.' });
+    }
+
+    const pythonScript = path.join(process.cwd(), 'printer', 'cetak_struk.py');
+    const jsonData = JSON.stringify({ toko, transaksi, items });
+
+    const { stdout, stderr, code } = await spawnPython(pythonScript, jsonData);
+
+    if (code === 0) {
+      res.json({ success: true, message: '✅ Struk berhasil dicetak!' });
+    } else {
+      console.error('Printer error:', stderr);
+      res.status(500).json({
+        success: false,
+        error: stderr.trim() || 'Gagal mencetak struk. Periksa koneksi printer di COM11.',
+      });
+    }
+  } catch (error: any) {
+    console.error('Printer API error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ─── API: PRINTER TEST ───
+app.post('/api/printer/test', async (req, res) => {
+  try {
+    const testData = {
+      toko: { nama: 'NEAR BAKERY & CO.', alamat: 'TEST PRINT', kontak: '', footer_1: '✅ Printer OK!', footer_2: '' },
+      transaksi: { no_transaksi: 'TEST-001', kasir: 'Admin', waktu: new Date().toLocaleString('id-ID'), total_harga: 0 },
+      items: [{ nama: 'Test Print Thermal 58mm', qty: 1, satuan: 'pcs', harga: 0 }],
+    };
+
+    const pythonScript = path.join(process.cwd(), 'printer', 'cetak_struk.py');
+    const { stderr, code } = await spawnPython(pythonScript, JSON.stringify(testData));
+
+    if (code === 0) {
+      res.json({ success: true, message: '✅ Test print berhasil!' });
+    } else {
+      res.status(500).json({ success: false, error: stderr.trim() || '❌ Test print gagal.' });
+    }
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
 
 // ─── RATE LIMITER: maks 10 request / menit per IP untuk endpoint marketing (Gemini) ───
 const marketingLimiter = rateLimit({

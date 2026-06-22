@@ -4,6 +4,7 @@ import { showToast } from '../lib/toast';
 import { CalculationResult } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
 import { getSavedRecipeImage } from '../lib/image-generator';
+import { cetakStrukThermal, generateHtmlStruk } from '../lib/printer';
 
 interface RetailOrder {
   ordId: string;
@@ -321,55 +322,57 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
     printWin.document.close();
   };
 
-  // Print struk thermal untuk bill
-  const handlePrintThermalBill = (order: RetailOrder) => {
-    const printWin = window.open('', '_blank');
-    if (!printWin) return;
-    const addOnRows = order.addOns && order.addOns.length > 0
-      ? order.addOns.map(a => `<tr><td style="padding:1px 2px;font-size:9px;">  + ${a.nama}</td><td style="padding:1px 2px;text-align:right;font-size:9px;">${formatCurrency(a.harga)}</td></tr>`).join('')
-      : '';
-    const notesRow = order.catatan
-      ? `<p style="font-size:8px;margin:2px 0;">📝 ${order.catatan}</p>`
-      : '';
-    printWin.document.write(`
-      <html><head>
-        <title>Bill - ${order.ordId}</title>
-        <style>
-          @page{margin:0;}
-          body{font-family:'Courier New',monospace;font-size:10px;width:58mm;padding:4mm;margin:0;color:#000;}
-          h2{font-size:11px;text-align:center;margin:2px 0;}
-          .center{text-align:center;}
-          .line{border-top:1px dashed #000;margin:4px 0;}
-          table{width:100%;border-collapse:collapse;}
-          td{padding:2px 0;}
-          .right{text-align:right;}
-          .bold{font-weight:bold;}
-          .total{font-size:12px;font-weight:bold;}
-        </style>
-      </head><body>
-        <h2>NEAR BAKERY & CO.</h2>
-        <p class="center" style="font-size:8px;">Dapur Pusat Sektor 12, DKI Jakarta</p>
-        <div class="line"></div>
-        <p style="font-size:8px;">
-          No: ${order.ordId}<br>
-          ${new Date().toLocaleString('id-ID')}<br>
-          Kasir: POS
-        </p>
-        <div class="line"></div>
-        <table>
-          <tr><td colspan="2"><b>${order.items}</b></td></tr>
-          ${addOnRows}
-        </table>
-        ${notesRow}
-        <div class="line"></div>
-        <table>
-          <tr><td>TOTAL</td><td class="right total">${formatCurrency(order.totalSum)}</td></tr>
-        </table>
-        <p class="center" style="font-size:8px;margin-top:6px;">Terima kasih!</p>
-        <script>window.print(); setTimeout(() => window.close(), 1000);</script>
-      </body></html>
-    `);
-    printWin.document.close();
+  // ─── PRINT STRUK THERMAL ke Printer 58mm via API ───
+  const handlePrintThermalBill = async (order: RetailOrder) => {
+    // Parse items dari string "2 pcs Roti Tawar"
+    const itemMatch = order.items.match(/(\d+)\s+(\w+)\s+(.+)/);
+
+    // Hitung total add-ons dulu agar tidak double-counting
+    const totalAddOns = order.addOns?.reduce((sum, a) => sum + a.harga, 0) || 0;
+    const itemHarga = order.totalSum - totalAddOns;
+
+    const items = itemMatch
+      ? [{
+          nama: itemMatch[3],
+          qty: parseInt(itemMatch[1]),
+          satuan: itemMatch[2],
+          harga: itemHarga,
+        }]
+      : [{ nama: order.items, qty: 1, satuan: 'pcs', harga: itemHarga }];
+
+    // Tambah add-ons sebagai item terpisah (tanpa double-count)
+    if (order.addOns && order.addOns.length > 0) {
+      order.addOns.forEach(a => {
+        items.push({ nama: `+ ${a.nama}`, qty: 1, satuan: 'pcs', harga: a.harga });
+      });
+    }
+
+    const transaksi = {
+      no_transaksi: order.ordId,
+      kasir: 'POS',
+      pelanggan: order.customerName,
+      waktu: `${new Date().toLocaleDateString('id-ID')} ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
+      total_harga: order.totalSum,
+      metode_bayar: order.source === 'Walk-In' ? 'Tunai' : order.source,
+    };
+
+    // Coba cetak via API thermal printer
+    const result = await cetakStrukThermal(transaksi, items);
+
+    if (!result.success) {
+      console.warn('Thermal printer unavailable, using browser print fallback:', result.message);
+      showToast(`⚠️ Printer thermal: ${result.message} — Fallback ke print browser.`, 'warning');
+
+      // ─── FALLBACK: browser print (window.print) ───
+      const html = generateHtmlStruk(transaksi, items);
+      const printWin = window.open('', '_blank');
+      if (printWin) {
+        printWin.document.write(html);
+        printWin.document.close();
+      }
+    } else {
+      showToast('✅ Struk berhasil dicetak!', 'success');
+    }
   };
 
   // Toggle add-on

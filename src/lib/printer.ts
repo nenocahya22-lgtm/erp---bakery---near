@@ -1,0 +1,176 @@
+/**
+ * Printer Service — Thermal Printer 58mm untuk POS Kasir
+ * 
+ * Mengirim data struk ke server lokal untuk dicetak via Python ESC/POS.
+ * Juga menyediakan fallback print browser untuk mode offline.
+ */
+
+export interface PrinterToko {
+  nama: string;
+  alamat: string;
+  kontak: string;
+  footer_1: string;
+  footer_2: string;
+}
+
+export interface PrinterTransaksi {
+  no_transaksi: string;
+  kasir: string;
+  pelanggan: string;
+  waktu: string;
+  total_harga: number;
+  metode_bayar: string;
+  uang_dibayar?: number;
+  kembalian?: number;
+}
+
+export interface PrinterItem {
+  nama: string;
+  qty: number;
+  satuan: string;
+  harga: number;
+}
+
+export interface PrinterPayload {
+  toko: PrinterToko;
+  transaksi: PrinterTransaksi;
+  items: PrinterItem[];
+}
+
+// Default konfigurasi toko
+const DEFAULT_TOKO: PrinterToko = {
+  nama: 'NEAR BAKERY & CO.',
+  alamat: 'Dapur Pusat Sektor 12, DKI Jakarta',
+  kontak: '',
+  footer_1: 'Terima kasih atas kunjungan Anda!',
+  footer_2: 'Near Bakery & Co.',
+};
+
+/**
+ * Cetak struk thermal 58mm via server API.
+ * Server akan memanggil Python script untuk ESC/POS printer.
+ */
+export async function cetakStrukThermal(
+  transaksi: PrinterTransaksi,
+  items: PrinterItem[],
+  toko?: Partial<PrinterToko>,
+): Promise<{ success: boolean; message: string }> {
+  const payload: PrinterPayload = {
+    toko: { ...DEFAULT_TOKO, ...toko },
+    transaksi,
+    items,
+  };
+
+  try {
+    const res = await fetch('/api/printer/cetak', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    return data;
+  } catch (err: any) {
+    return {
+      success: false,
+      message: `Gagal terhubung ke server printer: ${err.message}. Pastikan server lokal berjalan.`,
+    };
+  }
+}
+
+/**
+ * Test print — kirim struk test ke printer thermal
+ */
+export async function testPrintThermal(): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch('/api/printer/test', {
+      method: 'POST',
+    });
+    const data = await res.json();
+    return data;
+  } catch (err: any) {
+    return {
+      success: false,
+      message: `Gagal test print: ${err.message}`,
+    };
+  }
+}
+
+/**
+ * Format number ke format Rupiah untuk struk
+ */
+export function formatRupiahStruk(nilai: number): string {
+  if (nilai >= 1000000) {
+    return `Rp${Math.round(nilai / 1000)}K`;
+  }
+  return `Rp${nilai.toLocaleString('id-ID')}`;
+}
+
+/**
+ * Generate HTML struk untuk fallback browser print
+ * (digunakan jika API printer tidak tersedia)
+ */
+export function generateHtmlStruk(
+  transaksi: PrinterTransaksi,
+  items: PrinterItem[],
+  toko?: Partial<PrinterToko>,
+): string {
+  const t = { ...DEFAULT_TOKO, ...toko };
+  const addOnsHtml = items
+    .map(
+      (item) => `
+    <tr>
+      <td style="padding:1px 2px;font-size:9px;">${item.qty} ${item.satuan} ${item.nama}</td>
+      <td style="padding:1px 2px;text-align:right;font-size:9px;">${formatRupiahStruk(item.harga)}</td>
+    </tr>`,
+    )
+    .join('');
+
+  const kembalianHtml =
+    transaksi.kembalian && transaksi.kembalian > 0
+      ? `<tr><td style="font-size:9px;">Kembali</td><td style="text-align:right;font-size:9px;">${formatRupiahStruk(transaksi.kembalian)}</td></tr>`
+      : '';
+
+  return `
+    <html><head>
+      <title>Bill - ${transaksi.no_transaksi}</title>
+      <style>
+        @page{margin:0;}
+        body{font-family:'Courier New',monospace;font-size:10px;width:58mm;padding:4mm;margin:0;color:#000;}
+        h2{font-size:11px;text-align:center;margin:2px 0;}
+        .center{text-align:center;}
+        .line{border-top:1px dashed #000;margin:4px 0;}
+        table{width:100%;border-collapse:collapse;}
+        td{padding:1px 0;vertical-align:top;}
+        .right{text-align:right;}
+        .bold{font-weight:bold;}
+        .total{font-size:12px;font-weight:bold;}
+        .footer{text-align:center;font-size:8px;margin-top:6px;}
+        .label{color:#555;}
+      </style>
+    </head><body>
+      <h2>${t.nama}</h2>
+      <p class="center" style="font-size:8px;">${t.alamat}</p>
+      ${t.kontak ? `<p class="center" style="font-size:8px;">${t.kontak}</p>` : ''}
+      <div class="line"></div>
+      <p style="font-size:8px;">
+        No: ${transaksi.no_transaksi}<br>
+        ${transaksi.waktu}<br>
+        Kasir: ${transaksi.kasir}<br>
+        ${transaksi.pelanggan ? `Customer: ${transaksi.pelanggan}` : ''}
+      </p>
+      <div class="line"></div>
+      <table>
+        ${addOnsHtml}
+      </table>
+      <div class="line"></div>
+      <table>
+        <tr><td class="bold">TOTAL</td><td class="right total">${formatRupiahStruk(transaksi.total_harga)}</td></tr>
+        ${transaksi.metode_bayar ? `<tr><td style="font-size:9px;">Bayar (${transaksi.metode_bayar})</td><td style="text-align:right;font-size:9px;">${transaksi.uang_dibayar ? formatRupiahStruk(transaksi.uang_dibayar) : '-'}</td></tr>` : ''}
+        ${kembalianHtml}
+      </table>
+      <p class="footer">${t.footer_1}</p>
+      <p class="footer">${t.footer_2}</p>
+      <script>window.print(); setTimeout(() => window.close(), 1000);</script>
+    </body></html>`;
+}

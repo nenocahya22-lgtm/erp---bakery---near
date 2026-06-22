@@ -104,17 +104,19 @@ export function useFirestoreSync({
       );
 
       if (hasRemoteData) {
-        setters.setBahanBaku(remoteData!.bahanBaku);
-        setters.setProductHpp(remoteData!.productHpp);
-        setters.setDetailResep(remoteData!.detailResep);
-        setters.setCabangList(remoteData!.cabangList);
-        setters.setSuratOrders(remoteData!.suratOrders);
-        setters.setWasteLogs(remoteData!.wasteLogs);
-        setters.setWriteOffLogs(remoteData!.writeOffLogs);
-        setters.setRdExperiments(remoteData!.rdExperiments);
-        setters.setToppings(remoteData!.toppings);
-        setters.setCabangStok(remoteData!.cabangStok);
-        setters.setBranchTransactions(remoteData!.branchTransactions);
+        // ⚠️ HANYA overwrite collection yang PUNYA DATA di Firestore
+        // Mencegah data localStorage yang valid tertimpa array kosong dari cloud
+        if (remoteData!.bahanBaku.length > 0) setters.setBahanBaku(remoteData!.bahanBaku);
+        if (remoteData!.productHpp.length > 0) setters.setProductHpp(remoteData!.productHpp);
+        if (remoteData!.detailResep.length > 0) setters.setDetailResep(remoteData!.detailResep);
+        if (remoteData!.cabangList.length > 0) setters.setCabangList(remoteData!.cabangList);
+        if (remoteData!.suratOrders.length > 0) setters.setSuratOrders(remoteData!.suratOrders);
+        if (remoteData!.wasteLogs.length > 0) setters.setWasteLogs(remoteData!.wasteLogs);
+        if (remoteData!.writeOffLogs.length > 0) setters.setWriteOffLogs(remoteData!.writeOffLogs);
+        if (remoteData!.rdExperiments.length > 0) setters.setRdExperiments(remoteData!.rdExperiments);
+        if (remoteData!.toppings.length > 0) setters.setToppings(remoteData!.toppings);
+        if (remoteData!.cabangStok.length > 0) setters.setCabangStok(remoteData!.cabangStok);
+        if (remoteData!.branchTransactions.length > 0) setters.setBranchTransactions(remoteData!.branchTransactions);
         prevDataRef.current = { ...remoteData! };
         dirtyRef.current = { ...CLEAN_DIRTY };
         setFirestoreStatus('connected');
@@ -188,46 +190,58 @@ export function useFirestoreSync({
     if (!firestoreLoaded) return;
     const unsub = listenAllChanges({
       onBahanBaku: (items, fromRemote) => {
+        // ⚠️ Jangan overwrite dengan data kosong — lindungi data localStorage
+        if (items.length === 0) { if (fromRemote) prevDataRef.current.bahanBaku = items; return; }
         setters.setBahanBaku(items);
         if (fromRemote) prevDataRef.current.bahanBaku = items;
       },
       onProductHpp: (items, fromRemote) => {
+        if (items.length === 0) { if (fromRemote) prevDataRef.current.productHpp = items; return; }
         setters.setProductHpp(items);
         if (fromRemote) prevDataRef.current.productHpp = items;
       },
       onDetailResep: (items, fromRemote) => {
+        if (items.length === 0) { if (fromRemote) prevDataRef.current.detailResep = items; return; }
         setters.setDetailResep(items);
         if (fromRemote) prevDataRef.current.detailResep = items;
       },
       onCabangList: (items, fromRemote) => {
+        if (items.length === 0) { if (fromRemote) prevDataRef.current.cabangList = items; return; }
         setters.setCabangList(items);
         if (fromRemote) prevDataRef.current.cabangList = items;
       },
       onSuratOrders: (items, fromRemote) => {
+        if (items.length === 0) { if (fromRemote) prevDataRef.current.suratOrders = items; return; }
         setters.setSuratOrders(items);
         if (fromRemote) prevDataRef.current.suratOrders = items;
       },
       onWasteLogs: (items, fromRemote) => {
+        if (items.length === 0) { if (fromRemote) prevDataRef.current.wasteLogs = items; return; }
         setters.setWasteLogs(items);
         if (fromRemote) prevDataRef.current.wasteLogs = items;
       },
       onWriteOffLogs: (items, fromRemote) => {
+        if (items.length === 0) { if (fromRemote) prevDataRef.current.writeOffLogs = items; return; }
         setters.setWriteOffLogs(items);
         if (fromRemote) prevDataRef.current.writeOffLogs = items;
       },
       onRdExperiments: (items, fromRemote) => {
+        if (items.length === 0) { if (fromRemote) prevDataRef.current.rdExperiments = items; return; }
         setters.setRdExperiments(items);
         if (fromRemote) prevDataRef.current.rdExperiments = items;
       },
       onToppings: (items, fromRemote) => {
+        if (items.length === 0) { if (fromRemote) prevDataRef.current.toppings = items; return; }
         setters.setToppings(items);
         if (fromRemote) prevDataRef.current.toppings = items;
       },
       onCabangStok: (items, fromRemote) => {
+        if (items.length === 0) { if (fromRemote) prevDataRef.current.cabangStok = items; return; }
         setters.setCabangStok(items);
         if (fromRemote) prevDataRef.current.cabangStok = items;
       },
       onBranchTransactions: (items, fromRemote) => {
+        if (items.length === 0) { if (fromRemote) prevDataRef.current.branchTransactions = items; return; }
         setters.setBranchTransactions(items);
         if (fromRemote) prevDataRef.current.branchTransactions = items;
       },
@@ -246,17 +260,18 @@ export function useFirestoreSync({
         remoteData.detailResep.length > 0
       );
       if (hasRemoteData) {
-        setters.setBahanBaku(remoteData!.bahanBaku);
-        setters.setProductHpp(remoteData!.productHpp);
-        setters.setDetailResep(remoteData!.detailResep);
-        setters.setCabangList(remoteData!.cabangList);
-        setters.setSuratOrders(remoteData!.suratOrders);
-        setters.setWasteLogs(remoteData!.wasteLogs);
-        setters.setWriteOffLogs(remoteData!.writeOffLogs);
-        setters.setRdExperiments(remoteData!.rdExperiments);
-        setters.setToppings(remoteData!.toppings);
-        setters.setCabangStok(remoteData!.cabangStok);
-        setters.setBranchTransactions(remoteData!.branchTransactions);
+        // ⚠️ HANYA overwrite collection yang PUNYA DATA di Firestore
+        if (remoteData!.bahanBaku.length > 0) setters.setBahanBaku(remoteData!.bahanBaku);
+        if (remoteData!.productHpp.length > 0) setters.setProductHpp(remoteData!.productHpp);
+        if (remoteData!.detailResep.length > 0) setters.setDetailResep(remoteData!.detailResep);
+        if (remoteData!.cabangList.length > 0) setters.setCabangList(remoteData!.cabangList);
+        if (remoteData!.suratOrders.length > 0) setters.setSuratOrders(remoteData!.suratOrders);
+        if (remoteData!.wasteLogs.length > 0) setters.setWasteLogs(remoteData!.wasteLogs);
+        if (remoteData!.writeOffLogs.length > 0) setters.setWriteOffLogs(remoteData!.writeOffLogs);
+        if (remoteData!.rdExperiments.length > 0) setters.setRdExperiments(remoteData!.rdExperiments);
+        if (remoteData!.toppings.length > 0) setters.setToppings(remoteData!.toppings);
+        if (remoteData!.cabangStok.length > 0) setters.setCabangStok(remoteData!.cabangStok);
+        if (remoteData!.branchTransactions.length > 0) setters.setBranchTransactions(remoteData!.branchTransactions);
         prevDataRef.current = { ...remoteData! };
         dirtyRef.current = { ...CLEAN_DIRTY };
         setFirestoreStatus('connected');
