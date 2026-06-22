@@ -2,7 +2,7 @@
 """
 Near Bakery & Co. — Thermal Printer 58mm ESC/POS
 =================================================
-Mencetak struk belanja ke printer thermal 58mm via serial (COM11).
+Mencetak struk belanja ke printer thermal 58mm via serial.
 
 Usage:
   python cetak_struk.py <config_json>
@@ -103,7 +103,7 @@ def cetak_struk(config: dict) -> bool:
         # 2. METADATA TRANSAKSI
         # ═══════════════════════════════════════════
         p.set(align='left', height=1, width=1)
-        p.bold(False)
+        p._raw(b'\x1b\x45\x00')  # Bold OFF via ESC E 0
 
         def label_value(label: str, value: str, label_len: int = 10) -> str:
             return f"{label:<{label_len}}: {value}"
@@ -123,7 +123,7 @@ def cetak_struk(config: dict) -> bool:
         # 3. ITEM BELANJA
         # ═══════════════════════════════════════════
         p.set(align='left', height=1, width=1)
-        p.bold(False)
+        p._raw(b'\x1b\x45\x00')  # Bold OFF via ESC E 0
         for item in items:
             qty = item.get('qty', 1)
             satuan = item.get('satuan', 'pcs')
@@ -152,16 +152,16 @@ def cetak_struk(config: dict) -> bool:
         # 4. TOTAL
         # ═══════════════════════════════════════════
         p.set(align='right', height=1, width=1)
-        p.bold(True)
+        p._raw(b'\x1b\x45\x01')  # Bold ON via ESC E 1
         total = transaksi.get('total_harga', 0)
         p.text(f"TOTAL: {_format_harga(total)}\n")
-        p.bold(False)
+        p._raw(b'\x1b\x45\x00')  # Bold OFF via ESC E 0
 
         # ═══════════════════════════════════════════
         # 5. PEMBAYARAN
         # ═══════════════════════════════════════════
         p.set(align='right', height=1, width=1)
-        p.bold(False)
+        p._raw(b'\x1b\x45\x00')  # Bold OFF via ESC E 0
         metode = transaksi.get('metode_bayar', '')
         if metode:
             p.text(f"Bayar ({metode})\n")
@@ -179,7 +179,7 @@ def cetak_struk(config: dict) -> bool:
         # 6. FOOTER
         # ═══════════════════════════════════════════
         p.set(align='center', height=1, width=1)
-        p.bold(False)
+        p._raw(b'\x1b\x45\x00')  # Bold OFF via ESC E 0
         if toko.get('footer_1'):
             p.text(f"{toko['footer_1']}\n")
         if toko.get('footer_2'):
