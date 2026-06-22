@@ -1,9 +1,17 @@
 /**
  * Printer Service — Thermal Printer 58mm untuk POS Kasir
  * 
- * Mengirim data struk ke server lokal untuk dicetak via Python ESC/POS.
- * Juga menyediakan fallback print browser untuk mode offline.
+ * Mencoba cetak via WebSerial (browser langsung ke Bluetooth COM11),
+ * fallback ke server API (Python), fallback ke browser print.
  */
+
+import {
+  isWebSerialSupported,
+  isPrinterConnected,
+  connectPrinter,
+  disconnectPrinter,
+  cetakWebSerial,
+} from './printer-webserial';
 
 export interface PrinterToko {
   nama: string;
@@ -46,15 +54,26 @@ const DEFAULT_TOKO: PrinterToko = {
   footer_2: 'Near Bakery & Co.',
 };
 
+// ─── RE-EXPORT dari WebSerial ───
+export { isWebSerialSupported, isPrinterConnected, connectPrinter, disconnectPrinter };
+
 /**
- * Cetak struk thermal 58mm via server API.
- * Server akan memanggil Python script untuk ESC/POS printer.
+ * Cetak struk thermal 58mm.
+ * Priority: WebSerial (browser langsung) > Server API (Python) > Browser HTML print
  */
 export async function cetakStrukThermal(
   transaksi: PrinterTransaksi,
   items: PrinterItem[],
   toko?: Partial<PrinterToko>,
 ): Promise<{ success: boolean; message: string }> {
+  // ─── PRIORITAS 1: WebSerial (langsung dari browser ke Bluetooth) ───
+  if (isPrinterConnected()) {
+    const result = await cetakWebSerial(transaksi, items, toko);
+    if (result.success) return result;
+    console.warn('WebSerial gagal, fallback ke API server:', result.message);
+  }
+
+  // ─── PRIORITAS 2: Server API (Python via localhost) ───
   const payload: PrinterPayload = {
     toko: { ...DEFAULT_TOKO, ...toko },
     transaksi,
@@ -69,31 +88,14 @@ export async function cetakStrukThermal(
     });
 
     const data = await res.json();
-    return data;
+    if (data.success) return data;
+    console.warn('API server gagal, fallback ke browser print:', data.error);
   } catch (err: any) {
-    return {
-      success: false,
-      message: `Gagal terhubung ke server printer: ${err.message}. Pastikan server lokal berjalan.`,
-    };
+    console.warn('API server tidak tersedia, fallback ke browser print:', err.message);
   }
-}
 
-/**
- * Test print — kirim struk test ke printer thermal
- */
-export async function testPrintThermal(): Promise<{ success: boolean; message: string }> {
-  try {
-    const res = await fetch('/api/printer/test', {
-      method: 'POST',
-    });
-    const data = await res.json();
-    return data;
-  } catch (err: any) {
-    return {
-      success: false,
-      message: `Gagal test print: ${err.message}`,
-    };
-  }
+  // ─── PRIORITAS 3: Browser print fallback ───
+  return { success: false, message: 'Printer Bluetooth tidak terhubung. Klik "🔗 Hubungkan Printer" dulu.' };
 }
 
 /**
@@ -108,7 +110,6 @@ export function formatRupiahStruk(nilai: number): string {
 
 /**
  * Generate HTML struk untuk fallback browser print
- * (digunakan jika API printer tidak tersedia)
  */
 export function generateHtmlStruk(
   transaksi: PrinterTransaksi,

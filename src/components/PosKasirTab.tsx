@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, ChefHat, Printer, X, Coins, RefreshCw, Calendar, Clock, TrendingUp, BarChart3, Image } from 'lucide-react';
+import { ShoppingCart, ChefHat, Printer, X, Coins, RefreshCw, Calendar, Clock, TrendingUp, BarChart3, Image, Bluetooth } from 'lucide-react';
 import { showToast } from '../lib/toast';
 import { CalculationResult } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
 import { getSavedRecipeImage } from '../lib/image-generator';
-import { cetakStrukThermal, generateHtmlStruk } from '../lib/printer';
+import { cetakStrukThermal, generateHtmlStruk, isWebSerialSupported, isPrinterConnected, connectPrinter, disconnectPrinter } from '../lib/printer';
 
 interface RetailOrder {
   ordId: string;
@@ -38,10 +38,19 @@ interface PosKasirTabProps {
 }
 
 export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, toppings, detailResep }: PosKasirTabProps) {
+  const [printerConnected, setPrinterConnected] = useState(() => isPrinterConnected());
   const [activeReceipt, setActiveReceipt] = useState<RetailOrder | null>(null);
   const [showLaporan, setShowLaporan] = useState(false);
   const [showRekap, setShowRekap] = useState(false);
   const [newCustName, setNewCustName] = useState('');
+
+  // Poll printer status setiap 3 detik
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPrinterConnected(isPrinterConnected());
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
   const [selectedProduct, setSelectedProduct] = useState('');
   const [selectedVariant, setSelectedVariant] = useState<{ id: string; name: string; hargaJual: number } | null>(null);
   const [orderQty, setOrderQty] = useState(1);
@@ -411,6 +420,32 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
             className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1">
             <TrendingUp className="w-3.5 h-3.5" /> Rekap
           </button>
+          {/* ─── PRINTER CONNECTION ─── */}
+          {isWebSerialSupported() && (
+            <>
+              {printerConnected ? (
+                <button onClick={async () => { await disconnectPrinter(); setPrinterConnected(false); showToast('Printer Bluetooth diputuskan.', 'info'); }}
+                  className="px-3 py-1.5 bg-emerald-700 hover:bg-red-600 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1"
+                  title="Putuskan koneksi printer">
+                  <Bluetooth className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Printer ON</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse ml-0.5" />
+                </button>
+              ) : (
+                <button onClick={async () => {
+                  const result = await connectPrinter();
+                  setPrinterConnected(isPrinterConnected());
+                  showToast(result.message, result.success ? 'success' : 'error');
+                }}
+                  className="px-3 py-1.5 bg-slate-700 hover:bg-emerald-700 text-slate-300 hover:text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1"
+                  title="Hubungkan printer Bluetooth thermal">
+                  <Bluetooth className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Hubungkan Printer</span>
+                </button>
+              )}
+            </>
+          )}
+
           <button onClick={handleEndShift}
             className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1">
             <Clock className="w-3.5 h-3.5" /> End Shift
