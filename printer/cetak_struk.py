@@ -73,11 +73,21 @@ def cetak_struk(config: dict) -> bool:
     items = config.get('items', [])
 
     try:
-        # ─── 1. HEADER TOKO ───
-        p.set(align='center', width=2, height=2)
+        # ═══════════════════════════════════════════
+        # 0. INIT PRINTER — RESET + CODEPAGE
+        # ═══════════════════════════════════════════
+        p.hw("INIT")                     # Reset printer ke default state
+        p.charcode(code='USA')           # Codepage CP437 (Latin) — teks, angka, simbol benar
+        p._raw(b'\x1b\x32')             # ESC 2 = Set line spacing ke default (30 dots)
+        p._raw(b'\x1b\x33\x24')         # ESC 3 n = Set line spacing ke 36 dots (n=36)
+
+        # ═══════════════════════════════════════════
+        # 1. HEADER TOKO
+        # ═══════════════════════════════════════════
+        p.set(align='center', height=2, width=2)
         p.text(f"{toko.get('nama', 'NEAR BAKERY & CO.')}\n")
 
-        p.set(align='center')
+        p.set(align='center', height=1, width=1)
         if toko.get('alamat'):
             p.text(f"{toko['alamat']}\n")
         if toko.get('kontak'):
@@ -85,8 +95,11 @@ def cetak_struk(config: dict) -> bool:
 
         p.text("-" * LEBAR_STRUK + "\n")
 
-        # ─── 2. METADATA TRANSAKSI ───
-        p.set(align='left')
+        # ═══════════════════════════════════════════
+        # 2. METADATA TRANSAKSI
+        # ═══════════════════════════════════════════
+        p.set(align='left', height=1, width=1)
+        p.bold(False)
 
         def label_value(label: str, value: str, label_len: int = 10) -> str:
             return f"{label:<{label_len}}: {value}"
@@ -102,7 +115,11 @@ def cetak_struk(config: dict) -> bool:
 
         p.text("-" * LEBAR_STRUK + "\n")
 
-        # ─── 3. ITEM BELANJA ───
+        # ═══════════════════════════════════════════
+        # 3. ITEM BELANJA
+        # ═══════════════════════════════════════════
+        p.set(align='left', height=1, width=1)
+        p.bold(False)
         for item in items:
             qty = item.get('qty', 1)
             satuan = item.get('satuan', 'pcs')
@@ -127,14 +144,19 @@ def cetak_struk(config: dict) -> bool:
 
         p.text("-" * LEBAR_STRUK + "\n")
 
-        # ─── 4. TOTAL ───
-        p.set(align='right')
+        # ═══════════════════════════════════════════
+        # 4. TOTAL
+        # ═══════════════════════════════════════════
+        p.set(align='right', height=1, width=1)
         p.bold(True)
         total = transaksi.get('total_harga', 0)
         p.text(f"TOTAL: {_format_harga(total)}\n")
+        p.bold(False)
 
-        # ─── 5. PEMBAYARAN ───
-        p.set(align='right')
+        # ═══════════════════════════════════════════
+        # 5. PEMBAYARAN
+        # ═══════════════════════════════════════════
+        p.set(align='right', height=1, width=1)
         p.bold(False)
         metode = transaksi.get('metode_bayar', '')
         if metode:
@@ -149,15 +171,19 @@ def cetak_struk(config: dict) -> bool:
 
         p.text("\n")
 
-        # ─── 6. FOOTER ───
-        p.set(align='center')
+        # ═══════════════════════════════════════════
+        # 6. FOOTER
+        # ═══════════════════════════════════════════
+        p.set(align='center', height=1, width=1)
         p.bold(False)
         if toko.get('footer_1'):
             p.text(f"{toko['footer_1']}\n")
         if toko.get('footer_2'):
             p.text(f"{toko['footer_2']}\n")
 
-        # ─── 7. POTONG KERTAS ───
+        # ═══════════════════════════════════════════
+        # 7. POTONG KERTAS
+        # ═══════════════════════════════════════════
         p.text("\n\n\n")
         p.cut()
         p.close()
