@@ -67,6 +67,7 @@ import {
   listenOrderStatusChanges,
   listenNotifications,
   listenNewChats,
+  listenProofUploads,
   syncProductsToFirestore,
   getFirestoreCategories,
 } from './lib/firestore-bridge';
@@ -81,6 +82,7 @@ import {
 } from './lib/sheets';
 import { calculateAllProducts } from './lib/calculations';
 import { saveAllToFirestore } from './lib/erp-firestore-sync';
+import { cetakStrukThermal, isPrinterConnected } from './lib/printer';
 import { safeGetLocalStorage } from './lib/safe-json';
 import { googleSignIn } from './lib/firebase';
 import type { IoTDevice } from './types';
@@ -516,6 +518,26 @@ export default function App() {
       const totalStr = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(order.totalAmount);
       showToast(`🛒 Pesanan Baru dari Web Store! ${order.userName} — ${totalStr} (${order.status})`, 'success');
 
+      // ─── AUTO-PRINT: Cetak struk pesanan otomatis jika printer WebSerial terhubung ───
+      // Tidak perlu start relay server lokal — langsung dari browser ke Bluetooth!
+      if (isPrinterConnected()) {
+        const printItems = (order.items || []).map((i: any) => ({
+          nama: i.name,
+          qty: i.quantity,
+          satuan: 'pcs',
+          harga: i.price * i.quantity,
+        }));
+
+        cetakStrukThermal({
+          no_transaksi: `WS-${(order.id || '').slice(-8)}`,
+          kasir: 'Web Store',
+          pelanggan: order.userName,
+          waktu: new Date().toLocaleString('id-ID'),
+          total_harga: order.totalAmount,
+          metode_bayar: order.paymentMethod || 'Online',
+        }, printItems).catch(console.warn);
+      }
+
       try {
         const savedOrders = localStorage.getItem('pos_orders_data');
         const posOrders = savedOrders ? JSON.parse(savedOrders) : [];
@@ -620,11 +642,38 @@ export default function App() {
       }
     }, (err) => console.warn('Chat listener error:', err));
 
+    // ─── LISTENER: Notifikasi bukti transfer baru dari customer ───
+    const unsubProofUploads = listenProofUploads((order) => {
+      const totalStr = new Intl.NumberFormat('id-ID', {
+        style: 'currency', currency: 'IDR', minimumFractionDigits: 0
+      }).format(order.totalAmount);
+      showToast(`📸 Bukti transfer baru dari ${order.userName}! ${totalStr} — Klik Pesanan Online untuk verifikasi.`, 'info');
+
+      // Auto-print jika printer terhubung
+      if (isPrinterConnected()) {
+        const printItems = (order.items || []).map((i: any) => ({
+          nama: i.name,
+          qty: i.quantity,
+          satuan: 'pcs',
+          harga: i.price * i.quantity,
+        }));
+        cetakStrukThermal({
+          no_transaksi: `WS-${(order.id || '').slice(-8)}`,
+          kasir: 'Web Store',
+          pelanggan: order.userName,
+          waktu: new Date().toLocaleString('id-ID'),
+          total_harga: order.totalAmount,
+          metode_bayar: order.paymentMethod || 'Transfer',
+        }, printItems).catch(console.warn);
+      }
+    }, (err) => console.warn('Proof upload listener error:', err));
+
     return () => {
       unsubOrders();
       unsubStatus();
       unsubNotif();
       unsubChats();
+      unsubProofUploads();
     };
   }, []);
 

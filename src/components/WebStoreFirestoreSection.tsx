@@ -94,7 +94,7 @@ export default function WebStoreFirestoreSection({
         <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
           {firestoreProducts.map((fp: any) => {
             const existsInErp = productHpp.some(
-              (p: any) => p.namaProduk.toLowerCase().trim() === fp.name.toLowerCase().trim()
+              (p: any) => p.namaProduk && (p.namaProduk || '').toLowerCase().trim() === (fp.name || '').toLowerCase().trim()
             );
             return (
               <div key={fp.docId} className={`flex items-center gap-3 p-3 rounded-xl border ${
@@ -170,8 +170,8 @@ export default function WebStoreFirestoreSection({
 
       <div className="border-t border-gray-100 pt-3 mt-3 flex items-center justify-between text-[10px] text-gray-500">
         <span>Total di Firestore: <strong>{firestoreProducts.length}</strong> produk</span>
-        <span>Di ERP: <strong>{firestoreProducts.filter((fp: any) => productHpp.some((p: any) => p.namaProduk.toLowerCase().trim() === fp.name.toLowerCase().trim())).length}</strong></span>
-        <span>Web Store Only: <strong>{firestoreProducts.filter((fp: any) => !productHpp.some((p: any) => p.namaProduk.toLowerCase().trim() === fp.name.toLowerCase().trim())).length}</strong></span>
+        <span>Di ERP: <strong>{firestoreProducts.filter((fp: any) => productHpp.some((p: any) => p.namaProduk && (p.namaProduk || '').toLowerCase().trim() === (fp.name || '').toLowerCase().trim())).length}</strong></span>
+        <span>Web Store Only: <strong>{firestoreProducts.filter((fp: any) => !productHpp.some((p: any) => p.namaProduk && (p.namaProduk || '').toLowerCase().trim() === (fp.name || '').toLowerCase().trim())).length}</strong></span>
       </div>
 
       <div className="border-t border-gray-100 pt-4 mt-4">

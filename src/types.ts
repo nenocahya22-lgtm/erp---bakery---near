@@ -67,6 +67,7 @@ export interface CalculationResult {
     biayaTenagaKerja?: number;
     biayaUtilitas?: number;
     biayaKemasan?: number;
+    warnings?: string[]; // Conversion warnings — ditampilkan di UI
     // Hasil kalkulasi per varian (jika produk punya varian ukuran)
     variants?: {
       id: string;

@@ -210,13 +210,15 @@ export function calculateBahanADS(
 
 /**
  * Hitung HPP untuk varian tertentu — override takaran bahan jika varian punya ingredients sendiri
+ * ⚠️ Harus konsisten dengan calculateAllProducts: waste multiplier diterapkan juga di sini!
  */
 function calculateVariantHPP(
   variant: { name: string; porsi: number; ingredients?: { namaBahan: string; takaran: number }[] },
   baseProductName: string,
   baseDetails: DetailResep[],
-  bahanMap: Map<string, BahanBaku>
-): { biayaBahanTotal: number; bahanList: any[]; hppTotal: number; hppPerPorsi: number } {
+  bahanMap: Map<string, BahanBaku>,
+  wastePercent: number = 0
+): { biayaBahanTotal: number; bahanList: any[]; hppTotal: number; hppPerPorsi: number; warnings?: string[] } {
   // Gunakan ingredients varian jika ada, fallback ke resep dasar
   const variantDetails = variant.ingredients && variant.ingredients.length > 0
     ? variant.ingredients.map(ing => ({
@@ -227,6 +229,7 @@ function calculateVariantHPP(
     : baseDetails;
 
   let biayaBahanTotal = 0;
+  const variantWarnings: string[] = [];
   const bahanListMapped = variantDetails.map((detail) => {
     const material = bahanMap.get(detail.namaBahan.toLowerCase().trim());
     const hargaSatuan = material ? (material.hargaSatuanReal > 0 ? material.hargaSatuanReal : material.hargaSatuan) : 0;
@@ -242,7 +245,7 @@ function calculateVariantHPP(
       takaranEffective = detail.takaran / material.konversiGram;
     } else {
       if (materialSatuan && !['gr','kg','ons','ml','liter'].includes(materialSatuan)) {
-        console.warn(`Bahan "${detail.namaBahan}" dalam satuan "${materialSatuan}" — pastikan takaran resep (${detail.takaran}) sudah dalam satuan yang sama.`);
+        variantWarnings.push(`⚠️ Konversi: Bahan "${detail.namaBahan}" dalam satuan "${materialSatuan}" — pastikan takaran resep (${detail.takaran}) sudah dalam satuan yang sama.`);
       }
       takaranEffective = detail.takaran;
     }
@@ -260,12 +263,19 @@ function calculateVariantHPP(
     };
   });
 
+  // 🔥 Terapkan waste multiplier — KONSISTEN dengan calculateAllProducts!
+  // Sebelumnya BUG: varian tidak pakai waste multiplier, sehingga HPP varian
+  // selalu lebih rendah dari produk dasar. Sekarang diperbaiki.
+  const wasteMultiplier = 1 / (1 - Math.min(wastePercent, 50) / 100);
+  const hppTotalAfterWaste = Math.round((biayaBahanTotal * wasteMultiplier) * 100) / 100;
+
   const variantPorsi = variant.porsi || 1;
   return {
     biayaBahanTotal: Math.round(biayaBahanTotal * 100) / 100,
     bahanList: bahanListMapped,
-    hppTotal: Math.round(biayaBahanTotal * 100) / 100,
-    hppPerPorsi: Math.round((biayaBahanTotal / variantPorsi) * 100) / 100,
+    hppTotal: hppTotalAfterWaste,
+    hppPerPorsi: Math.round((hppTotalAfterWaste / variantPorsi) * 100) / 100,
+    warnings: variantWarnings.length > 0 ? variantWarnings : undefined,
   };
 }
 
@@ -286,6 +296,7 @@ export function calculateAllProducts(
     );
 
     let biayaBahanTotal = 0;
+    const productWarnings: string[] = [];
     const bahanListMapped = productDetailRows.map((detail) => {
       const material = bahanMap.get(detail.namaBahan.toLowerCase().trim());
       const hargaSatuan = material ? (material.hargaSatuanReal > 0 ? material.hargaSatuanReal : material.hargaSatuan) : 0;
@@ -296,17 +307,16 @@ export function calculateAllProducts(
       const materialSatuan = material?.satuan || 'gr';
       const conv = SATUAN_CONVERSIONS[materialSatuan];
       let takaranInMaterialUnit: number;
-      let conversionWarning: string | undefined;
       if (conv?.group === 'mass') {
         takaranInMaterialUnit = convertSatuan(detail.takaran, 'gr', materialSatuan, true);
       } else if (conv?.group === 'volume') {
         takaranInMaterialUnit = convertSatuan(detail.takaran, 'ml', materialSatuan, true);
       } else if (conv?.group === 'count' && material?.konversiGram && material.konversiGram > 0) {
         takaranInMaterialUnit = detail.takaran / material.konversiGram;
-        conversionWarning = `Bahan "${detail.namaBahan}" (${materialSatuan}) — resep ${detail.takaran}gr × konversi ${material.konversiGram}gr/${materialSatuan} = ${takaranInMaterialUnit.toFixed(2)} ${materialSatuan}`;
+        productWarnings.push(`ℹ️ Konversi: Bahan "${detail.namaBahan}" (${materialSatuan}) — resep ${detail.takaran}gr ÷ ${material.konversiGram}gr/${materialSatuan} = ${takaranInMaterialUnit.toFixed(2)} ${materialSatuan}`);
       } else {
         if (materialSatuan && !['gr','kg','ons','ml','liter'].includes(materialSatuan)) {
-          conversionWarning = `Bahan "${detail.namaBahan}" dalam satuan "${materialSatuan}" — pastikan takaran resep (${detail.takaran}) sudah dalam satuan yang sama.`;
+          productWarnings.push(`⚠️ Konversi: Bahan "${detail.namaBahan}" dalam satuan "${materialSatuan}" — pastikan takaran resep (${detail.takaran}) sudah dalam satuan yang sama.`);
         }
         takaranInMaterialUnit = detail.takaran;
       }
@@ -323,6 +333,11 @@ export function calculateAllProducts(
         totalBiayaBahan,
       };
     });
+
+    // ─── VALIDASI: Beri warning kalau harga jual = 0 ───
+    if ((product.hargaJual || 0) <= 0) {
+      productWarnings.push(`⚠️ Harga jual produk "${product.namaProduk}" belum diisi! HPP tidak bisa dihitung.`);
+    }
 
     // ─── HPP LENGKAP ───
     // HPP = Biaya Bahan murni (tanpa overhead)
@@ -347,7 +362,10 @@ export function calculateAllProducts(
     const variantResults = (product.variants || [])
       .filter(v => v.active !== false)
       .map(v => {
-        const vHpp = calculateVariantHPP(v, product.namaProduk, productDetailRows, bahanMap);
+        const vHpp = calculateVariantHPP(v, product.namaProduk, productDetailRows, bahanMap, wastePct);
+        if (vHpp.warnings) {
+          productWarnings.push(...vHpp.warnings);
+        }
         return {
           id: v.id,
           name: v.name,
@@ -378,6 +396,7 @@ export function calculateAllProducts(
       biayaKemasan,
       bahanList: bahanListMapped,
       variants: variantResults,
+      warnings: productWarnings.length > 0 ? productWarnings : undefined,
     };
   });
 }

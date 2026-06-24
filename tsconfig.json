@@ -23,5 +23,11 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": [
+    "near-bakery-store",
+    "near-bakery-store-extracted",
+    "dist",
+    "node_modules"
+  ]
 }

@@ -281,15 +281,9 @@ export function useERPData(showConfirm?: (opts: { title: string; message: string
       setDetailResep((prev) => [...prev, ...ingredients]);
     }
     setHasUnsavedChanges(true);
-    setTimeout(() => {
-      const updatedCalc = calculateAllProducts(bahanBakuRef.current, [...productHppRef.current, p], detailResepRef.current);
-      const allProducts = [...productHppRef.current, p].filter(pr => pr.status !== 'draft');
-      if (allProducts.length > 0) {
-        syncProductsToFirestore(updatedCalc, allProducts, detailResepRef.current, bahanBakuRef.current, 'pusat').catch((err) => {
-          console.warn('Auto-sync after recipe creation failed:', err);
-        });
-      }
-    }, 1000);
+    // 🔥 HAPUS auto-sync di sini — hanya sync saat PUBLISH (handleUpdateProductIngredients)
+    // Sebelumnya: ada setTimeout sync di sini + setTimeout sync di publish → DOUBLE SYNC!
+    // Sekarang: sync hanya sekali, saat user klik "Terbitkan".
     showToast(`Resep Produk "${p.namaProduk}" diformulasikan!`, 'success');
   };
 

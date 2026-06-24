@@ -7,7 +7,8 @@
  */
 
 
-import { app, auth } from './firebase';
+import { app, auth, storage } from './firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { signInAnonymously } from 'firebase/auth';
 import {
   getFirestore,
@@ -145,19 +146,24 @@ export async function syncProductsToFirestore(
   }
   if (wsConfig?.products) {
     wsConfig.products.forEach((p: any) => {
-      if (p.displayImage) wsProductImages[p.productName.toLowerCase().trim()] = p.displayImage;
+      if (p.productName && p.displayImage) {
+        wsProductImages[p.productName.toLowerCase().trim()] = p.displayImage;
+      }
     });
   }
 
   // Batch: ambil semua existing products dari Firestore dalam 1 parallel call
   // (daripada sequential getDoc per produk yang lambat untuk >50 produk)
-  const productRefs = calculatedProducts.map(calc => ({
-    calc,
-    productId: hashProductName(calc.namaProduk),
-    productInfo: productHpp.find(
-      (p) => p.namaProduk.toLowerCase().trim() === calc.namaProduk.toLowerCase().trim()
-    ),
-  }));
+  const productRefs = calculatedProducts.map(calc => {
+    const calcNameClean = (calc.namaProduk || '').toLowerCase().trim();
+    return {
+      calc,
+      productId: hashProductName(calc.namaProduk || ''),
+      productInfo: productHpp.find(
+        (p) => p.namaProduk && (p.namaProduk || '').toLowerCase().trim() === calcNameClean
+      ),
+    };
+  });
 
   const existingSnaps = await Promise.all(
     productRefs.map(p => getDoc(doc(db, 'products', p.productId)).catch(() => null))
@@ -175,7 +181,7 @@ export async function syncProductsToFirestore(
   await Promise.all(productRefs.map(async (pRef) => {
     const { productId, calc } = pRef;
     if (existingDataMap.has(productId)) return; // Already has new ID
-    const oldId = 'PRD-' + calc.namaProduk.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const oldId = 'PRD-' + (calc.namaProduk || '').toLowerCase().replace(/[^a-z0-9]/g, '-');
     if (oldId === productId) return; // Same ID, no migration needed
     try {
       const oldSnap = await getDoc(doc(db, 'products', oldId));
@@ -209,7 +215,7 @@ export async function syncProductsToFirestore(
     }
 
     // 1. localStorage (RecipesTab) — gambar paling update dari user
-    const savedKey = `recipe_img_${calc.namaProduk.toLowerCase().trim()}`;
+    const savedKey = `recipe_img_${(calc.namaProduk || '').toLowerCase().trim()}`;
     const explicitlySaved = localStorage.getItem(savedKey);
     if (explicitlySaved) {
       displayImage = explicitlySaved;
@@ -217,7 +223,7 @@ export async function syncProductsToFirestore(
 
     // 2. Fallback ke WebStoreConfig
     if (!displayImage) {
-      displayImage = wsProductImages[calc.namaProduk.toLowerCase().trim()] || '';
+      displayImage = wsProductImages[(calc.namaProduk || '').toLowerCase().trim()] || '';
     }
 
     // 3. Fallback ke existing Firestore data
@@ -236,7 +242,7 @@ export async function syncProductsToFirestore(
     let discountPercent = 0;
     if (wsConfig?.products) {
       const wsProduct = wsConfig.products.find(
-        (p: any) => p.productName.toLowerCase().trim() === calc.namaProduk.toLowerCase().trim()
+        (p: any) => p.productName && (p.productName || '').toLowerCase().trim() === (calc.namaProduk || '').toLowerCase().trim()
       );
       if (wsProduct && wsProduct.discountPercent) {
         discountPercent = Math.min(100, Math.max(0, Number(wsProduct.discountPercent)));
@@ -245,7 +251,7 @@ export async function syncProductsToFirestore(
 
     // ─── VARIAN — mapping dari productHpp ke web store ───
     const productWithVariants = productHpp.find(
-      (p) => p.namaProduk.toLowerCase().trim() === calc.namaProduk.toLowerCase().trim()
+      (p) => p.namaProduk && (p.namaProduk || '').toLowerCase().trim() === (calc.namaProduk || '').toLowerCase().trim()
     );
     const webVariants = productWithVariants?.variants
       ?.filter(v => v.active !== false && v.hargaJual > 0)
@@ -283,9 +289,53 @@ export async function syncProductsToFirestore(
       firestoreData.discountPercent = discountPercent;
       firestoreData.originalPrice = Math.round(calc.hargaJual);
     }
-    // 🔥 SELALU set field stock — web store baca field ini untuk tampilkan "tersedia" / "habis"
-    //    Kalau field stock tidak ada (undefined), web store akan interpretasi sebagai 0 → "habis"!
-    firestoreData.stock = madeToOrder ? 9999 : 0;
+    // 🔥 HITUNG STOK REAL dari bahan baku — bukan 9999 palsu!
+    //    Sebelumnya: stock selalu 9999 (made-to-order) → pelanggan bisa order
+    //    produk yang sebenarnya stok bahannya habis.
+    //    Sekarang: hitung max unit yang bisa diproduksi berdasarkan stok bahan baku
+    //    yang PALING MENIPIS di antara semua bahan resep.
+    //
+    //    Rumus: min(stokBahan1 / (takaran1 / porsiJual), stokBahan2 / (takaran2 / porsiJual), ...) / batchCount
+    //    batchCount = 1 (per resep)
+    //
+    //    Jika madeToOrder=true, stok = 9999 (bisa produksi kapan saja)
+    //    Jika madeToOrder=false, stok = min available dari bahan
+    let calculatedStock = 0;
+    if (madeToOrder) {
+      calculatedStock = 9999;
+    } else {
+      // Cari semua bahan untuk produk ini dari detailResep
+      const productIngredients = detailResep.filter(
+        r => r.namaProduk.toLowerCase().trim() === (calc.namaProduk || '').toLowerCase().trim()
+      );
+      const porsiJual = productWithVariants?.porsiJual || 1;
+
+      if (productIngredients.length > 0) {
+        const produciblePerIngredient: number[] = [];
+        for (const ing of productIngredients) {
+          const bahan = bahanBaku.find(
+            b => b.nama.toLowerCase().trim() === ing.namaBahan.toLowerCase().trim()
+          );
+          if (bahan && bahan.isiKemasan > 0 && ing.takaran > 0) {
+            // Berapa unit yang bisa diproduksi dari stok bahan ini?
+            // takaran per porsi = ing.takaran / porsiJual
+            // unit yg bisa dibuat = bahan.isiKemasan / (ing.takaran / porsiJual)
+            const maxUnits = Math.floor(bahan.isiKemasan / (ing.takaran / porsiJual));
+            produciblePerIngredient.push(maxUnits);
+          }
+        }
+        if (produciblePerIngredient.length > 0) {
+          // Stok = min dari semua bahan (bottleneck)
+          calculatedStock = Math.min(...produciblePerIngredient);
+          calculatedStock = Math.max(0, Math.round(calculatedStock));
+        }
+      }
+      // Jika tidak bisa dihitung (tidak ada resep), fallback ke 0
+      if (calculatedStock === 0 && productIngredients.length === 0) {
+        calculatedStock = 0;
+      }
+    }
+    firestoreData.stock = calculatedStock;
 
     batch.set(doc(db, 'products', productId), firestoreData);
 
@@ -522,6 +572,14 @@ export interface WebStoreOrder {
   };
   paymentMethod: string;
   paymentStatus: 'Belum Bayar' | 'Lunas';
+  /** URL bukti transfer/upload — bisa dari admin ERP atau dari web store */
+  paymentProofUrl?: string;
+  /** Catatan admin tentang pembayaran */
+  paymentNote?: string;
+  /** Flag: customer baru upload bukti, perlu review admin */
+  proofNeedsReview?: boolean;
+  /** Timestamp upload bukti oleh customer */
+  proofUploadedAt?: any;
   cabangId?: string;
   createdAt: any;
 }
@@ -652,7 +710,7 @@ export async function getAllOrders(cabangId?: string): Promise<WebStoreOrder[]> 
 // --- HELPER: Stable product ID from name ---
 export function hashProductName(name: string): string {
   let hash = 0;
-  const s = name.toLowerCase().trim();
+  const s = (name || '').toLowerCase().trim();
   for (let i = 0; i < s.length; i++) {
     const chr = s.charCodeAt(i);
     hash = ((hash << 5) - hash) + chr;
@@ -662,11 +720,86 @@ export function hashProductName(name: string): string {
 }
 
 // --- UPDATE ORDER STATUS di Firestore ---
-export async function updateOrderStatus(orderId: string, newStatus: string, paymentStatus?: string): Promise<void> {
+export async function updateOrderStatus(orderId: string, newStatus: string, paymentStatus?: string, paymentProofUrl?: string): Promise<void> {
   const orderRef = doc(db, 'orders', orderId);
   const updateData: any = { status: newStatus };
   if (paymentStatus) updateData.paymentStatus = paymentStatus;
+  if (paymentProofUrl) updateData.paymentProofUrl = paymentProofUrl;
   await setDoc(orderRef, updateData, { merge: true });
+}
+
+// --- LISTENER BUKTI TRANSFER DARI CUSTOMER ---
+
+/**
+ * Listen real-time untuk order yang baru diupload bukti transfer oleh customer
+ * (proofNeedsReview = true). Berguna untuk notifikasi admin ERP.
+ * 
+ * @param onNewProof - Callback ketika ada bukti baru yang perlu direview
+ * @param onError - Callback error
+ * @returns Unsubscribe function
+ */
+export function listenProofUploads(
+  onNewProof: (order: WebStoreOrder) => void,
+  onError?: (err: Error) => void
+) {
+  const q = query(
+    collection(db, 'orders'),
+    where('proofNeedsReview', '==', true),
+    orderBy('createdAt', 'desc'),
+    limit(50)
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added' || change.type === 'modified') {
+          const data = change.doc.data() as WebStoreOrder;
+          if (data.paymentProofUrl && data.proofNeedsReview) {
+            onNewProof(data);
+          }
+        }
+      });
+    },
+    onError
+  );
+}
+
+// --- UPLOAD BUKTI TRANSFER ---
+
+/**
+ * Upload bukti transfer ke Firebase Storage untuk suatu order.
+ * File disimpan di: payment_proofs/{orderId}/{timestamp}_{fileName}
+ * Returns download URL yang bisa disimpan di order.paymentProofUrl
+ */
+export async function uploadPaymentProof(
+  orderId: string,
+  file: File
+): Promise<string> {
+  const timestamp = Date.now();
+  const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const filePath = `payment_proofs/${orderId}/${timestamp}_${safeFileName}`;
+  const storageRef = ref(storage, filePath);
+
+  // Upload file
+  const snapshot = await uploadBytes(storageRef, file);
+  
+  // Dapatkan download URL
+  const downloadUrl = await getDownloadURL(snapshot.ref);
+  
+  // Simpan URL ke order di Firestore agar bisa diakses web store
+  const orderRef = doc(db, 'orders', orderId);
+  await setDoc(orderRef, { paymentProofUrl: downloadUrl }, { merge: true });
+  
+  return downloadUrl;
+}
+
+/**
+ * Hapus bukti transfer dari order (reset paymentProofUrl)
+ */
+export async function removePaymentProof(orderId: string): Promise<void> {
+  const orderRef = doc(db, 'orders', orderId);
+  await setDoc(orderRef, { paymentProofUrl: '' }, { merge: true });
 }
 
 // ============================================================================

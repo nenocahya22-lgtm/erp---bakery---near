@@ -17,6 +17,9 @@ import type { PrinterToko, PrinterTransaksi, PrinterItem } from './printer';
 let connectedPort: SerialPort | null = null;
 let connectedWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
 
+// Flag untuk mencegah print ganda (mutex)
+let isPrinting = false;
+
 // ─── ESC/POS CONSTANTS ───
 const ESC = 0x1B;
 const LF = 0x0A;
@@ -101,6 +104,27 @@ export async function cetakWebSerial(
 ): Promise<{ success: boolean; message: string }> {
   if (!isPrinterConnected()) {
     return { success: false, message: 'Printer belum terhubung. Klik "Hubungkan Printer" dulu.' };
+  }
+
+  // ─── CEGAH PRINT GANDA ───
+  // Jika masih ada print job berjalan, tolak request baru.
+  // Ini mencegah printer ngeprint ulang karena double-click atau buffer tersisa.
+  if (isPrinting) {
+    return { success: false, message: '⏳ Masih ada print job berjalan. Tunggu selesai.' };
+  }
+  isPrinting = true;
+
+  // Gunakan writer dari koneksi yang sudah ada
+  // Tidak perlu release+re-acquire writer — cukup pakai yang sudah ada.
+  // Ini mencegah stream corruption di WebSerial.
+  if (!connectedWriter) {
+    try {
+      const writer = connectedPort!.writable.getWriter();
+      connectedWriter = writer;
+    } catch (e) {
+      isPrinting = false;
+      return { success: false, message: `Gagal mendapatkan writer: ${e}` };
+    }
   }
 
   const t: PrinterToko = {
@@ -194,18 +218,24 @@ export async function cetakWebSerial(
     if (t.footer_1) await tulis(t.footer_1);
     if (t.footer_2) await tulis(t.footer_2);
 
-    // ─── 7. POTONG KERTAS ───
-    await tulis('');
-    await tulis('');
-    await tulis('');
-    await sendRaw([
-      ESC, 0x6D,           // ESC m — Partial cut (most common)
-      // Or: GS V m — Full cut
-      // 0x1D, 0x56, 0x00,
-    ]);
+    // ─── 7. AKHIR DOKUMEN ───
+    // Feed paper 4 baris ke posisi robek manual
+    for (let i = 0; i < 4; i++) await tulis('');
+
+    // Kirim Form Feed (FF = 0x0C) — sinyal akhir halaman
+    // PRINTER BERHENTI NGEPRINT setelah menerima ini!
+    await sendRaw([0x0C]);
+
+    // Kirim Cut command (GS V 0) — untuk printer yang punya auto-cutter
+    // Tanpa auto-cutter, ini jadi penanda END-OF-JOB
+    await sendRaw([0x1D, 0x56, 0x00]);
+
+    // Selesai — release mutex agar print selanjutnya bisa jalan
+    isPrinting = false;
 
     return { success: true, message: '✅ Struk berhasil dicetak via WebSerial!' };
   } catch (err: any) {
+    isPrinting = false;
     // Jika koneksi putus, reset state
     if (err.message?.includes('disconnected') || err.message?.includes('not open')) {
       disconnectPrinter();
@@ -218,5 +248,11 @@ export async function cetakWebSerial(
 
 async function sendRaw(bytes: number[]): Promise<void> {
   if (!connectedWriter) throw new Error('Printer tidak terhubung');
-  await connectedWriter.write(new Uint8Array(bytes));
+  try {
+    await connectedWriter.write(new Uint8Array(bytes));
+  } catch (err) {
+    // Jika writer error, buang writer lock dan throw
+    connectedWriter = null;
+    throw err;
+  }
 }

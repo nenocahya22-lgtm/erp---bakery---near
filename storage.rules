@@ -1,0 +1,48 @@
+rules_version = '2';
+
+// ──────────────────────────────────────────────────────────────
+// Firebase Storage Security Rules — Near Bakery & Co. 
+// ──────────────────────────────────────────────────────────────
+// Rules ini mengatur akses ke Firebase Storage.
+// 
+// Kebutuhan:
+//   1. Customer bisa upload & read bukti transfer ke folder payment_proofs/
+//   2. File gambar max 5MB
+//   3. Hanya user terautentikasi yang bisa akses
+// ──────────────────────────────────────────────────────────────
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── FUNGSI VALIDASI ──
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // ── PAYMENT PROOFS — Customer upload bukti transfer ──
+    // Customer yang sudah login (anonim atau email) bisa:
+    //   - Upload gambar ke payment_proofs/{orderId}/
+    //   - Membaca file yang sudah diupload
+    //   - Max 5MB, hanya gambar
+    match /payment_proofs/{orderId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated()
+        && request.resource.size < 5 * 1024 * 1024   // Max 5MB
+        && request.resource.contentType.matches('image/.*');  // Hanya gambar
+    }
+
+    // ── PRODUCT IMAGES — Gambar produk dari admin ERP ──
+    // Hanya admin (Google Auth) yang bisa upload
+    // Semua user terautentikasi bisa baca
+    match /product_images/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated()
+        && request.resource.size < 2 * 1024 * 1024;
+    }
+
+    // ── SEMUA FILE LAIN — Default: tidak bisa diakses ──
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

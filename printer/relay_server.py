@@ -23,7 +23,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
 
 # ─── Konfigurasi ───
-PRINTER_PORT = os.environ.get('PRINTER_PORT', 'COM11')
+PRINTER_PORT = os.environ.get('PRINTER_PORT', 'auto')
 PRINTER_BAUD = os.environ.get('PRINTER_BAUD', '9600')
 RELAY_PORT = int(os.environ.get('RELAY_PORT', '3001'))
 
@@ -45,6 +45,23 @@ class PrinterRelayHandler(BaseHTTPRequestHandler):
         """Handle GET requests."""
         parsed = urlparse(self.path)
         if parsed.path == '/' or parsed.path == '/status':
+            printers_list = []
+            import sys
+            if sys.platform == 'win32':
+                try:
+                    import win32print
+                    printers_list = [p[2] for p in win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)]
+                except Exception as e:
+                    printers_list = [f"Error listing printers: {e}"]
+            
+            printers_li = "".join(f"<li>{p}</li>" for p in printers_list) if printers_list else "<li>Tidak ada printer Windows terdeteksi</li>"
+            printers_html = f'''<div class="card">
+  <div class="label">Printer Windows Terinstall</div>
+  <div class="value" style="font-size:12px;font-family:-apple-system,sans-serif;">
+    <ul style="margin:4px 0;padding-left:20px;color:#475569;">{printers_li}</ul>
+  </div>
+</div>'''
+
             self._send_html(200, f'''<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><title>Near Bakery — Printer Relay</title>
 <style>
@@ -67,9 +84,10 @@ class PrinterRelayHandler(BaseHTTPRequestHandler):
   <div class="value ok">✅ AKTIF</div>
 </div>
 <div class="card">
-  <div class="label">Printer</div>
-  <div class="value">{PRINTER_PORT} @ {PRINTER_BAUD} baud</div>
+  <div class="label">Printer Konfigurasi</div>
+  <div class="value">{PRINTER_PORT} @ {PRINTER_BAUD} baud (Auto-fallback)</div>
 </div>
+{printers_html}
 <div class="card">
   <div class="label">Server</div>
   <div class="value">http://localhost:{RELAY_PORT}/api/print</div>

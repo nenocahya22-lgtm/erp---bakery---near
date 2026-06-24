@@ -406,7 +406,7 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
           showToast(`✅ ${count} produk + kategori tersinkronisasi! Web Store akan update.`, 'success');
         } catch (e) {
           console.warn('Product sync error (non-critical):', e);
-          const imgCount = calculatedProducts ? calculatedProducts.filter(c => localStorage.getItem(`recipe_img_${c.namaProduk.toLowerCase().trim()}`)).length : 0;
+          const imgCount = calculatedProducts ? calculatedProducts.filter(c => c.namaProduk && localStorage.getItem(`recipe_img_${(c.namaProduk || '').toLowerCase().trim()}`)).length : 0;
           showToast(`⚠️ Konfigurasi tersimpan. Gagal sync ${imgCount > 0 ? `(${imgCount} gambar AI siap)` : ''} — coba Sync Manual di tab Katalog Produk.`, 'warning');
         }
       } else {
@@ -2245,7 +2245,7 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
             <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
               {firestoreProducts.map((fp) => {
                 const existsInErp = productHpp.some(
-                  p => p.namaProduk.toLowerCase().trim() === fp.name.toLowerCase().trim()
+                  p => p.namaProduk && (p.namaProduk || '').toLowerCase().trim() === (fp.name || '').toLowerCase().trim()
                 );
                 return (
                   <div key={fp.docId} className={`flex items-center gap-3 p-3 rounded-xl border ${
@@ -2324,8 +2324,8 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
           {/* Ringkasan stats */}
           <div className="border-t border-gray-100 pt-3 mt-3 flex items-center justify-between text-[10px] text-gray-500">
             <span>Total di Firestore: <strong>{firestoreProducts.length}</strong> produk</span>
-            <span>Di ERP: <strong>{firestoreProducts.filter(fp => productHpp.some(p => p.namaProduk.toLowerCase().trim() === fp.name.toLowerCase().trim())).length}</strong></span>
-            <span>Web Store Only: <strong>{firestoreProducts.filter(fp => !productHpp.some(p => p.namaProduk.toLowerCase().trim() === fp.name.toLowerCase().trim())).length}</strong></span>
+            <span>Di ERP: <strong>{firestoreProducts.filter(fp => productHpp.some(p => p.namaProduk && (p.namaProduk || '').toLowerCase().trim() === (fp.name || '').toLowerCase().trim())).length}</strong></span>
+            <span>Web Store Only: <strong>{firestoreProducts.filter(fp => !productHpp.some(p => p.namaProduk && (p.namaProduk || '').toLowerCase().trim() === (fp.name || '').toLowerCase().trim())).length}</strong></span>
           </div>
 
           {/* ─── KATEGORI DARI FIRESTORE ─── */}

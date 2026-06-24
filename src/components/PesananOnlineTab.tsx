@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Layers, ShieldCheck, ShoppingCart, AlertTriangle, CheckCircle2, Globe, RefreshCw, Package, ChevronDown, ChevronRight, Clock } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Layers, ShieldCheck, ShoppingCart, AlertTriangle, CheckCircle2, Globe, RefreshCw, Package, ChevronDown, ChevronRight, Clock, Upload, X, ExternalLink } from 'lucide-react';
 import { CalculationResult, BahanBaku, DetailResep, ProductHpp } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
-import { listenNewOrders, getAllOrders, WebStoreOrder, updateOrderStatus } from '../lib/firestore-bridge';
+import { listenNewOrders, getAllOrders, WebStoreOrder, updateOrderStatus, uploadPaymentProof, removePaymentProof, listenProofUploads } from '../lib/firestore-bridge';
 
 /** Catat baking log ke localStorage ProductionCenterTab agar tidak dobel entry */
 function recordBakingLog(productName: string, batchQty: number) {
@@ -90,6 +90,36 @@ export default function PesananOnlineTab({
     };
   }, []);
 
+  // ─── LISTENER: Deteksi bukti transfer baru dari customer ───
+  useEffect(() => {
+    const unsubProofs = listenProofUploads((order) => {
+      // Update local state untuk tampilkan badge (tanpa trigger ulang notifikasi)
+      setFirestoreOrders(prev => prev.map(o => {
+        if (o.id === order.id) {
+          return {
+            ...o,
+            paymentProofUrl: order.paymentProofUrl || o.paymentProofUrl,
+            paymentStatus: order.paymentStatus as any || o.paymentStatus,
+          };
+        }
+        return o;
+      }));
+    }, (err) => {
+      console.warn('Proof upload listener error:', err);
+    });
+
+    return () => {
+      unsubProofs();
+    };
+  }, []);
+
+  // ─── HITUNG ORDER YG MENUNGGU VERIFIKASI BUKTI ───
+  const pendingProofCount = firestoreOrders.filter(o =>
+    o.paymentProofUrl && 
+    o.status === 'Menunggu Pembayaran' &&
+    o.paymentStatus !== 'Lunas'
+  ).length;
+
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
@@ -130,6 +160,46 @@ export default function PesananOnlineTab({
       showLocalToast('❌ Gagal memuat orders dari Firestore.', 'error');
     } finally {
       setIsLoadingOrders(false);
+    }
+  };
+
+  // ─── BUKTI TRANSFER ───
+  const [uploadingOrderId, setUploadingOrderId] = useState<string | null>(null);
+  const [viewingProofOrderId, setViewingProofOrderId] = useState<string | null>(null);
+
+  const handleUploadProof = async (orderId: string, file: File) => {
+    if (!file || !file.type.startsWith('image/')) {
+      showLocalToast('❌ File harus berupa gambar (JPG/PNG).', 'error');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showLocalToast('❌ Ukuran file maksimal 5MB.', 'error');
+      return;
+    }
+    setUploadingOrderId(orderId);
+    try {
+      const downloadUrl = await uploadPaymentProof(orderId, file);
+      setFirestoreOrders(prev => prev.map(o =>
+        o.id === orderId ? { ...o, paymentProofUrl: downloadUrl } : o
+      ));
+      showLocalToast('✅ Bukti transfer berhasil diupload!', 'success');
+    } catch (err: any) {
+      console.error('Upload proof failed:', err);
+      showLocalToast('❌ Gagal upload: ' + (err.message || 'Unknown error'), 'error');
+    } finally {
+      setUploadingOrderId(null);
+    }
+  };
+
+  const handleRemoveProof = async (orderId: string) => {
+    try {
+      await removePaymentProof(orderId);
+      setFirestoreOrders(prev => prev.map(o =>
+        o.id === orderId ? { ...o, paymentProofUrl: undefined } : o
+      ));
+      showLocalToast('✅ Bukti transfer dihapus.', 'info');
+    } catch (err) {
+      showLocalToast('❌ Gagal menghapus bukti.', 'error');
     }
   };
 
@@ -297,6 +367,11 @@ export default function PesananOnlineTab({
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1">
                   <ShoppingCart className="w-3.5 h-3.5 text-indigo-600" /> Pesanan Web Store ({firestoreOrders.length})
+                  {pendingProofCount > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 bg-amber-400 text-amber-900 text-[8px] font-black rounded-full animate-pulse">
+                      🪄 {pendingProofCount} bukti baru
+                    </span>
+                  )}
                 </h4>
               </div>
               <div className="space-y-3 max-h-[600px] overflow-y-auto">
@@ -339,6 +414,43 @@ export default function PesananOnlineTab({
                           <span className="text-[9px] text-gray-400">
                             {o.items.reduce((s, i) => s + i.quantity, 0)} items
                           </span>
+                        </div>
+                        {/* ─── BUKTI TRANSFER ─── */}
+                        <div className="flex flex-col gap-1 items-end">
+                          {o.paymentProofUrl ? (
+                            <div className="flex items-center gap-1">
+                              <div className="w-8 h-8 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 cursor-pointer hover:opacity-80 transition"
+                                onClick={(e) => { e.stopPropagation(); setViewingProofOrderId(o.id); }}>
+                                <img src={o.paymentProofUrl} alt="Bukti Transfer"
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                              </div>
+                              <button onClick={(e) => { e.stopPropagation(); handleRemoveProof(o.id); }}
+                                className="p-1 text-gray-400 hover:text-red-500 transition cursor-pointer" title="Hapus bukti">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <label className={`p-1.5 rounded-lg cursor-pointer transition ${
+                              uploadingOrderId === o.id
+                                ? 'bg-gray-200 text-gray-400 cursor-wait'
+                                : 'bg-amber-100 hover:bg-amber-200 text-amber-700'
+                            }`} title="Upload bukti transfer"
+                              onClick={(e) => e.stopPropagation()}>
+                              <input type="file" accept="image/*" className="hidden"
+                                disabled={uploadingOrderId !== null}
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) await handleUploadProof(o.id, file);
+                                  e.target.value = '';
+                                }} />
+                              {uploadingOrderId === o.id ? (
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Upload className="w-3.5 h-3.5" />
+                              )}
+                            </label>
+                          )}
                         </div>
                         {/* Action buttons */}
                         <div className="flex flex-col gap-1">
@@ -567,6 +679,56 @@ export default function PesananOnlineTab({
           </div>
         </div>
       </div>
+
+      {/* ─── MODAL BUKTI TRANSFER ─── */}
+      {viewingProofOrderId && (() => {
+        const order = firestoreOrders.find(o => o.id === viewingProofOrderId);
+        if (!order || !order.paymentProofUrl) return null;
+        return (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setViewingProofOrderId(null)}>
+            <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-gray-100 overflow-hidden"
+              onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">📸 Bukti Transfer</h3>
+                  <p className="text-[10px] text-gray-500">
+                    Pesanan #{order.id.slice(-8)} — {order.userName}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a href={order.paymentProofUrl} target="_blank" rel="noopener noreferrer"
+                    className="p-2 text-gray-400 hover:text-emerald-600 transition cursor-pointer"
+                    title="Buka di tab baru">
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                  <button onClick={() => setViewingProofOrderId(null)}
+                    className="p-2 text-gray-400 hover:text-gray-600 transition cursor-pointer">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="p-4 bg-gray-50 flex items-center justify-center max-h-[70vh] overflow-y-auto">
+                <img src={order.paymentProofUrl} alt="Bukti Transfer"
+                  className="max-w-full h-auto rounded-lg shadow-sm"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'data:image/svg+xml,' + encodeURIComponent(
+                      '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect fill="#f3f4f6" width="400" height="300"/><text x="200" y="150" text-anchor="middle" fill="#9ca3af" font-size="14" font-family="sans-serif">Gambar tidak dapat dimuat</text></svg>'
+                    );
+                  }} />
+              </div>
+              {order.paymentStatus && (
+                <div className="p-4 border-t border-gray-100 flex justify-between items-center text-xs">
+                  <span className="text-gray-500">Status Pembayaran:</span>
+                  <span className={`font-bold px-2.5 py-1 rounded-lg ${
+                    order.paymentStatus === 'Lunas' ? 'bg-emerald-100 text-emerald-800' : 'bg-yellow-100 text-yellow-800'
+                  }`}>{order.paymentStatus}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Platform status */}
       <div className="bg-slate-900 text-slate-100 p-5 rounded-2xl border border-slate-800 shadow-xs space-y-4">

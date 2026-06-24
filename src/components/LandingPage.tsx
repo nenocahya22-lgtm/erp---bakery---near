@@ -74,9 +74,19 @@ function Reveal({ children, className = '', delay = 0 }: { children: React.React
 function FloatingOrb({ className, size = 'w-96 h-96', color = 'bg-emerald-500/10' }: { className?: string; size?: string; color?: string }) {
   return (
     <div
-      className={`absolute rounded-full ${size} ${color} blur-[80px] ${className || ''}`}
-      style={{ willChange: 'opacity' }}
+      className={`absolute rounded-full ${size} ${color} blur-[80px] pointer-events-none ${className || ''}`}
+      style={{ transform: 'translateZ(0)', willChange: 'transform' }}
     />
+  );
+}
+
+// ─── SELF-CONTAINED COUNTER COMPONENT (prevents root component re-renders) ───
+function StatCounter({ target, start = false, suffix = '' }: { target: number; start?: boolean; suffix?: string }) {
+  const count = useCountUp(target, 2500, start);
+  return (
+    <>
+      {count.toLocaleString()}<span className="text-emerald-400">{suffix}</span>
+    </>
   );
 }
 
@@ -102,10 +112,6 @@ export default function LandingPage({ onEnterERP, onEnterWebstore, productCount,
   const realRevenueToday = revenueToday ?? 0;
   const realLowStockCount = lowStockCount ?? 0;
   const realTodayOrders = todayOrders ?? 0;
-
-  const productCountAnim = useCountUp(realProductCount, 2500, statsVisible);
-  const branchCountAnim = useCountUp(realBranchCount, 2500, statsVisible);
-  const transactionCountAnim = useCountUp(realTransactionCount, 2500, statsVisible);
 
   // Format revenue
   const formattedRevenue = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(realRevenueToday);
@@ -369,17 +375,16 @@ export default function LandingPage({ onEnterERP, onEnterWebstore, productCount,
         <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {[
-              { value: productCountAnim, suffix: '+', label: 'Produk Dikelola', icon: <Package className="w-5 h-5" /> },
-              { value: branchCountAnim, suffix: '', label: 'Cabang Aktif', icon: <Store className="w-5 h-5" /> },
-              { value: transactionCountAnim, suffix: '+', label: 'Transaksi Diproses', icon: <TrendingUp className="w-5 h-5" /> },
-              // { value: satisfactionCountAnim, suffix: '%', label: 'Kepuasan Pengguna', icon: <Award className="w-5 h-5" /> },  // DUMMY — dihapus
+              { target: realProductCount, suffix: '+', label: 'Produk Dikelola', icon: <Package className="w-5 h-5" /> },
+              { target: realBranchCount, suffix: '', label: 'Cabang Aktif', icon: <Store className="w-5 h-5" /> },
+              { target: realTransactionCount, suffix: '+', label: 'Transaksi Diproses', icon: <TrendingUp className="w-5 h-5" /> },
             ].map((stat, i) => (
               <div key={i} className="text-center space-y-2">
                 <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto text-emerald-400">
                   {stat.icon}
                 </div>
                 <div className="text-3xl md:text-4xl font-black text-white tabular-nums">
-                  {stat.value.toLocaleString()}<span className="text-emerald-400">{stat.suffix}</span>
+                  <StatCounter target={stat.target} start={statsVisible} suffix={stat.suffix} />
                 </div>
                 <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">{stat.label}</p>
               </div>

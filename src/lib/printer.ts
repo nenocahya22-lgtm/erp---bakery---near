@@ -59,7 +59,10 @@ export { isWebSerialSupported, isPrinterConnected, connectPrinter, disconnectPri
 
 /**
  * Cetak struk thermal 58mm.
- * Priority: WebSerial (browser langsung) > Server API (Python) > Browser HTML print
+ * Priority: WebSerial (browser langsung) > Relay Server (Python) > Server API
+ * 
+ * ⚠️ PENTING: Jika WebSerial terhubung dan cetak, TIDAK lanjut ke metode lain
+ * karena data MUNGKIN sudah terkirim ke printer (buffer issue). Ini mencegah double-print.
  */
 export async function cetakStrukThermal(
   transaksi: PrinterTransaksi,
@@ -67,10 +70,12 @@ export async function cetakStrukThermal(
   toko?: Partial<PrinterToko>,
 ): Promise<{ success: boolean; message: string }> {
   // ─── PRIORITAS 1: WebSerial (langsung dari browser ke Bluetooth) ───
+  // Jika printer sudah terhubung via WebSerial, hanya coba via WebSerial.
+  // JANGAN fallback ke metode lain meskipun gagal, karena data mungkin sudah
+  // terkirim sebagian ke printer dan fallback akan menyebabkan PRINT GANDA.
   if (isPrinterConnected()) {
     const result = await cetakWebSerial(transaksi, items, toko);
-    if (result.success) return result;
-    console.warn('WebSerial gagal, fallback ke API server:', result.message);
+    return result;
   }
 
   // ─── PRIORITAS 2: Relay Server (Python HTTP relay di localhost:3001) ───
@@ -112,8 +117,11 @@ export async function cetakStrukThermal(
     console.warn('API server tidak tersedia:', err.message);
   }
 
-  // ─── PRIORITAS 4: Browser print fallback ───
-  return { success: false, message: 'Printer tidak terhubung. Jalankan start-printer.bat dulu, atau klik "Hubungkan Printer" untuk WebSerial.' };
+  // ─── SEMUA METODE GAGAL ───
+  return { 
+    success: false, 
+    message: 'Printer tidak terhubung. Jalankan start-printer.bat dulu, atau klik "Hubungkan Printer" untuk WebSerial.' 
+  };
 }
 
 /**

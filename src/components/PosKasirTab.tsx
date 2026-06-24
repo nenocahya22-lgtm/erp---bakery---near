@@ -148,6 +148,13 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
     // Harga varian jika dipilih, fallback ke harga dasar
     const variantPrice = selectedVariant?.hargaJual || 0;
     const price = variantPrice > 0 ? variantPrice : (prodInfo ? prodInfo.hargaJualPerPorsi : 0);
+    
+    // 🔥 VALIDASI: Harga harus > 0 — cegah transaksi gratis karena lupa set harga!
+    if (price <= 0) {
+      showToast(`❌ Harga jual "${selectedProduct}" belum diatur! Atur harga di tab Harga & HPP.`, 'error');
+      return;
+    }
+    
     const totalRevenue = price * orderQty;
     const txId = `TX-${Date.now().toString().slice(-6)}`;
 
@@ -170,6 +177,12 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
 
     setOrders(prev => [newOrder, ...prev]);
     if (onCompletePOSSale) onCompletePOSSale(selectedProduct, orderQty, grandTotal, orderSource);
+
+    // ─── AUTO-PRINT: Cetak bill otomatis jika printer WebSerial terhubung ───
+    // Tidak perlu start relay server lokal — langsung dari browser ke Bluetooth!
+    if (isPrinterConnected()) {
+      handlePrintThermalBill(newOrder).catch(console.warn);
+    }
 
     setNewCustName('');
     setSelectedProduct('');
@@ -239,8 +252,6 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
   };
 
   const handlePrintLaporan = (orderList: RetailOrder[], dateLabel: string) => {
-    const printWin = window.open('', '_blank');
-    if (!printWin) return;
     const total = orderList.reduce((s, o) => s + o.totalSum, 0);
     const rows = orderList.map(o => `
       <tr>
@@ -274,7 +285,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
       </tr>
     `).join('');
 
-    printWin.document.write(`
+    const htmlContent = `
       <html><head>
         <title>Laporan Penjualan - ${dateLabel}</title>
         <style>
@@ -325,10 +336,31 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
           Near Bakery & Co. ERP — Laporan Penjualan<br>
           Dicetak dari Sistem POS Kasir
         </div>
-        <script>window.print(); setTimeout(() => window.close(), 1000);</script>
+        <script>window.print();</script>
       </body></html>
-    `);
-    printWin.document.close();
+    `;
+
+    const printFrame = document.createElement('iframe');
+    printFrame.style.position = 'fixed';
+    printFrame.style.right = '0';
+    printFrame.style.bottom = '0';
+    printFrame.style.width = '0';
+    printFrame.style.height = '0';
+    printFrame.style.border = '0';
+    document.body.appendChild(printFrame);
+
+    const doc = printFrame.contentWindow?.document || printFrame.contentDocument;
+    if (doc) {
+      doc.write(htmlContent);
+      doc.close();
+      setTimeout(() => {
+        printFrame.contentWindow?.focus();
+        printFrame.contentWindow?.print();
+        setTimeout(() => {
+          document.body.removeChild(printFrame);
+        }, 1000);
+      }, 500);
+    }
   };
 
   // ─── PRINT STRUK THERMAL ke Printer 58mm via API ───
@@ -372,12 +404,29 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
       console.warn('Thermal printer unavailable, using browser print fallback:', result.message);
       showToast(`⚠️ Printer thermal: ${result.message} — Fallback ke print browser.`, 'warning');
 
-      // ─── FALLBACK: browser print (window.print) ───
+      // ─── FALLBACK: browser print (window.print via hidden iframe) ───
       const html = generateHtmlStruk(transaksi, items);
-      const printWin = window.open('', '_blank');
-      if (printWin) {
-        printWin.document.write(html);
-        printWin.document.close();
+      
+      const printFrame = document.createElement('iframe');
+      printFrame.style.position = 'fixed';
+      printFrame.style.right = '0';
+      printFrame.style.bottom = '0';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.style.border = '0';
+      document.body.appendChild(printFrame);
+
+      const doc = printFrame.contentWindow?.document || printFrame.contentDocument;
+      if (doc) {
+        doc.write(html);
+        doc.close();
+        setTimeout(() => {
+          printFrame.contentWindow?.focus();
+          printFrame.contentWindow?.print();
+          setTimeout(() => {
+            document.body.removeChild(printFrame);
+          }, 1000);
+        }, 500);
       }
     } else {
       showToast('✅ Struk berhasil dicetak!', 'success');

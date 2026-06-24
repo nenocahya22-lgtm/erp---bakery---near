@@ -52,7 +52,7 @@ if %errorlevel% neq 0 (
 
 echo.
 echo  Menjalankan relay server...
-echo  Printer: COM11 @ 9600 baud
+echo  Printer: Auto-detect (Serial / Spooler)
 echo  Server : http://localhost:3001
 echo.
 echo  Biarkan jendela ini terbuka!

@@ -1,5 +1,6 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 import { safeGetLocalStorage } from './safe-json';
 
 // Firebase config dari environment variables (VITE_* untuk client-side)
@@ -15,8 +16,9 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
+const storage = getStorage(app);
 
-export { app, auth };
+export { app, auth, storage };
 
 const provider = new GoogleAuthProvider();
 // Request the Google Sheets scope
