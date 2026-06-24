@@ -4,10 +4,20 @@
  * Atau: node --loader ts-node/esm api/check-firestore-data.ts
  * 
  * Mengecek collection: webstore_config, products, categories
+ * 
+ * 🔐 KEAMANAN: API Key dan Project ID dibaca dari environment variable,
+ * bukan hardcoded! Set FIRESTORE_PROJECT_ID dan FIRESTORE_API_KEY
+ * sebelum menjalankan script.
+ * 
+ * Cara setting:
+ *   export FIRESTORE_PROJECT_ID="your-project-id"
+ *   export FIRESTORE_API_KEY="your-api-key"
+ *   npx tsx api/check-firestore-data.ts
  */
 
-const PROJECT_ID = 'near-bakery-store';
-const API_KEY = 'AIzaSyDAoTZXv7H849mwP4A29_Ohhbri7_ztLm4';
+// ⚠️ JANGAN hardcode API Key! Gunakan environment variables.
+const PROJECT_ID = process.env.FIRESTORE_PROJECT_ID || '';
+const API_KEY = process.env.FIRESTORE_API_KEY || '';
 
 // Gunakan Firestore REST API langsung — tidak perlu SDK
 interface DocResult {
@@ -18,6 +28,13 @@ interface DocResult {
 }
 
 async function fetchCollection(collectionPath: string): Promise<DocResult[]> {
+  if (!PROJECT_ID || !API_KEY) {
+    console.warn('  ⚠️ FIRESTORE_PROJECT_ID atau FIRESTORE_API_KEY tidak diset!');
+    console.warn('     Set environment variable sebelum menjalankan script:');
+    console.warn('     export FIRESTORE_PROJECT_ID="your-project-id"');
+    console.warn('     export FIRESTORE_API_KEY="your-api-key"');
+    return [];
+  }
   const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/${collectionPath}?key=${API_KEY}`;
   try {
     const res = await fetch(url);

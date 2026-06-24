@@ -106,17 +106,11 @@ export async function cetakWebSerial(
     return { success: false, message: 'Printer belum terhubung. Klik "Hubungkan Printer" dulu.' };
   }
 
-  // ─── CEGAH PRINT GANDA ───
-  // Jika masih ada print job berjalan, tolak request baru.
-  // Ini mencegah printer ngeprint ulang karena double-click atau buffer tersisa.
   if (isPrinting) {
     return { success: false, message: '⏳ Masih ada print job berjalan. Tunggu selesai.' };
   }
   isPrinting = true;
 
-  // Gunakan writer dari koneksi yang sudah ada
-  // Tidak perlu release+re-acquire writer — cukup pakai yang sudah ada.
-  // Ini mencegah stream corruption di WebSerial.
   if (!connectedWriter) {
     try {
       const writer = connectedPort!.writable.getWriter();
@@ -127,90 +121,122 @@ export async function cetakWebSerial(
     }
   }
 
+  // Ambil pengaturan toko dari localStorage (Pengaturan Sistem)
+  const storeName = localStorage.getItem('store_name') || 'NEAR BAKERY & CO.';
+  const storeAddress = localStorage.getItem('store_address') || '';
+  const storePhone = localStorage.getItem('store_phone') || '';
+  const storeFooter = localStorage.getItem('store_footer') || 'Terima kasih!';
+
   const t: PrinterToko = {
-    nama: toko?.nama || 'NEAR BAKERY & CO.',
-    alamat: toko?.alamat || '',
-    kontak: toko?.kontak || '',
-    footer_1: toko?.footer_1 || 'Terima kasih!',
+    nama: toko?.nama || storeName,
+    alamat: toko?.alamat || storeAddress,
+    kontak: toko?.kontak || storePhone,
+    footer_1: toko?.footer_1 || storeFooter,
     footer_2: toko?.footer_2 || 'Near Bakery & Co.',
   };
 
   try {
     const LEBAR = 32;
 
-    // Helper: format harga
     const fmt = (n: number) => n >= 1000000 ? `Rp${Math.round(n / 1000)}K` : `Rp${n.toLocaleString('id-ID')}`;
 
-    // Helper: tulis teks + LF
     const tulis = (teks: string) => {
       const bytes = new TextEncoder().encode(teks + '\n');
       return sendRaw(Array.from(bytes));
     };
 
-    // Helper: tulis teks tanpa LF
-    const tulisLangsung = (teks: string) => {
-      return sendRaw(Array.from(new TextEncoder().encode(teks)));
-    };
-
-    // Helper: garis separator
-    const garis = () => tulis('-'.repeat(LEBAR));
+    const garis = () => tulis('='.repeat(LEBAR));
+    const garisTipis = () => tulis('-'.repeat(LEBAR));
 
     // ─── 0. INIT ───
     await sendRaw([
       ESC, 0x40,           // ESC @ — Initialize
       ESC, 0x32,           // ESC 2 — line spacing default
-      ESC, 0x33, 36,       // ESC 3 36 — line spacing 36 dots
+      ESC, 0x33, 24,       // ESC 3 24 — line spacing lebih rapat (muat banyak item)
     ]);
 
     // ─── 1. HEADER TOKO ───
-    await sendRaw([
-      ESC, 0x61, 0x01,     // ESC a 1 — Center align
-      ESC, 0x21, 0x30,     // ESC ! 0x30 — Double width + height
-    ]);
+    await sendRaw([ESC, 0x61, 0x01]);  // Center align
+    await sendRaw([ESC, 0x45, 0x01]);  // Bold ON
+    await sendRaw([ESC, 0x21, 0x00]);  // Normal size (tidak double — MP-58 rawan overflow)
     await tulis(t.nama);
+    await sendRaw([ESC, 0x45, 0x00]);  // Bold OFF
 
     await sendRaw([ESC, 0x61, 0x01]);  // Center
-    await sendRaw([ESC, 0x21, 0x00]);  // Normal size
     if (t.alamat) await tulis(t.alamat);
-    if (t.kontak) await tulis(t.kontak);
+    if (t.kontak) await tulis(`Telp: ${t.kontak}`);
     await garis();
 
     // ─── 2. METADATA TRANSAKSI ───
     await sendRaw([ESC, 0x61, 0x00]);  // Left align
-    if (transaksi.no_transaksi) await tulis(`No        : ${transaksi.no_transaksi}`);
-    if (transaksi.pelanggan) await tulis(`Pelanggan : ${transaksi.pelanggan}`);
-    if (transaksi.kasir) await tulis(`Kasir     : ${transaksi.kasir}`);
-    if (transaksi.waktu) await tulis(`Waktu     : ${transaksi.waktu}`);
-    await garis();
+    if (transaksi.no_transaksi) await tulis(`No    : ${transaksi.no_transaksi}`);
+    if (transaksi.pelanggan) await tulis(`Atas  : ${transaksi.pelanggan}`);
+    if (transaksi.kasir) await tulis(`Kasir : ${transaksi.kasir}`);
+    if (transaksi.waktu) await tulis(`Jam   : ${transaksi.waktu}`);
+    await garisTipis();
 
     // ─── 3. ITEM BELANJA ───
-    for (const item of items) {
-      const teksProduk = `${item.qty} ${item.satuan} ${item.nama}`;
-      const teksHarga = fmt(item.harga);
-      const sisa = LEBAR - teksProduk.length - teksHarga.length;
+    // Header item
+    await sendRaw([ESC, 0x45, 0x01]);  // Bold ON
+    await tulis(`${'#  Item'.padEnd(22)} ${'Harga'.padStart(10)}`);
+    await sendRaw([ESC, 0x45, 0x00]);  // Bold OFF
+    await garisTipis();
 
-      if (sisa >= 0) {
-        await tulis(teksProduk + ' '.repeat(sisa) + teksHarga);
+    for (let idx = 0; idx < items.length; idx++) {
+      const item = items[idx];
+      const noUrut = `${idx + 1}.`;
+      const teksProduk = `${noUrut} ${item.nama}`;
+      const qtyStr = `${item.qty}${item.satuan === 'pcs' ? '' : ' ' + item.satuan}`;
+      const teksHarga = fmt(item.harga);
+
+      // Format: "1. Roti Tawar   x2     Rp25.000"
+      // Atau untuk 58mm: "1. Roti Tawar     Rp25.000"
+      //                  "   x2"
+      if (item.qty > 1) {
+        // Baris 1: nama + harga
+        const baris1 = `${noUrut} ${item.nama}`;
+        const sisa = LEBAR - baris1.length - teksHarga.length - 1;
+        if (sisa >= 0) {
+          await tulis(baris1 + ' '.repeat(sisa) + teksHarga);
+        } else {
+          const potong = baris1.slice(0, LEBAR - teksHarga.length - 4) + '...';
+          const sisa2 = LEBAR - potong.length - teksHarga.length - 1;
+          await tulis(potong + ' '.repeat(Math.max(0, sisa2)) + teksHarga);
+        }
+        // Baris 2: qty
+        await tulis(`   x${qtyStr}`);
       } else {
-        const potong = teksProduk.slice(0, LEBAR - teksHarga.length - 3) + '..';
-        const sisa2 = LEBAR - potong.length - teksHarga.length;
-        await tulis(potong + ' '.repeat(sisa2) + teksHarga);
+        const sisa = LEBAR - teksProduk.length - teksHarga.length - 1;
+        if (sisa >= 0) {
+          await tulis(teksProduk + ' '.repeat(sisa) + teksHarga);
+        } else {
+          const potong = teksProduk.slice(0, LEBAR - teksHarga.length - 4) + '...';
+          const sisa2 = LEBAR - potong.length - teksHarga.length - 1;
+          await tulis(potong + ' '.repeat(Math.max(0, sisa2)) + teksHarga);
+        }
       }
     }
     await garis();
 
     // ─── 4. TOTAL ───
     await sendRaw([ESC, 0x61, 0x02]);  // Right align
-    await sendRaw([ESC, 0x45, 0x01]);  // ESC E 1 — Bold ON
-    await sendRaw([ESC, 0x21, 0x08]);  // ESC ! 0x08 — Bold (some printers)
-    await tulis(`TOTAL     : ${fmt(transaksi.total_harga)}`);
-    await sendRaw([ESC, 0x45, 0x00]);  // ESC E 0 — Bold OFF
+    await sendRaw([ESC, 0x45, 0x01]);  // Bold ON
+    await tulis(`TOTAL  : ${fmt(transaksi.total_harga)}`);
+    await sendRaw([ESC, 0x45, 0x00]);  // Bold OFF
 
     // ─── 5. PEMBAYARAN ───
-    await sendRaw([ESC, 0x61, 0x02]);  // Right align
-    if (transaksi.metode_bayar) await tulis(`Bayar (${transaksi.metode_bayar})`);
-    if (transaksi.uang_dibayar && transaksi.uang_dibayar > 0) await tulis(`Tunai     : ${fmt(transaksi.uang_dibayar)}`);
-    if (transaksi.kembalian && transaksi.kembalian > 0) await tulis(`Kembali   : ${fmt(transaksi.kembalian)}`);
+    if (transaksi.metode_bayar) {
+      await sendRaw([ESC, 0x61, 0x02]);  // Right align
+      await tulis(`[${transaksi.metode_bayar}]`);
+    }
+    if (transaksi.uang_dibayar && transaksi.uang_dibayar > 0) {
+      await sendRaw([ESC, 0x61, 0x02]);
+      await tulis(`Bayar   : ${fmt(transaksi.uang_dibayar)}`);
+    }
+    if (transaksi.kembalian && transaksi.kembalian > 0) {
+      await sendRaw([ESC, 0x61, 0x02]);
+      await tulis(`Kembali : ${fmt(transaksi.kembalian)}`);
+    }
     await tulis('');
 
     // ─── 6. FOOTER ───
@@ -219,24 +245,15 @@ export async function cetakWebSerial(
     if (t.footer_2) await tulis(t.footer_2);
 
     // ─── 7. AKHIR DOKUMEN ───
-    // Feed paper 4 baris ke posisi robek manual
     for (let i = 0; i < 4; i++) await tulis('');
 
-    // Kirim Form Feed (FF = 0x0C) — sinyal akhir halaman
-    // PRINTER BERHENTI NGEPRINT setelah menerima ini!
-    await sendRaw([0x0C]);
+    await sendRaw([0x0C]);              // Form Feed
+    await sendRaw([0x1D, 0x56, 0x00]); // GS V 0 (cut/end-of-job)
 
-    // Kirim Cut command (GS V 0) — untuk printer yang punya auto-cutter
-    // Tanpa auto-cutter, ini jadi penanda END-OF-JOB
-    await sendRaw([0x1D, 0x56, 0x00]);
-
-    // Selesai — release mutex agar print selanjutnya bisa jalan
     isPrinting = false;
-
-    return { success: true, message: '✅ Struk berhasil dicetak via WebSerial!' };
+    return { success: true, message: '✅ Struk berhasil dicetak!' };
   } catch (err: any) {
     isPrinting = false;
-    // Jika koneksi putus, reset state
     if (err.message?.includes('disconnected') || err.message?.includes('not open')) {
       disconnectPrinter();
     }

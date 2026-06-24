@@ -45,14 +45,21 @@ export interface PrinterPayload {
   items: PrinterItem[];
 }
 
-// Default konfigurasi toko
-const DEFAULT_TOKO: PrinterToko = {
-  nama: 'NEAR BAKERY & CO.',
-  alamat: 'Dapur Pusat Sektor 12, DKI Jakarta',
-  kontak: '',
-  footer_1: 'Terima kasih atas kunjungan Anda!',
-  footer_2: 'Near Bakery & Co.',
-};
+// Default konfigurasi toko — ambil dari localStorage (Pengaturan Sistem)
+function getDefaultToko(): PrinterToko {
+  try {
+    return {
+      nama: localStorage.getItem('store_name') || 'NEAR BAKERY & CO.',
+      alamat: localStorage.getItem('store_address') || '',
+      kontak: localStorage.getItem('store_phone') || '',
+      footer_1: localStorage.getItem('store_footer') || 'Terima kasih!',
+      footer_2: 'Near Bakery & Co.',
+    };
+  } catch {
+    return { nama: 'NEAR BAKERY & CO.', alamat: '', kontak: '', footer_1: 'Terima kasih!', footer_2: 'Near Bakery & Co.' };
+  }
+}
+const DEFAULT_TOKO: PrinterToko = getDefaultToko();
 
 // ─── RE-EXPORT dari WebSerial ───
 export { isWebSerialSupported, isPrinterConnected, connectPrinter, disconnectPrinter };

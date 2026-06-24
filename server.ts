@@ -169,6 +169,77 @@ const marketingLimiter = rateLimit({
 
 app.use('/api/marketing', marketingLimiter);
 
+// ─── API: MARKETING CHAT — AI Chatbot ───
+app.post('/api/marketing/chat', async (req, res) => {
+  try {
+    const { message, history, products, bahanBaku, detailResep, wasteLogs, cabangList, suratOrders, productHpp, revenueData, ordersData } = req.body;
+    const client = getAiClient();
+
+    const productList = (products || []).map((p: any) => ({
+      nama: p.namaProduk, hpp: p.hppPerPorsi, hargaJual: p.hargaJualPerPorsi,
+      margin: p.marginPersen, yield: p.porsiJual,
+    }));
+    const bahanStok = (bahanBaku || []).map((b: any) => ({
+      nama: b.nama, stok: b.isiKemasan, satuan: b.satuan, hargaSatuan: b.hargaSatuan,
+    }));
+    const resepDetail = (detailResep || []).map((r: any) => ({
+      produk: r.namaProduk, bahan: r.namaBahan, takaran: r.takaran, satuan: r.satuan,
+    }));
+    const wasteTotal = (wasteLogs || []).reduce((s: number, w: any) => s + (w.lossValue || 0), 0);
+    const branchDetail = (cabangList || []).map((c: any) => ({
+      nama: c.nama || c.cabangNama, subdomain: c.subdomain, isActive: c.isActive,
+    }));
+    const pendingSO = (suratOrders || []).filter((s: any) => s.status === 'minta').length;
+    const totalRevenue = (revenueData?.transactions || []).reduce((s: number, t: any) => s + (t.amount || 0), 0);
+    const totalOrders = (revenueData?.transactions || []).length;
+    const lowStockBahan = (bahanBaku || []).filter((b: any) => b.isiKemasan < 100).map((b: any) => b.nama);
+    const lowMarginProducts = (products || []).filter((p: any) => p.marginPersen < 20);
+
+    const chatHistory = (history || []).slice(-20).map((h: any) => `${h.role === 'user' ? 'User' : 'AI'}: ${h.text}`).join('\n\n');
+    const systemData = `PRODUK (${productList.length}):\n${JSON.stringify(productList)}\n\nSTOK:\n${JSON.stringify(bahanStok)}\n\nRESEP:\n${JSON.stringify(resepDetail)}\n\nCABANG:\n${JSON.stringify(branchDetail)}\n\nREVENUE: Rp ${totalRevenue.toLocaleString('id-ID')} (${totalOrders} transaksi)\nWASTE: Rp ${wasteTotal.toLocaleString('id-ID')}\nSO PENDING: ${pendingSO}\nSTOK KRITIS: ${lowStockBahan.join(', ') || '-'}\nMARGIN RENDAH: ${lowMarginProducts.length}`;
+
+    const prompt = `Kamu adalah asisten AI marketing untuk Near Bakery & Co — jaringan toko roti dan bakery.
+Tugasmu membantu tim marketing dan owner mengelola bisnis dengan data real-time.
+
+KEPRIBADIAN:
+- Bicara santai, hangat, natural, pake bahasa Indonesia sehari-hari
+- Ngerti istilah bakery: HPP, margin, gramasi, yield, waste
+- Boleh pake emoji secukupnya 👍
+- Kalo detail, kasih langkah jelas & spesifik
+
+KEMAMPUAN:
+1. ANALISIS DATA — baca semua data produk, stok, resep, cabang, revenue, waste
+2. SARAN PER CABANG — saran spesifik untuk cabang tertentu
+3. SARAN HPP — kalo HPP melonjak, saran turunin gramasi atau cari vendor lain
+4. RESEP & MENU — cari resep, modifikasi, bikin resep baru dengan takaran
+5. STRATEGI — bundling, diskon, promo, campaign
+6. VENDOR — saran supplier alternatif
+7. FORECAST — prediksi tren
+
+DATA SISTEM:
+${systemData}
+
+RIWAYAT:
+${chatHistory}
+
+PESAN USER:
+"${message}"
+
+INSTRUKSI:
+- Jawab berdasarkan DATA, jangan ngasal
+- Kalo gak ada data, bilang jujur
+- Kalo ditanya resep baru, kasih resep lengkap + bahan + takaran + estimasi HPP
+- Format markdown sederhana
+- Santai, kayak ngobrol sama rekan kerja`;
+
+    const response = await client.models.generateContent({ model: "gemini-2.0-flash", contents: prompt });
+    res.json({ text: response.text });
+  } catch (error: any) {
+    console.error('Gemini chat error:', error);
+    res.status(500).json({ error: error.message || 'Error communicating with AI' });
+  }
+});
+
 // ─── API: MARKETING CONSULT ───
 app.post('/api/marketing/consult', async (req, res) => {
   try {

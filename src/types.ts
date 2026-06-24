@@ -430,7 +430,10 @@ export const createDefaultOperatingHours = () => [
   { day: 'Minggu', open: '09:00', close: '18:00', active: true },
 ];
 
-// Default config factory
+// ⚠️ HANYA UNTUK INITIAL SETUP — jangan panggil di tombol "Reset"!
+// Data default ini hanya dipakai sekali saat pertama user buka Web Store Manager.
+// Setelah itu, Firestore jadi sumber kebenaran dan user bebas edit/hapus/tambah.
+// Fungsi ini dipanggil secara internal oleh createDefaultWebStoreConfig().
 export const createDefaultPaymentMethods = (): PaymentMethod[] => [
   {
     id: 'bca-transfer',

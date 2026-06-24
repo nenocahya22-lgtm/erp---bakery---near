@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { CalculationResult, BahanBaku, ProductHpp, DetailResep, WasteLog, Cabang, SuratOrder } from '../types';
 import PosKasirTab from './PosKasirTab';
 import PesananOnlineTab from './PesananOnlineTab';
-import CrmMarketingTab from './CrmMarketingTab';
+import AiChatTab from './AiChatTab';
 import ChatTab from './ChatTab';
 
 interface PenjualanDashboardProps {
@@ -25,7 +25,7 @@ export default function PenjualanDashboard(props: PenjualanDashboardProps) {
   const tabs = [
     { key: 'pos' as const, label: '🛒 POS Kasir' },
     { key: 'online' as const, label: '📱 Pesanan Online' },
-    { key: 'crm' as const, label: '📈 CRM Marketing' },
+    { key: 'crm' as const, label: '🤖 AI Chat Marketing' },
     { key: 'chat' as const, label: '💬 Chat Pembeli' },
   ];
 
@@ -68,7 +68,7 @@ export default function PenjualanDashboard(props: PenjualanDashboardProps) {
         />
       )}
       {subTab === 'crm' && (
-        <CrmMarketingTab
+        <AiChatTab
           calculatedProducts={props.calculatedProducts}
           bahanBaku={props.bahanBaku}
           productHpp={props.productHpp}

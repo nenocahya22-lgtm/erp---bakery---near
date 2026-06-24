@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CalculationResult, BahanBaku, Cabang, BranchTransaction } from '../types';
-import DashboardTab from './DashboardTab';
+import DashboardTab, { type DashboardTabProps } from './DashboardTab';
 import EnterpriseDashboard from './EnterpriseDashboard';
 import LaporanKeuanganTab from './LaporanKeuanganTab';
 

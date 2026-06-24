@@ -44,7 +44,7 @@ interface RetailOrder {
   addOns?: { nama: string; harga: number }[];
 }
 
-interface DashboardTabProps {
+export interface DashboardTabProps {
   calculatedProducts: CalculationResult[];
   bahanBaku: BahanBaku[];
   cabangList?: Cabang[];

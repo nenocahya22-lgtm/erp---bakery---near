@@ -413,8 +413,12 @@ export function useERPData(showConfirm?: (opts: { title: string; message: string
     showToast(`Varian dihapus dari ${productName}!`, 'info');
   };
 
-  // ─── POS SALE ───
+  // ─── POS SALE + AUTO DEDUCT STOK ───
+  // 🔥 FIX: handleCompletePOSSale sekarang otomatis mengurangi stok bahan baku
+  //    untuk produk yang terjual, menggunakan data resep (detailResep).
+  //    SEBELUMNYA: hanya mencatat revenue, stok tidak terpotong.
   const handleCompletePOSSale = (productName: string, soldQty: number, totalRevenue: number, source?: string, cabangId?: string) => {
+    // ─── REVENUE TRACKING ───
     try {
       const saved = localStorage.getItem('revenue_tracker_data');
       const tracker = saved ? JSON.parse(saved) : { transactions: [], dailyTotals: {} };
@@ -446,9 +450,83 @@ export function useERPData(showConfirm?: (opts: { title: string; message: string
       console.error('Failed to record revenue:', err);
     }
 
+    // ─── 🔥 AUTO DEDUCT STOK BAHAN BAKU ───
+    // Cari resep untuk produk ini, lalu kurangi stok bahan sesuai qty terjual
+    const ingredientsForProduct = detailResep.filter(
+      (r) => r.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
+    );
+
+    if (ingredientsForProduct.length > 0) {
+      const productInfo = productHpp.find(
+        (p) => p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
+      );
+      const yieldPortions = productInfo?.porsiJual || 1;
+
+      setBahanBaku((prev) =>
+        prev.map((b) => {
+          const ing = ingredientsForProduct.find(
+            (i) => i.namaBahan.toLowerCase().trim() === b.nama.toLowerCase().trim()
+          );
+          if (ing) {
+            const consumedAmount = Number(((ing.takaran / yieldPortions) * soldQty).toFixed(2));
+            const newStok = Math.max(0, Number((b.isiKemasan - consumedAmount).toFixed(2)));
+            return { ...b, isiKemasan: newStok, stok: newStok };
+          }
+          return b;
+        })
+      );
+    }
+
+    // ─── CABANG STOK DEDUCTION (with error handling) ───
+    if (cabangId) {
+      try {
+        const ingredientsForBranch = detailResep.filter(
+          (r) => r.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
+        );
+        if (ingredientsForBranch.length > 0) {
+          const productInfo = productHpp.find(
+            (p) => p.namaProduk.toLowerCase().trim() === productName.toLowerCase().trim()
+          );
+          const yieldPortions = productInfo?.porsiJual || 1;
+
+          let deductedCount = 0;
+          ingredientsForBranch.forEach((ing) => {
+            try {
+              const consumedAmount = Number(((ing.takaran / yieldPortions) * soldQty).toFixed(2));
+              if (consumedAmount <= 0) return;
+              updateBranchStock(cabangId, ing.namaBahan, -consumedAmount, 'gr');
+              addBranchTransaction({
+                cabangId,
+                tipe: 'pos_jual',
+                bahanNama: ing.namaBahan,
+                qty: consumedAmount,
+                satuan: 'gr',
+                tanggal: new Date().toISOString(),
+                refId: `pos-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+              });
+              deductedCount++;
+            } catch (ingErr) {
+              console.error(`[POS Error] Gagal deduct stok bahan "${ing.namaBahan}" di cabang:`, ingErr);
+            }
+          });
+
+          if (deductedCount === 0) {
+            console.warn(`[POS Warning] Tidak ada bahan yang berhasil dipotong untuk "${productName}" di cabang ${cabangId}.`);
+          }
+        } else {
+          console.warn(`[POS Warning] Produk "${productName}" tidak memiliki resep untuk cabang (${cabangId}). Stok cabang tidak dipotong.`);
+        }
+      } catch (cabangErr) {
+        console.error(`[POS Error] Gagal proses stok cabang untuk "${productName}" (cabang: ${cabangId}):`, cabangErr);
+        showToast(`⚠️ Stok cabang gagal dipotong: ${cabangErr instanceof Error ? cabangErr.message : 'Unknown error'}`, 'error');
+      }
+    }
+
     setHasUnsavedChanges(true);
     const revStr = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(totalRevenue);
-    showToast(`Transaksi Sukses! Menjual ${soldQty} pcs "${productName}" (${revStr}).`, 'success');
+    const hasResep = ingredientsForProduct.length > 0;
+    const stokNote = hasResep ? 'Stok bahan baku otomatis dikurangi.' : '⚠️ Produk belum punya resep — stok tidak dipotong.';
+    showToast(`Transaksi Sukses! Menjual ${soldQty} pcs "${productName}" (${revStr}). ${stokNote}`, 'success');
   };
 
   // ─── PRODUCTION ───

@@ -279,8 +279,9 @@ export async function syncProductsToFirestore(
       rating: existingData?.rating || 5.0,
       reviewCount: existingData?.reviewCount || 0,
       madeToOrder,
-      preOrderLabel: wsConfig?.preOrderLabel || 'Pre-Order — Produksi Setiap Hari',
-      preOrderBadge: wsConfig?.preOrderBadge || 'MADE-TO-ORDER',
+      // ⚠️ preOrderLabel & preOrderBadge TIDAK disimpan per produk!
+      //    Label-label ini dibaca langsung dari webstore_config oleh komponen Web Store.
+      //    Menyimpannya di tiap produk membuatnya redundan dan sulit diubah serentak.
       updatedAt: serverTimestamp(),
     };
     // Hanya tambah field yang nilainya valid (Firestore tolak undefined)

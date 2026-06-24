@@ -6,15 +6,21 @@ interface OwnerLoginProps {
   onLoginSuccess: () => void;
 }
 
-// Default password hash untuk "owner123" (SHA-256 legacy — akan upgrade ke PBKDF2 saat login)
-const DEFAULT_PASSWORD_HASH = '43a0d17178a9d26c9e0fe9a74b0b45e38d32f27aed887a008a54bf6e033bf7b9';
-
 function getStoredPasswordHash(): string {
   try {
     const saved = localStorage.getItem('owner_password_hash');
-    return saved || DEFAULT_PASSWORD_HASH;
+    return saved || '';
   } catch {
-    return DEFAULT_PASSWORD_HASH;
+    return '';
+  }
+}
+
+function isPasswordSetup(): boolean {
+  try {
+    const hash = localStorage.getItem('owner_password_hash');
+    return !!hash && hash.length > 0;
+  } catch {
+    return false;
   }
 }
 
@@ -59,7 +65,8 @@ export default function OwnerLogin({ onLoginSuccess }: OwnerLoginProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [systemTime, setSystemTime] = useState('');
-  const [showChangePass, setShowChangePass] = useState(false);
+  const [isFirstSetup, setIsFirstSetup] = useState(() => !isPasswordSetup());
+  const [showChangePass, setShowChangePass] = useState(() => !isPasswordSetup());
   const [oldPass, setOldPass] = useState('');
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
@@ -142,10 +149,14 @@ export default function OwnerLogin({ onLoginSuccess }: OwnerLoginProps) {
       return;
     }
 
-    const isValid = await checkPassword(oldPass.trim());
-    if (!isValid) {
-      setPassMsg('Password lama salah!');
-      return;
+    // 🔥 FIX: Jika belum ada password terdaftar (first-time setup), skip verifikasi password lama
+    const hasExistingPassword = isPasswordSetup();
+    if (hasExistingPassword) {
+      const isValid = await checkPassword(oldPass.trim());
+      if (!isValid) {
+        setPassMsg('Password lama salah!');
+        return;
+      }
     }
 
     if (newPass.trim().length < 6) {
@@ -161,14 +172,14 @@ export default function OwnerLogin({ onLoginSuccess }: OwnerLoginProps) {
     const newHash = await hashPassword(newPass.trim());
     setStoredPasswordHash(newHash);
     setPassMsg('✅ Password berhasil diubah!');
-    setTimeout(() => {
-      setShowChangePass(false);
-      setPassword(newPass.trim());
-      setOldPass('');
-      setNewPass('');
-      setConfirmPass('');
-      setPassMsg('');
-    }, 2000);
+    setTimeout(() => {                    setShowChangePass(false);
+                    setIsFirstSetup(false);
+                    setPassword(newPass.trim());
+                    setOldPass('');
+                    setNewPass('');
+                    setConfirmPass('');
+                    setPassMsg('');
+                  }, 2000);
   };
 
   return (
@@ -200,7 +211,27 @@ export default function OwnerLogin({ onLoginSuccess }: OwnerLoginProps) {
           </div>
         )}
 
-        {!showChangePass ? (
+        {/* ⚠️ First-time setup: password belum pernah dibuat */}
+        {isFirstSetup && !showChangePass && (
+          <div className="bg-amber-950/40 border border-amber-800/60 p-4 rounded-xl space-y-3">
+            <div className="flex items-center gap-2 text-amber-400">
+              <KeyRound className="w-5 h-5" />
+              <span className="text-xs font-bold">PENGATURAN PERTAMA</span>
+            </div>
+            <p className="text-xs text-amber-200/80 leading-relaxed">
+              Belum ada password owner yang terdaftar. Silakan buat password baru untuk mengamankan akses Owner.
+              Password default sudah dihapus demi keamanan — Anda WAJIB membuat password baru sekarang.
+            </p>
+            <button
+              onClick={() => setShowChangePass(true)}
+              className="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all cursor-pointer"
+            >
+              Buat Password Sekarang
+            </button>
+          </div>
+        )}
+
+        {!showChangePass && !isFirstSetup && (
           <>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1">
@@ -263,7 +294,9 @@ export default function OwnerLogin({ onLoginSuccess }: OwnerLoginProps) {
               </button>
             </div>
           </>
-        ) : (
+        )}
+
+        {showChangePass && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">

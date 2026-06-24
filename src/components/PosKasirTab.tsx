@@ -6,11 +6,21 @@ import { safeGetLocalStorage } from '../lib/safe-json';
 import { getSavedRecipeImage } from '../lib/image-generator';
 import { cetakStrukThermal, generateHtmlStruk, isWebSerialSupported, isPrinterConnected, connectPrinter, disconnectPrinter } from '../lib/printer';
 
+interface OrderItem {
+  nama: string;
+  variantLabel?: string;
+  qty: number;
+  satuan: string;
+  harga: number;
+  addOns?: { nama: string; harga: number }[];
+}
+
 interface RetailOrder {
   ordId: string;
   source: 'Walk-In' | 'WhatsApp Order' | 'GrabFood' | 'GoFood' | 'ShopeeFood' | 'Web Toko';
   customerName: string;
   items: string;
+  itemsList: OrderItem[];
   totalSum: number;
   status: 'Queued' | 'Baking' | 'Completed' | 'Refunded';
   timeAgo: string;
@@ -58,6 +68,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
   const [orderNotes, setOrderNotes] = useState('');
   const [orderAddOns, setOrderAddOns] = useState<{ nama: string; harga: number }[]>([]);
   const [showAddOnPicker, setShowAddOnPicker] = useState(false);
+  const [cartItems, setCartItems] = useState<OrderItem[]>([]);
 
   const [orders, setOrders] = useState<RetailOrder[]>(() =>
     safeGetLocalStorage<RetailOrder[]>('pos_orders_data', [])
@@ -121,11 +132,15 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
   const todayRevenue = todayOrders.reduce((sum, o) => sum + o.totalSum, 0);
   const completedOrders = todayOrders.filter(o => o.status === 'Completed');
 
-  const handleCreatePOSOrder = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const cartTotal = React.useMemo(() => {
+    const itemsTotal = cartItems.reduce((s, i) => s + i.harga * i.qty, 0);
+    const addOnsTotal = cartItems.reduce((s, i) => s + (i.addOns?.reduce((a, o) => a + o.harga, 0) || 0), 0);
+    return { itemsTotal, addOnsTotal, grandTotal: itemsTotal + addOnsTotal };
+  }, [cartItems]);
+
+  const handleAddToCart = async () => {
     if (!selectedProduct) { showToast('Silakan pilih produk terlebih dahulu!', 'warning'); return; }
 
-    // Validasi: produk harus punya resep (BOM) agar stok bisa otomatis terpotong
     const hasRecipe = detailResep && detailResep.some(
       r => r.namaProduk.toLowerCase().trim() === selectedProduct.toLowerCase().trim()
     );
@@ -145,51 +160,79 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
     }
 
     const prodInfo = calculatedProducts.find(p => p.namaProduk === selectedProduct);
-    // Harga varian jika dipilih, fallback ke harga dasar
     const variantPrice = selectedVariant?.hargaJual || 0;
     const price = variantPrice > 0 ? variantPrice : (prodInfo ? prodInfo.hargaJualPerPorsi : 0);
     
-    // 🔥 VALIDASI: Harga harus > 0 — cegah transaksi gratis karena lupa set harga!
     if (price <= 0) {
-      showToast(`❌ Harga jual "${selectedProduct}" belum diatur! Atur harga di tab Harga & HPP.`, 'error');
+      showToast(`❌ Harga jual "${selectedProduct}" belum diatur!`, 'error');
       return;
     }
-    
-    const totalRevenue = price * orderQty;
+
+    const variantLabel = selectedVariant ? selectedVariant.name : '';
+    const existingIdx = cartItems.findIndex(i => i.nama === selectedProduct && i.variantLabel === variantLabel);
+
+    if (existingIdx >= 0) {
+      const updated = [...cartItems];
+      updated[existingIdx] = { ...updated[existingIdx], qty: updated[existingIdx].qty + orderQty };
+      setCartItems(updated);
+    } else {
+      setCartItems(prev => [...prev, {
+        nama: selectedProduct,
+        variantLabel,
+        qty: orderQty,
+        satuan: 'pcs',
+        harga: price,
+        addOns: orderAddOns.length > 0 ? [...orderAddOns] : undefined,
+      }]);
+    }
+
+    setSelectedProduct('');
+    setSelectedVariant(null);
+    setOrderQty(1);
+    setOrderAddOns([]);
+    showToast(`✅ ${selectedProduct} × ${orderQty} ditambahkan ke pesanan`, 'success');
+  };
+
+  const handleRemoveCartItem = (idx: number) => {
+    setCartItems(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleCheckout = () => {
+    if (cartItems.length === 0) { showToast('Keranjang kosong!', 'warning'); return; }
+
     const txId = `TX-${Date.now().toString().slice(-6)}`;
+    const itemsSummary = cartItems.map(i => `${i.qty} pcs ${i.nama}${i.variantLabel ? ' (' + i.variantLabel + ')' : ''}`).join(', ');
+    const allAddOns = cartItems.flatMap(i => i.addOns || []);
 
-    const addOnsTotal = orderAddOns.reduce((s, a) => s + a.harga, 0);
-    const grandTotal = totalRevenue + addOnsTotal;
-
-    const variantLabel = selectedVariant ? ` (${selectedVariant.name})` : '';
     const newOrder: RetailOrder = {
       ordId: txId,
       source: orderSource,
       customerName: newCustName.trim() || 'Pelanggan POS',
-      items: `${orderQty} pcs ${selectedProduct}${variantLabel}`,
-      totalSum: grandTotal,
+      items: itemsSummary,
+      itemsList: cartItems,
+      totalSum: cartTotal.grandTotal,
       status: 'Queued',
       timeAgo: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
       date: today,
       catatan: orderNotes.trim(),
-      addOns: orderAddOns,
+      addOns: allAddOns,
     };
 
     setOrders(prev => [newOrder, ...prev]);
-    if (onCompletePOSSale) onCompletePOSSale(selectedProduct, orderQty, grandTotal, orderSource);
+    cartItems.forEach(i => {
+      if (onCompletePOSSale) onCompletePOSSale(i.nama, i.qty, i.harga * i.qty, orderSource);
+    });
 
-    // ─── AUTO-PRINT: Cetak bill otomatis jika printer WebSerial terhubung ───
-    // Tidak perlu start relay server lokal — langsung dari browser ke Bluetooth!
     if (isPrinterConnected()) {
       handlePrintThermalBill(newOrder).catch(console.warn);
     }
 
+    setCartItems([]);
     setNewCustName('');
+    setOrderNotes('');
     setSelectedProduct('');
     setSelectedVariant(null);
-    setOrderQty(1);
-    setOrderNotes('');
-    setOrderAddOns([]);
+    showToast(`✅ Pesanan ${txId} selesai — ${formatCurrency(cartTotal.grandTotal)}`, 'success');
   };
 
   // Reset selectedVariant saat ganti produk
@@ -365,27 +408,43 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
 
   // ─── PRINT STRUK THERMAL ke Printer 58mm via API ───
   const handlePrintThermalBill = async (order: RetailOrder) => {
-    // Parse items dari string "2 pcs Roti Tawar"
-    const itemMatch = order.items.match(/(\d+)\s+(\w+)\s+(.+)/);
+    let items: { nama: string; qty: number; satuan: string; harga: number }[];
 
-    // Hitung total add-ons dulu agar tidak double-counting
-    const totalAddOns = order.addOns?.reduce((sum, a) => sum + a.harga, 0) || 0;
-    const itemHarga = order.totalSum - totalAddOns;
-
-    const items = itemMatch
-      ? [{
-          nama: itemMatch[3],
-          qty: parseInt(itemMatch[1]),
-          satuan: itemMatch[2],
-          harga: itemHarga,
-        }]
-      : [{ nama: order.items, qty: 1, satuan: 'pcs', harga: itemHarga }];
-
-    // Tambah add-ons sebagai item terpisah (tanpa double-count)
-    if (order.addOns && order.addOns.length > 0) {
-      order.addOns.forEach(a => {
-        items.push({ nama: `+ ${a.nama}`, qty: 1, satuan: 'pcs', harga: a.harga });
+    if (order.itemsList && order.itemsList.length > 0) {
+      items = [];
+      order.itemsList.forEach(oi => {
+        const label = `${oi.nama}${oi.variantLabel ? ' (' + oi.variantLabel + ')' : ''}`;
+        items.push({
+          nama: label,
+          qty: oi.qty,
+          satuan: oi.satuan || 'pcs',
+          harga: oi.harga * oi.qty,
+        });
+        if (oi.addOns && oi.addOns.length > 0) {
+          oi.addOns.forEach(a => {
+            items.push({ nama: `+ ${a.nama}`, qty: 1, satuan: 'pcs', harga: a.harga });
+          });
+        }
       });
+    } else {
+      const itemMatch = order.items.match(/(\d+)\s+(\w+)\s+(.+)/);
+      const totalAddOns = order.addOns?.reduce((sum, a) => sum + a.harga, 0) || 0;
+      const itemHarga = order.totalSum - totalAddOns;
+
+      items = itemMatch
+        ? [{
+            nama: itemMatch[3],
+            qty: parseInt(itemMatch[1]),
+            satuan: itemMatch[2],
+            harga: itemHarga,
+          }]
+        : [{ nama: order.items, qty: 1, satuan: 'pcs', harga: itemHarga }];
+
+      if (order.addOns && order.addOns.length > 0) {
+        order.addOns.forEach(a => {
+          items.push({ nama: `+ ${a.nama}`, qty: 1, satuan: 'pcs', harga: a.harga });
+        });
+      }
     }
 
     const transaksi = {
@@ -513,7 +572,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
             <ShoppingCart className="w-4 h-4 text-emerald-600" /> Checkout
           </h3>
 
-          <form onSubmit={handleCreatePOSOrder} className="space-y-3.5 text-xs">
+          <div className="space-y-3.5 text-xs">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Customer</label>
@@ -656,13 +715,50 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
               </div>
             </div>
 
-            <button type="submit" disabled={!selectedProduct}
+            <button onClick={handleAddToCart} disabled={!selectedProduct}
               className={`w-full font-bold text-xs py-3 rounded-xl transition cursor-pointer shadow-sm active:scale-[0.98] uppercase tracking-wide ${
-                selectedProduct ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                selectedProduct ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
               }`}>
-              <ShoppingCart className="w-4 h-4 inline mr-1" /> Transaksi Kasir
+              <ShoppingCart className="w-4 h-4 inline mr-1" /> Tambah ke Pesanan
             </button>
-          </form>
+          </div>
+
+        {/* ─── KERANJANG ─── */}
+        {cartItems.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2 mt-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider">Keranjang ({cartItems.length})</h4>
+              <span className="text-xs font-bold text-amber-900">{formatCurrency(cartTotal.grandTotal)}</span>
+            </div>
+            <div className="max-h-[180px] overflow-y-auto space-y-1">
+              {cartItems.map((item, i) => (
+                <div key={i} className="flex items-center justify-between bg-white rounded-lg px-2.5 py-1.5 text-[11px]">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-semibold text-gray-800">{item.qty}x {item.nama}</span>
+                    {item.variantLabel && <span className="text-purple-600 ml-1">({item.variantLabel})</span>}
+                    {item.addOns && item.addOns.length > 0 && (
+                      <span className="text-amber-600 block text-[10px]">
+                        + {item.addOns.map(a => a.nama).join(', ')}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-mono font-bold text-gray-700">{formatCurrency(item.harga * item.qty)}</span>
+                    <button onClick={() => handleRemoveCartItem(i)}
+                      className="text-red-400 hover:text-red-600 transition cursor-pointer p-0.5">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={handleCheckout}
+              className="w-full font-bold text-xs py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer active:scale-[0.98] uppercase tracking-wide shadow-sm">
+              <Coins className="w-4 h-4 inline mr-1" /> Bayar — {formatCurrency(cartTotal.grandTotal)}
+            </button>
+          </div>
+        )}
+
         </div>
 
         {/* KANAN: KATALOG PRODUK + ANTREAN */}

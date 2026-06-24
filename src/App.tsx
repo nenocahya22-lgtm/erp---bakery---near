@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { useConfirmModal } from './hooks/useConfirmModal';
 import { ConfirmModal, type ConfirmState } from './components/ConfirmModal';
 import OwnerLogin from './components/OwnerLogin';
@@ -9,6 +9,7 @@ import PesananOnlineTab from './components/PesananOnlineTab';
 import ProductionCenterTab from './components/ProductionCenterTab';
 import BranchDashboard from './components/BranchDashboard';
 import LandingPage from './components/LandingPage';
+import PengaturanSystemTab from './components/PengaturanSystemTab';
 
 // ─── LAZY IMPORT dengan auto-retry ───
 // Mencegah error "dynamically imported module" setelah deploy,
@@ -40,9 +41,26 @@ function retryLazy<T extends React.ComponentType<any>>(
   });
 }
 
+// ─── LOADING SKELETON — tampilkan saat tab pertama kali di-load ───
+function TabSuspense({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={
+      <div className="space-y-4 animate-pulse">
+        <div className="h-10 bg-slate-200 rounded-2xl w-3/4" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1,2,3,4].map(i => <div key={i} className="h-24 bg-slate-200 rounded-2xl" />)}
+        </div>
+        <div className="h-64 bg-slate-200 rounded-2xl" />
+        <div className="h-48 bg-slate-200 rounded-2xl" />
+      </div>
+    }>
+      {children}
+    </Suspense>
+  );
+}
+
 // Lazy-loaded wrappers — pakai retryLazy
 const KeuanganDashboard = retryLazy(() => import('./components/KeuanganDashboard'));
-const InventarisTab = retryLazy(() => import('./components/InventarisTab'));
 const LogistikDashboard = retryLazy(() => import('./components/LogistikDashboard'));
 const ProduksiDashboard = retryLazy(() => import('./components/ProduksiDashboard'));
 const PenjualanDashboard = retryLazy(() => import('./components/PenjualanDashboard'));
@@ -204,6 +222,7 @@ export default function App() {
     | 'penjualan'
     | 'strategi'
     | 'sistem'
+    | 'pengaturan'
   >('keuangan');
 
   // Mobile sidebar state
@@ -265,14 +284,25 @@ export default function App() {
     }
   }, [token]);
 
-  // Robust Auto-Save background Sync with Google Sheets — every 2 menit (diff sync cegah API overuse)
+  // ─── AUTO-SAVE DEBOUNCE ───
+  // Simpan ke Google Sheets 30 detik setelah user berhenti edit, max 5 menit safety net
   const autoSaveDataRef = useRef({ bahanBaku, productHpp, detailResep, hasUnsavedChanges, token, spreadsheetId });
+  const lastEditTimeRef = useRef<number>(Date.now());
+
   useEffect(() => {
+    const prev = autoSaveDataRef.current;
+    if (hasUnsavedChanges && !prev.hasUnsavedChanges) {
+      lastEditTimeRef.current = Date.now();
+    }
     autoSaveDataRef.current = { bahanBaku, productHpp, detailResep, hasUnsavedChanges, token, spreadsheetId };
   }, [bahanBaku, productHpp, detailResep, hasUnsavedChanges, token, spreadsheetId]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const MAX_IDLE_MS = 30_000; // 30 detik idle sebelum auto-save
+    const CHECK_INTERVAL_MS = 15_000; // cek tiap 15 detik
+    let forcedTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const doSave = () => {
       const {
         bahanBaku: currentBahan,
         productHpp: currentHpp,
@@ -282,58 +312,86 @@ export default function App() {
         spreadsheetId: currentId,
       } = autoSaveDataRef.current;
 
-      if (currentUnsaved && currentToken && currentId) {
-        Promise.all([
-          saveProjectDataToSheets(currentToken, currentId, {
-            bahanBaku: currentBahan,
-            productHpp: currentHpp,
-            detailResep: currentResep,
-          }),
-          (() => {
+      if (!currentUnsaved || !currentToken || !currentId) return;
+
+      Promise.all([
+        saveProjectDataToSheets(currentToken, currentId, {
+          bahanBaku: currentBahan,
+          productHpp: currentHpp,
+          detailResep: currentResep,
+        }),
+        (() => {
+          try {
+            const revenueData = localStorage.getItem('revenue_tracker_data');
+            if (revenueData) {
+              const parsed = JSON.parse(revenueData);
+              return saveRevenueToSheets(currentToken, currentId, parsed.transactions || []);
+            }
+          } catch (e) { /* silent */ }
+          return Promise.resolve();
+        })(),
+      ])
+        .then(() => {
+          setHasUnsavedChanges(false);
+          setLastAutoSaved(new Date());
+          showToast('Auto-save berhasil disinkronisasikan ke Google Sheets!', 'success');
+        })
+        .catch((err) => {
+          console.error('Silent auto-save failed, masuk retry queue:', err);
+          if (currentToken && currentId) {
+            enqueueFailedSync({
+              type: 'save_project',
+              token: currentToken,
+              spreadsheetId: currentId,
+              data: { bahanBaku: currentBahan, productHpp: currentHpp, detailResep: currentResep },
+            });
             try {
               const revenueData = localStorage.getItem('revenue_tracker_data');
               if (revenueData) {
                 const parsed = JSON.parse(revenueData);
-                return saveRevenueToSheets(currentToken, currentId, parsed.transactions || []);
+                if (parsed.transactions?.length > 0) {
+                  enqueueFailedSync({
+                    type: 'save_revenue',
+                    token: currentToken,
+                    spreadsheetId: currentId,
+                    revenueData: parsed.transactions,
+                  });
+                }
               }
             } catch (e) { /* silent */ }
-            return Promise.resolve();
-          })(),
-        ])
-          .then(() => {
-            setHasUnsavedChanges(false);
-            setLastAutoSaved(new Date());
-            showToast('Auto-save berhasil disinkronisasikan ke Google Sheets!', 'success');
-          })
-          .catch((err) => {
-            console.error('Silent auto-save failed, masuk retry queue:', err);
-            if (currentToken && currentId) {
-              enqueueFailedSync({
-                type: 'save_project',
-                token: currentToken,
-                spreadsheetId: currentId,
-                data: { bahanBaku: currentBahan, productHpp: currentHpp, detailResep: currentResep },
-              });
-              try {
-                const revenueData = localStorage.getItem('revenue_tracker_data');
-                if (revenueData) {
-                  const parsed = JSON.parse(revenueData);
-                  if (parsed.transactions?.length > 0) {
-                    enqueueFailedSync({
-                      type: 'save_revenue',
-                      token: currentToken,
-                      spreadsheetId: currentId,
-                      revenueData: parsed.transactions,
-                    });
-                  }
-                }
-              } catch (e) { /* silent */ }
-            }
-          });
-      }
-    }, 2 * 60 * 1000); // 2 menit — lebih sering tapi diff sync cegah API overuse
+          }
+        });
+    };
 
-    return () => clearInterval(interval);
+    const scheduleForcedSave = () => {
+      if (forcedTimer) clearTimeout(forcedTimer);
+      forcedTimer = setTimeout(() => {
+        // Safety: paksa save setelah 5 menit meskipun user masih aktif
+        doSave();
+        forcedTimer = null;
+      }, 5 * 60 * 1000);
+    };
+
+    const interval = setInterval(() => {
+      const { hasUnsavedChanges: currentUnsaved } = autoSaveDataRef.current;
+      if (!currentUnsaved) {
+        if (forcedTimer) { clearTimeout(forcedTimer); forcedTimer = null; }
+        return;
+      }
+
+      const idleMs = Date.now() - lastEditTimeRef.current;
+      if (idleMs >= MAX_IDLE_MS) {
+        doSave();
+        if (forcedTimer) { clearTimeout(forcedTimer); forcedTimer = null; }
+      } else if (!forcedTimer) {
+        scheduleForcedSave();
+      }
+    }, CHECK_INTERVAL_MS);
+
+    return () => {
+      clearInterval(interval);
+      if (forcedTimer) clearTimeout(forcedTimer);
+    };
   }, []);
 
   // Connect to Google Sheets
@@ -552,6 +610,7 @@ export default function App() {
           date: new Date().toISOString().substring(0, 10),
           catatan: '',
         });
+        if (posOrders.length > 500) posOrders.splice(0, posOrders.length - 500);
         localStorage.setItem('pos_orders_data', JSON.stringify(posOrders));
       } catch (e) { console.warn('Failed to save pos_orders_data:', e); }
 
@@ -694,6 +753,26 @@ export default function App() {
     };
     window.addEventListener('app:toast', handler);
     return () => window.removeEventListener('app:toast', handler);
+  }, []);
+
+  // ─── PERIODIC LOCALSTORAGE CLEANUP ───
+  useEffect(() => {
+    const cleanup = () => {
+      const keys = ['pos_orders_data', 'revenue_tracker_data', 'waste_logs_data', 'system_alerts_data', 'wa_notification_queue'];
+      keys.forEach(key => {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return;
+          const data = JSON.parse(raw);
+          if (Array.isArray(data) && data.length > 500) {
+            localStorage.setItem(key, JSON.stringify(data.slice(-500)));
+          }
+        } catch {}
+      });
+    };
+    cleanup();
+    const interval = setInterval(cleanup, 30 * 60 * 1000); // tiap 30 menit
+    return () => clearInterval(interval);
   }, []);
 
   // ─── GLOBAL IoT SIMULATION ───
@@ -882,6 +961,17 @@ export default function App() {
     return <OwnerLogin onLoginSuccess={handleOwnerLogin} />;
   }
 
+  // ─── MEMOIZED BRANCH FILTERS (hindari re-filter tiap render) ───
+  const branchCabangId = branchAuth?.id || '';
+  const filteredCabangStokForBranch = useMemo(
+    () => cabangStok.filter(s => s.cabangId === branchCabangId),
+    [cabangStok, branchCabangId]
+  );
+  const filteredBranchTransactionsForBranch = useMemo(
+    () => branchTransactions.filter(t => t.cabangId === branchCabangId),
+    [branchTransactions, branchCabangId]
+  );
+
   // If branch authenticated, show BranchDashboard
   if (branchAuth && !isOwnerAuthenticated) {
     const currentCabang = cabangList.find(c => c.id === branchAuth.id);
@@ -895,8 +985,8 @@ export default function App() {
           detailResep={detailResep}
           calculatedProducts={calculatedProducts}
           wasteLogs={wasteLogs}
-          cabangStok={cabangStok.filter(s => s.cabangId === currentCabang.id)}
-          branchTransactions={branchTransactions.filter(t => t.cabangId === currentCabang.id)}
+          cabangStok={filteredCabangStokForBranch}
+          branchTransactions={filteredBranchTransactionsForBranch}
           onAddWasteLog={handleAddWasteLog}
           onDeleteWasteLog={handleDeleteWasteLog}
           onAddSuratOrder={handleAddSuratOrder}
@@ -1018,7 +1108,8 @@ export default function App() {
         {/* MAIN CONTENT */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 scrollbar-thin">
           <div className="pb-16">
-            <Suspense fallback={<div className="flex items-center justify-center py-20"><RefreshCw className="w-8 h-8 animate-spin text-emerald-500" /></div>}>
+            {/* Loading skeleton untuk tab yang belum ter-load */}
+            <TabSuspense>
             {activeTab === 'penjualan' && (
               <PenjualanDashboard
                 calculatedProducts={calculatedProducts}
@@ -1114,6 +1205,13 @@ export default function App() {
                 onImportProduct={(product) => handleAddProduct(product, [])}
               />
             )}
+            {activeTab === 'pengaturan' && (
+              <PengaturanSystemTab
+                showToast={showToast}
+                spreadsheetId={spreadsheetId}
+                onWipeAllData={handleWipeAllData}
+              />
+            )}
             {activeTab === 'keuangan' && (
               <KeuanganDashboard
                 calculatedProducts={calculatedProducts}
@@ -1127,8 +1225,15 @@ export default function App() {
                 showConfirm={showConfirm}
               />
             )}
+            {!['penjualan','produksi','logistik','strategi','sistem','pengaturan','keuangan'].includes(activeTab as string) && (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <AlertTriangle className="w-12 h-12 text-amber-400 mb-4" />
+                <h2 className="text-lg font-bold text-slate-700 mb-2">Halaman Tidak Ditemukan</h2>
+                <p className="text-sm text-slate-500">Tab "{activeTab}" tidak dikenal. Pilih menu dari sidebar.</p>
+              </div>
+            )}
 
-          </Suspense>
+            </TabSuspense>
           </div>
         </main>
 
@@ -1301,7 +1406,8 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
         </div>
         <div className="space-y-1">
           <span className="px-3 text-[8px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Sistem</span>
-          {sidebarBtn('sistem', <Settings className="w-4 h-4" />, 'Web Store · Backup · Pengaturan')}
+          {sidebarBtn('sistem', <Settings className="w-4 h-4" />, 'Web Store · Backup · Data')}
+          {sidebarBtn('pengaturan', <Settings className="w-4 h-4" />, 'Pengaturan Sistem')}
           {sidebarBtn('keuangan', <LineChart className="w-4 h-4" />, 'Dashboard Keuangan')}
         </div>
       </nav>
