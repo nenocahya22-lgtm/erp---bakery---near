@@ -1,41 +1,28 @@
 import React, { useState } from 'react';
-import { RefreshCw } from 'lucide-react';
-import { BahanBaku, Cabang, SuratOrder, BranchStock, BranchTransaction, WasteLog, OpnameDraft, ProductHpp, CalculationResult, DetailResep } from '../types';
-import DataPusatTab from './DataPusatTab';
+import { BahanBaku, Cabang, ProductHpp, CalculationResult, DetailResep } from '../types';
 import WebStoreManagerTab from './WebStoreManagerTab';
 import BackupSystemTab from './BackupSystemTab';
 
 interface SistemDashboardProps {
-  bahanBaku: BahanBaku[];
-  onAddMaterial: (m: BahanBaku) => void;
-  onEditMaterial: (oldName: string, m: BahanBaku) => void;
-  onDeleteMaterial: (name: string) => void;
-  cabangList: Cabang[];
-  onAddCabang: (c: Cabang) => void;
-  onEditCabang: (id: string, c: Cabang) => void;
-  onDeleteCabang: (id: string) => void;
-  suratOrders: SuratOrder[];
-  onAddSuratOrder: (so: SuratOrder) => void;
-  onUpdateSuratOrder: (id: string, so: SuratOrder) => void;
-  onReturSuratOrder?: (id: string, returNote: string) => void;
-  cabangStok: BranchStock[];
-  branchTransactions: BranchTransaction[];
-  wasteLogs: WasteLog[];
-  opnameDrafts: OpnameDraft[];
-  onApproveOpname: (draftId: string) => void;
-  onRejectOpname: (draftId: string, note?: string) => void;
   productHpp: ProductHpp[];
   calculatedProducts: CalculationResult[];
+  bahanBaku: BahanBaku[];
   detailResep: DetailResep[];
+  cabangList: Cabang[];
   onImportProduct?: (product: ProductHpp) => void;
-  showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
 }
 
-export default function SistemDashboard(props: SistemDashboardProps) {
-  const [subTab, setSubTab] = useState<'data_pusat' | 'webstore' | 'backup'>('data_pusat');
+export default function SistemDashboard({
+  productHpp,
+  calculatedProducts,
+  bahanBaku,
+  detailResep,
+  cabangList,
+  onImportProduct,
+}: SistemDashboardProps) {
+  const [subTab, setSubTab] = useState<'webstore' | 'backup'>('webstore');
 
   const tabs = [
-    { key: 'data_pusat' as const, label: '🏢 Data Pusat' },
     { key: 'webstore' as const, label: '🌐 Web Store' },
     { key: 'backup' as const, label: '💾 Backup & Restore' },
   ];
@@ -58,43 +45,22 @@ export default function SistemDashboard(props: SistemDashboardProps) {
         ))}
       </div>
 
-      {subTab === 'data_pusat' && (
-        <DataPusatTab
-          bahanBaku={props.bahanBaku}
-          onAddMaterial={props.onAddMaterial}
-          onEditMaterial={props.onEditMaterial}
-          onDeleteMaterial={props.onDeleteMaterial}
-          cabangList={props.cabangList}
-          onAddCabang={props.onAddCabang}
-          onEditCabang={props.onEditCabang}
-          onDeleteCabang={props.onDeleteCabang}
-          suratOrders={props.suratOrders}
-          onAddSuratOrder={props.onAddSuratOrder}
-          onUpdateSuratOrder={props.onUpdateSuratOrder}
-          onReturSuratOrder={props.onReturSuratOrder}
-          cabangStok={props.cabangStok}
-          branchTransactions={props.branchTransactions}
-          wasteLogs={props.wasteLogs}
-          opnameDrafts={props.opnameDrafts}
-          onApproveOpname={props.onApproveOpname}
-          onRejectOpname={props.onRejectOpname}
-          showConfirm={props.showConfirm}
-        />
-      )}
       {subTab === 'webstore' && (
         <WebStoreManagerTab
-          productHpp={props.productHpp}
-          calculatedProducts={props.calculatedProducts}
-          bahanBaku={props.bahanBaku}
-          detailResep={props.detailResep}
-          cabangList={props.cabangList}
-          onImportProduct={props.onImportProduct}
+          productHpp={productHpp}
+          calculatedProducts={calculatedProducts}
+          bahanBaku={bahanBaku}
+          detailResep={detailResep}
+          cabangList={cabangList}
+          onImportProduct={onImportProduct}
         />
       )}
       {subTab === 'backup' && (
         <BackupSystemTab
-          calculatedProducts={props.calculatedProducts}
-          bahanBaku={props.bahanBaku}
+          calculatedProducts={calculatedProducts}
+          bahanBaku={bahanBaku}
+          productHpp={productHpp}
+          detailResep={detailResep}
         />
       )}
     </div>

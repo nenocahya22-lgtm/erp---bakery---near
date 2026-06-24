@@ -1089,13 +1089,13 @@ export default function RecipesTab({
                   <h4 className="text-[11px] uppercase font-bold text-slate-800 tracking-wider">
                     Minyak / Tepung / Mengetik Bahan Baru Ke Adonan
                   </h4>
-                  <form onSubmit={handleAddIngredientToActive} className="flex flex-col sm:flex-row gap-2.5">
-                    <div className="flex-1">
+                  <form onSubmit={handleAddIngredientToActive} className="grid grid-cols-1 sm:grid-cols-[1fr_minmax(140px,auto)_auto] items-center gap-2.5">
+                    <div className="min-w-0">
                       <select
                         required
                         value={selectedBahan}
                         onChange={(e) => setSelectedBahan(e.target.value)}
-                        className="w-full text-xs font-semibold border border-gray-205 rounded-xl p-2.5 bg-white focus:outline-none"
+                        className="w-full text-xs font-semibold border border-gray-205 rounded-xl p-2.5 bg-white focus:outline-none truncate"
                       >
                         <option value="">-- Pilih Bahan Baku —</option>
                         {bahanBaku.map((b) => (
@@ -1106,7 +1106,7 @@ export default function RecipesTab({
                       </select>
                     </div>
 
-                    <div className="w-full sm:w-40 flex gap-1">
+                    <div className="flex gap-1 items-center">
                       <input
                         type="number"
                         step="any"
@@ -1115,17 +1115,17 @@ export default function RecipesTab({
                         placeholder="Takaran"
                         value={takaranBahan}
                         onChange={(e) => setTakaranBahan(e.target.value)}
-                        className="flex-1 text-xs border border-gray-205 rounded-xl p-2.5 bg-white"
+                        className="w-full sm:w-24 text-xs border border-gray-205 rounded-xl p-2.5 bg-white"
                       />
                       <select value={takaranSatuan} onChange={e => setTakaranSatuan(e.target.value)}
-                        className="w-16 text-xs border border-gray-200 rounded-xl p-2.5 font-bold bg-white text-center">
+                        className="w-16 text-xs border border-gray-200 rounded-xl p-2.5 font-bold bg-white text-center shrink-0">
                         {SATUAN_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
 
                     <button
                       type="submit"
-                      className="sm:w-auto inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition duration-150 cursor-pointer shrink-0"
+                      className="inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition duration-150 cursor-pointer shrink-0"
                     >
                       <Plus className="w-4 h-4" />
                       Tambah

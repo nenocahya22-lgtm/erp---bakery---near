@@ -1106,28 +1106,11 @@ export default function App() {
             )}
             {activeTab === 'sistem' && (
               <SistemDashboard
-                bahanBaku={bahanBaku}
-                onAddMaterial={handleAddMaterial}
-                onEditMaterial={handleEditMaterial}
-                onDeleteMaterial={handleDeleteMaterial}
-                cabangList={cabangList}
-                onAddCabang={handleAddCabang}
-                onEditCabang={handleEditCabang}
-                onDeleteCabang={handleDeleteCabang}
-                suratOrders={suratOrders}
-                onAddSuratOrder={handleAddSuratOrder}
-                onUpdateSuratOrder={handleUpdateSuratOrder}
-                onReturSuratOrder={handleReturSuratOrder}
-                cabangStok={cabangStok}
-                branchTransactions={branchTransactions}
-                wasteLogs={wasteLogs}
-                opnameDrafts={opnameDrafts}
-                onApproveOpname={handleApproveOpname}
-                onRejectOpname={handleRejectOpname}
                 productHpp={productHpp}
                 calculatedProducts={calculatedProducts}
+                bahanBaku={bahanBaku}
                 detailResep={detailResep}
-                showConfirm={showConfirm}
+                cabangList={cabangList}
                 onImportProduct={(product) => handleAddProduct(product, [])}
               />
             )}
@@ -1318,7 +1301,7 @@ function SidebarContent({ isSidebarOpen, setIsSidebarOpen, activeTab, setActiveT
         </div>
         <div className="space-y-1">
           <span className="px-3 text-[8px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Sistem</span>
-          {sidebarBtn('sistem', <Settings className="w-4 h-4" />, 'Data Pusat · Web Store · Backup')}
+          {sidebarBtn('sistem', <Settings className="w-4 h-4" />, 'Web Store · Backup · Pengaturan')}
           {sidebarBtn('keuangan', <LineChart className="w-4 h-4" />, 'Dashboard Keuangan')}
         </div>
       </nav>
