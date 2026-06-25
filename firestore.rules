@@ -48,18 +48,17 @@ service cloud.firestore {
     function isValidOrder() {
       return (
         incoming() is map &&
-        incoming().keys().hasAll(['totalAmount', 'items', 'userName']) &&
-        incoming().totalAmount is number &&
-        incoming().totalAmount > 0 &&
-        incoming().totalAmount <= 500000000 &&  // Maks Rp 500 juta per order
-        incoming().items is list &&
-        incoming().items.size() > 0 &&
-        incoming().items.size() <= 50 &&        // Maks 50 item per order
-        incoming().userName is string &&
-        incoming().userName.size() > 0 &&
-        incoming().userName.size() <= 100 &&
-        incoming().keys().hasAll(['paymentMethod']) &&
-        incoming().paymentMethod is string
+        incoming().keys().hasAll(['id', 'userId', 'userName', 'userEmail', 'items', 'totalAmount', 'status', 'shippingAddress', 'paymentMethod', 'paymentStatus']) &&
+        incoming().id is string && incoming().id.size() <= 128 &&
+        incoming().userId is string && incoming().userId.size() <= 128 &&
+        incoming().userName is string && incoming().userName.size() > 0 && incoming().userName.size() <= 100 &&
+        incoming().userEmail is string && incoming().userEmail.size() <= 100 &&
+        incoming().items is list && incoming().items.size() > 0 && incoming().items.size() <= 50 &&
+        (incoming().totalAmount is int || incoming().totalAmount is float) && incoming().totalAmount > 0 && incoming().totalAmount <= 500000000 &&
+        incoming().status is string && incoming().status.size() <= 50 &&
+        incoming().shippingAddress is map &&
+        incoming().paymentMethod is string && incoming().paymentMethod.size() <= 50 &&
+        incoming().paymentStatus is string && incoming().paymentStatus.size() <= 50
       );
     }
 
@@ -98,7 +97,7 @@ service cloud.firestore {
         incoming().name is string && incoming().name.size() <= 200 &&
         incoming().description is string && incoming().description.size() <= 2000 &&
         (incoming().price is int || incoming().price is float) && incoming().price >= 0 &&
-        incoming().stock is int && incoming().stock >= 0 &&
+        (incoming().stock is int || incoming().stock is float) && incoming().stock >= 0 && incoming().stock == math.floor(incoming().stock) &&
         incoming().imageUrl is string && incoming().imageUrl.size() <= 1000 &&
         incoming().category is string && incoming().category.size() <= 100
       );
@@ -163,8 +162,10 @@ service cloud.firestore {
     }
 
     // Categories — ERP atur, Web Store baca
+    // Catatan: untuk list oleh non-authenticated, resource.data tidak tersedia
     match /categories/{cabangId} {
-      allow get, list: if true;  // Public read — Web Store customer lihat kategori
+      allow get: if true;  // Public read — Web Store customer lihat kategori
+      allow list: if true;  // Public list — diizinkan
       allow create, update, delete: if isOwnerOrAdmin();
     }
 
@@ -235,7 +236,7 @@ service cloud.firestore {
     // Orders — Customer bisa create, ERP & merchant bisa read + update
     match /orders/{orderId} {
       allow get: if isMerchant() || (isAuthenticated() && existing().userId == request.auth.uid);
-      allow list: if isMerchant();
+      allow list: if isMerchant();  // Hanya merchant bisa list semua orders
       allow create: if isAuthenticated() && incoming().userId == request.auth.uid && isValidOrder();
       allow update: if isMerchant() || (isAuthenticated() && existing().userId == request.auth.uid);
       allow delete: if false;  // Tidak ada yang bisa hapus order
@@ -263,8 +264,10 @@ service cloud.firestore {
     }
 
     // Web Store Notifications — User-specific notifications
+    // Catatan: untuk list oleh non-authenticated, resource.data tidak tersedia
     match /notifications/{notificationId} {
-      allow get, list: if isAuthenticated() && existing().userId == request.auth.uid;
+      allow get: if isAuthenticated() && existing().userId == request.auth.uid;
+      allow list: if isAuthenticated();  // List diizinkan untuk authenticated, filter via query
       allow create: if isMerchant() || (isAuthenticated() && incoming().userId == request.auth.uid && isValidNotification());
       allow update, delete: if isAuthenticated() && existing().userId == request.auth.uid;
     }
