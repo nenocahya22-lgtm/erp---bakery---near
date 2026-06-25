@@ -175,8 +175,8 @@ export default function LandingPage({ onEnterERP, onEnterWebstore, productCount,
           </div>
 
           {/* Mobile Hamburger */}
-          <button onClick={() => setMobileMenu(!mobileMenu)} className="md:hidden p-2 text-slate-400 hover:text-white cursor-pointer">
-            {mobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          <button onClick={() => setMobileMenu(!mobileMenu)} aria-label={mobileMenu ? 'Tutup menu' : 'Buka menu'} aria-expanded={mobileMenu ? 'true' : 'false'} className="md:hidden p-2 text-slate-400 hover:text-white cursor-pointer">
+            {mobileMenu ? <X className="w-5 h-5" aria-hidden="true" /> : <Menu className="w-5 h-5" aria-hidden="true" />}
           </button>
         </div>
 
@@ -386,7 +386,7 @@ export default function LandingPage({ onEnterERP, onEnterWebstore, productCount,
                 <div className="text-3xl md:text-4xl font-black text-white tabular-nums">
                   <StatCounter target={stat.target} start={statsVisible} suffix={stat.suffix} />
                 </div>
-                <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">{stat.label}</p>
+                <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">{stat.label}</p>
               </div>
             ))}
           </div>
@@ -550,7 +550,7 @@ export default function LandingPage({ onEnterERP, onEnterWebstore, productCount,
                   <span className="text-[10px] block text-emerald-400 font-bold -mt-0.5 tracking-widest">ERP SYSTEM</span>
                 </div>
               </div>
-              <p className="text-xs text-slate-500 max-w-sm leading-relaxed">
+              <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
                 Sistem manajemen bakery artisan terpadu — kelola produksi, stok, penjualan, 
                 dan toko online dari satu platform. Dibuat khusus untuk bakery Indonesia.
               </p>
@@ -565,18 +565,18 @@ export default function LandingPage({ onEnterERP, onEnterWebstore, productCount,
 
             {/* Links */}
             <div>
-              <h4 className="text-[10px] font-bold text-white uppercase tracking-widest mb-4">Fitur</h4>
+              <h2 className="text-[10px] font-bold text-white uppercase tracking-widest mb-4">Fitur</h2>
               <ul className="space-y-2.5">
                 {['Manajemen Stok', 'Resep & HPP', 'POS Kasir', 'Multi-Cabang', 'Web Store', 'Laporan'].map((link, i) => (
-                  <li key={i}><a href="#features" className="text-xs text-slate-500 hover:text-emerald-400 transition-colors">{link}</a></li>
+                  <li key={i}><a href="#features" className="text-xs text-slate-400 hover:text-emerald-400 transition-colors">{link}</a></li>
                 ))}
               </ul>
             </div>
             <div>
-              <h4 className="text-[10px] font-bold text-white uppercase tracking-widest mb-4">Perusahaan</h4>
+              <h2 className="text-[10px] font-bold text-white uppercase tracking-widest mb-4">Perusahaan</h2>
               <ul className="space-y-2.5">
                 {['Tentang', 'Blog', 'Kebijakan Privasi', 'Syarat & Ketentuan', 'Kontak', 'FAQ'].map((link, i) => (
-                  <li key={i}><a href="#" className="text-xs text-slate-500 hover:text-emerald-400 transition-colors">{link}</a></li>
+                  <li key={i}><a href="#" className="text-xs text-slate-400 hover:text-emerald-400 transition-colors">{link}</a></li>
                 ))}
               </ul>
             </div>

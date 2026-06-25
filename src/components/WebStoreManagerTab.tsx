@@ -186,10 +186,14 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
         const cabangId = config.cabangId || 'pusat';
         const remoteConfig = await getWebStoreConfig(cabangId);
         if (remoteConfig) {
-          setConfig(remoteConfig);
+          // 🔧 Jangan timpa madeToOrder dari remote — biarkan sesuai local/checkbox
+          // Agar web store manager tidak tiba-tiba mengaktifkan mode stok
+          // yang membuat produk jadi "Stok Habis" saat auto-sync berikutnya.
+          setConfig({ ...remoteConfig, madeToOrder: config.madeToOrder });
           // 🔧 Simpan ke localStorage tanpa gambar (gambar sudah di products/{id} Firestore)
           const remoteConfigWithoutImages = {
             ...remoteConfig,
+            madeToOrder: config.madeToOrder,
             logo: '',
             products: remoteConfig.products.map(p => ({
               ...p,

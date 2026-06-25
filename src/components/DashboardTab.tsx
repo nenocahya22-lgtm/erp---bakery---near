@@ -3,7 +3,7 @@ import { CalculationResult, BahanBaku, Cabang, BranchTransaction } from '../type
 import { TrendingUp, FolderTree, Package, DollarSign, AlertCircle, Sparkles, AlertTriangle, Lightbulb, RefreshCw, Copy, Check, FileDown, Rocket, ArrowRight, Bell, X, Trash2, MessageSquare, Send, Settings, CheckCircle2, Building2, ShoppingCart } from 'lucide-react';
 import { showToast } from '../lib/toast';
 import { safeGetLocalStorage } from '../lib/safe-json';
-import { jsPDF } from 'jspdf';
+
 
 const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('id-ID', {
@@ -375,9 +375,10 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (!analysisResult) return;
     try {
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF();
       doc.setFont("Helvetica", "bold");
       doc.setFontSize(16);

@@ -307,10 +307,11 @@ export function useERPData(showConfirm?: (opts: { title: string; message: string
     setHasUnsavedChanges(true);
     if (status === 'published') {
       showToast(`✅ Resep "${productName}" diterbitkan! Kini tersedia di semua modul.`, 'success');
-      setTimeout(() => {
+      setTimeout(async () => {
+        const wsConfig = await getWebStoreConfig('pusat').catch(() => null);
         const publishedAll = productHppRef.current.filter(pr => pr.status !== 'draft');
         const updatedCalc = calculateAllProducts(bahanBakuRef.current, publishedAll, detailResepRef.current);
-        syncProductsToFirestore(updatedCalc, publishedAll, detailResepRef.current, bahanBakuRef.current, 'pusat').catch(console.warn);
+        syncProductsToFirestore(updatedCalc, publishedAll, detailResepRef.current, bahanBakuRef.current, 'pusat', wsConfig).catch(console.warn);
       }, 500);
     } else {
       showToast(`Bahan resep "${productName}" diperbarui!`, 'success');
@@ -355,11 +356,12 @@ export function useERPData(showConfirm?: (opts: { title: string; message: string
     ]);
 
     // Auto-sync penghapusan ke Firestore — update data produk yang tersisa
-    setTimeout(() => {
+    setTimeout(async () => {
+      const wsConfig = await getWebStoreConfig('pusat').catch(() => null);
       const updatedCalc = calculateAllProducts(bahanBakuRef.current, productHppRef.current.filter(p => p.namaProduk.toLowerCase().trim() !== productName.toLowerCase().trim()), detailResepRef.current);
       const publishedProducts = productHppRef.current.filter(p => p.status !== 'draft' && p.namaProduk.toLowerCase().trim() !== productName.toLowerCase().trim());
       if (publishedProducts.length > 0 || productHppRef.current.filter(p => p.status !== 'draft').length !== publishedProducts.length) {
-        syncProductsToFirestore(updatedCalc, publishedProducts, detailResepRef.current, bahanBakuRef.current, 'pusat').catch((err) => {
+        syncProductsToFirestore(updatedCalc, publishedProducts, detailResepRef.current, bahanBakuRef.current, 'pusat', wsConfig).catch((err) => {
           console.warn('Auto-sync after product deletion failed:', err);
         });
       }

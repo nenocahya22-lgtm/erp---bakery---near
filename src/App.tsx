@@ -87,6 +87,7 @@ import {
   listenNewChats,
   listenProofUploads,
   syncProductsToFirestore,
+  getWebStoreConfig,
   getFirestoreCategories,
 } from './lib/firestore-bridge';
 import {
@@ -233,9 +234,10 @@ export default function App() {
     const cabangId = 'pusat';
     try {
       showToast('⏳ Sinkronisasi produk & kategori ke Web Store...', 'info');
+      const wsConfig = await getWebStoreConfig(cabangId).catch(() => null);
       const publishedProducts = productHpp.filter(p => p.status !== 'draft');
       const count = await syncProductsToFirestore(
-        calculatedProducts, publishedProducts, detailResep, bahanBaku, cabangId
+        calculatedProducts, publishedProducts, detailResep, bahanBaku, cabangId, wsConfig
       );
       showToast(`✅ ${count} produk + kategori berhasil disinkronisasi! Web Store akan update.`, 'success');
     } catch (err: any) {
@@ -557,10 +559,14 @@ export default function App() {
   };
 
   // ─── PROCESSED ORDER IDS ───
-  const processedOrderIdsRef = useRef<Set<string>>(() => {
+  // 🔥 FIX: useRef tidak punya lazy initializer seperti useState!
+  //    Sebelumnya: useRef<Set<string>>(() => {...}) — menyimpan FUNGSI, bukan Set!
+  //    Sekarang: inisialisasi manual dengan null check
+  const processedOrderIdsRef = useRef<Set<string> | null>(null);
+  if (!processedOrderIdsRef.current) {
     const saved = safeGetLocalStorage<string[]>('processed_order_ids', []);
-    return new Set(saved);
-  });
+    processedOrderIdsRef.current = new Set(saved);
+  }
 
   const markOrderProcessed = (orderId: string) => {
     processedOrderIdsRef.current.add(orderId);
@@ -660,10 +666,11 @@ export default function App() {
       } catch (e) { /* silent */ }
 
       if (currentCalc.length > 0) {
-        setTimeout(() => {
+        setTimeout(async () => {
+          const wsConfig = await getWebStoreConfig('pusat').catch(() => null);
           const published = productHppRef.current.filter(pr => pr.status !== 'draft');
           const updatedCalc = calculateAllProducts(bahanBakuRef.current, published, detailResepRef.current);
-          syncProductsToFirestore(updatedCalc, published, detailResepRef.current, bahanBakuRef.current, 'pusat').catch(console.warn);
+          syncProductsToFirestore(updatedCalc, published, detailResepRef.current, bahanBakuRef.current, 'pusat', wsConfig).catch(console.warn);
         }, 2000);
       }
     }, (err) => console.warn('Status change listener error:', err));

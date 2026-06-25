@@ -1,0 +1,30 @@
+# Near Bakery & Co. ERP
+
+> Sistem manajemen bakery artisan terpadu — kelola produksi, stok, penjualan, dan toko online dari satu platform.
+
+## Tech Stack
+- **Frontend:** React 19, TypeScript, Tailwind CSS v4, Vite
+- **Backend:** Firebase (Firestore, Auth, Storage, Hosting)
+- **State:** React hooks + localStorage (no external state library)
+- **Charts:** Recharts
+- **PDF:** jsPDF + html2canvas
+- **Icons:** Lucide React
+
+## Key Features
+- Multi-cabang inventory management
+- Recipe & HPP (Cost of Production) calculator
+- POS Cashier system
+- AI-powered marketing insights
+- Auto-sync to Google Sheets
+- Integrated web store
+
+## API Documentation
+Firebase-powered REST-like access via client SDK:
+- `GET /api/sheets` — Proxy to Google Sheets v4
+- `POST /api/sheets` — Append row to Google Sheets
+- Firebase Auth REST endpoints: `identitytoolkit.googleapis.com`
+
+## Deployment
+- Primary: Vercel (`erp-bakery.vercel.app`)
+- Staging: Firebase Hosting (`near-bakery.web.app`)
+- Print server: standalone Node.js on port 3002

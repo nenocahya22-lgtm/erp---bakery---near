@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CalculationResult, BahanBaku } from '../types';
 import { safeGetLocalStorage } from '../lib/safe-json';
 import { TrendingUp, DollarSign, BarChart3, FileDown, RefreshCw, Plus, Trash2 } from 'lucide-react';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
+
 import {
   AreaChart,
   Area,
@@ -188,6 +187,8 @@ export default function EnterpriseDashboard({ calculatedProducts, showConfirm }:
     setIsExporting(true);
     setExportError(null);
     try {
+      const { default: jsPDF } = await import('jspdf');
+      const { default: html2canvas } = await import('html2canvas');
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       doc.setFillColor(16, 185, 129);
       doc.rect(0, 0, 210, 15, 'F');
