@@ -26,7 +26,7 @@ export default defineConfig(() => {
       minify: 'esbuild' as const,
       cssMinify: true,
       // Hapus sourcemaps di production
-      sourcemap: false,
+      sourcemap: "hidden",
       // Peringatan jika bundle terlalu besar
       chunkSizeWarningLimit: 500,
     },
