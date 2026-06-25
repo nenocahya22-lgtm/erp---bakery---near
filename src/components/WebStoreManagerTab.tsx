@@ -95,7 +95,7 @@ const loadImageAsBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
-      const img = new Image();
+      const img = new window.Image();
       img.onload = () => {
         const MAX = 400;
         let { width, height } = img;
