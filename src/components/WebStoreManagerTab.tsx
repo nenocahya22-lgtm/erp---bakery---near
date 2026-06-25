@@ -179,6 +179,41 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
   const logoInputRef = useRef<HTMLInputElement>(null);
   const promoInputRef = useRef<HTMLInputElement>(null);
 
+  // ─── Variabel yang hilang (referenced di JSX tapi belum didefinisikan) ───
+  const products = config.products;
+  const setProducts = useCallback((fn: ((prev: WebStoreProduct[]) => WebStoreProduct[]) | WebStoreProduct[]) => {
+    setConfig(prev => ({
+      ...prev,
+      products: typeof fn === 'function'
+        ? (fn as (prev: WebStoreProduct[]) => WebStoreProduct[])(prev.products)
+        : (fn as WebStoreProduct[]),
+    }));
+  }, []);
+  const [searchQuery, setSearchQuery] = useState('');
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery.trim()) return products;
+    const q = searchQuery.toLowerCase();
+    return products.filter(p =>
+      p.productName.toLowerCase().includes(q) ||
+      (p.description || '').toLowerCase().includes(q) ||
+      (p.kategori || '').toLowerCase().includes(q)
+    );
+  }, [products, searchQuery]);
+  const productList = products;
+  const featuredProducts = useMemo(() => {
+    if (!config.featuredProducts || config.featuredProducts.length === 0) return [];
+    return config.featuredProducts
+      .map(fp => products.find(p => p.productName === fp.productName))
+      .filter(Boolean);
+  }, [config.featuredProducts, products]);
+  const handleDuplicateProduct = useCallback((product: WebStoreProduct) => {
+    const newName = `${product.productName} (copy)`;
+    setConfig(prev => ({
+      ...prev,
+      products: [...prev.products, { ...product, productName: newName }],
+    }));
+  }, []);
+
   // Load config dari Firestore on mount
   useEffect(() => {
     const loadFromFirestore = async () => {
