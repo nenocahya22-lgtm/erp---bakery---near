@@ -929,7 +929,7 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList
                 
                 <button
                   onClick={() => setAnalysisResult('')}
-                  className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-850 text-slate-400 hover:text-white rounded-lg border border-slate-800 transition cursor-pointer text-[10px] font-bold uppercase tracking-wider"
+                  className="px-2.5 py-1.5 bg-slate-900 text-slate-300 hover:text-white rounded-lg border border-slate-800 transition cursor-pointer text-[10px] font-bold uppercase tracking-wider"
                   title="Tutup laporan"
                 >
                   Tutup

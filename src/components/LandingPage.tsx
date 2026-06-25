@@ -556,7 +556,7 @@ export default function LandingPage({ onEnterERP, onEnterWebstore, productCount,
               </p>
               <div className="flex items-center gap-4">
                 {[FileSpreadsheet, Shield, CheckCircle2].map((Icon, i) => (
-                  <div key={i} className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-500 hover:text-emerald-400 hover:border-emerald-800 transition-colors">
+                  <div key={i} className="w-8 h-8 rounded-lg bg-slate-800 text-slate-300 hover:text-emerald-400 hover:border-emerald-800 transition-colors">
                     <Icon className="w-4 h-4" />
                   </div>
                 ))}

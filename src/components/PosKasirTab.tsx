@@ -1052,7 +1052,7 @@ export default function PosKasirTab({ calculatedProducts, onCompletePOSSale, top
                 <Printer className="w-4 h-4 text-emerald-400" /> Struk Kasir
               </span>
               <button onClick={() => setActiveReceipt(null)}
-                className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white cursor-pointer">
+                className="p-1 hover:bg-slate-800 text-slate-300">
                 <X className="w-4 h-4" />
               </button>
             </div>

@@ -12,29 +12,24 @@ export default defineConfig(() => {
       },
     },
     build: {
-      // Optimasi bundle size — pecah vendor chunks besar
       rollupOptions: {
         output: {
           manualChunks: {
             'vendor-react': ['react', 'react-dom'],
             'vendor-lucide': ['lucide-react'],
-            'vendor-pdf': ['jspdf'],
+            'vendor-pdf': ['jspdf', 'html2canvas'],
+            'vendor-charts': ['recharts'],
+            'vendor-motion': ['motion'],
           },
         },
       },
-      // Minimalisir CSS & JS
       minify: 'esbuild' as const,
       cssMinify: true,
-      // Hapus sourcemaps di production
-      sourcemap: "hidden",
-      // Peringatan jika bundle terlalu besar
-      chunkSizeWarningLimit: 500,
+      sourcemap: 'hidden' as const,
+      chunkSizeWarningLimit: 600,
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };
