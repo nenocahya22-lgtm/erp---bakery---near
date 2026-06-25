@@ -909,6 +909,17 @@ export default function App() {
     };
   }, [productHpp, calculatedProducts, cabangList, bahanBaku]);
 
+  // ─── MEMOIZED BRANCH FILTERS (harus sebelum early return agar jumlah hook konsisten) ───
+  const branchCabangId = branchAuth?.id || '';
+  const filteredCabangStokForBranch = useMemo(
+    () => cabangStok.filter(s => s.cabangId === branchCabangId),
+    [cabangStok, branchCabangId]
+  );
+  const filteredBranchTransactionsForBranch = useMemo(
+    () => branchTransactions.filter(t => t.cabangId === branchCabangId),
+    [branchTransactions, branchCabangId]
+  );
+
   if (showLanding) {
     return (
       <LandingPage
@@ -967,17 +978,6 @@ export default function App() {
 
     return <OwnerLogin onLoginSuccess={handleOwnerLogin} />;
   }
-
-  // ─── MEMOIZED BRANCH FILTERS (hindari re-filter tiap render) ───
-  const branchCabangId = branchAuth?.id || '';
-  const filteredCabangStokForBranch = useMemo(
-    () => cabangStok.filter(s => s.cabangId === branchCabangId),
-    [cabangStok, branchCabangId]
-  );
-  const filteredBranchTransactionsForBranch = useMemo(
-    () => branchTransactions.filter(t => t.cabangId === branchCabangId),
-    [branchTransactions, branchCabangId]
-  );
 
   // If branch authenticated, show BranchDashboard
   if (branchAuth && !isOwnerAuthenticated) {
