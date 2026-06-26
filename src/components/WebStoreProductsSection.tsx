@@ -25,7 +25,7 @@ interface Props {
   showToast?: (msg: string, type: string) => void;
 }
 
-export default function WebStoreProductsSection({config, updateConfig, updateProduct, products, setProducts, handleDuplicateProduct, handleUploadProductImage, filteredProducts, searchQuery}: Props) {
+export default function WebStoreProductsSection({config, updateConfig, updateProduct, products, setProducts, handleDuplicateProduct, handleUploadProductImage, filteredProducts, searchQuery, handleSyncProducts, isSyncing, calculatedProducts, setConfig, showToast}: Props) {
   return (
     
             <div className={cardClass}>
