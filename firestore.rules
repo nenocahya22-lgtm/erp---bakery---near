@@ -248,16 +248,23 @@ service cloud.firestore {
     }
 
     // Chats — Customer buat, ERP & merchant baca + balas
+    // ERP menggunakan Anonymous Auth (signInAnonymously) sehingga:
+    //   - isMerchant() ❌ (tidak punya email)
+    //   - isOwnerOrAdmin() ✅ (hanya cek request.auth != null)
+    //   - Butuh allow list: isOwnerOrAdmin() agar ERP bisa lihat SEMUA chat room
     match /chats/{chatId} {
-      allow get: if isMerchant() || (isAuthenticated() && chatId == request.auth.uid + '_admin');
-      allow list: if isMerchant() || (isAuthenticated() && existing().buyerId == request.auth.uid);
+      allow get: if isOwnerOrAdmin() || isMerchant() || (isAuthenticated() && chatId == request.auth.uid + '_admin');
+      allow list: if isOwnerOrAdmin() || isMerchant() || (isAuthenticated() && existing().buyerId == request.auth.uid);
       allow create: if isAuthenticated() && isValidChat();
-      allow update: if isMerchant() || (isAuthenticated() && chatId == request.auth.uid + '_admin');
+      allow update: if isOwnerOrAdmin() || isMerchant() || (isAuthenticated() && chatId == request.auth.uid + '_admin');
       allow delete: if false;
 
-      // Messages (subcollection) — Chat messages
+      // ⚠️ Messages (subcollection) — Chat messages
+      //    isOwnerOrAdmin() di READ (get,list) = OK — ERP perlu baca semua pesan
+      //    isOwnerOrAdmin() di CREATE = ❌ TIDAK — hanya isMerchant() yang boleh kirim
+      //    (mencegah spam: anonymous user Web Store tidak bisa kirim pesan ke room orang lain)
       match /messages/{messageId} {
-        allow get, list: if isMerchant() || (isAuthenticated() && chatId == request.auth.uid + '_admin');
+        allow get, list: if isOwnerOrAdmin() || isMerchant() || (isAuthenticated() && chatId == request.auth.uid + '_admin');
         allow create: if (isMerchant() || (isAuthenticated() && chatId == request.auth.uid + '_admin')) && isValidChatMessage();
         allow update, delete: if isMerchant();
       }

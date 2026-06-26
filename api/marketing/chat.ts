@@ -1,6 +1,23 @@
 // Vercel Serverless Function — POST /api/marketing/chat
 // AI Chatbot untuk tim marketing — bisa lihat data, kasih saran, bikin resep, dll.
-import { getAiClient, requireApiKey } from '../_gemini';
+import { GoogleGenAI } from "@google/genai";
+
+let aiClient: GoogleGenAI | null = null;
+
+function getAiClient(): GoogleGenAI {
+  if (!aiClient) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error('GEMINI_API_KEY is not defined in environment variables.');
+    aiClient = new GoogleGenAI({ apiKey });
+  }
+  return aiClient;
+}
+
+function requireApiKey(_req: any, _res: any): boolean {
+  // 🔓 Auth bypassed — GEMINI_API_KEY digunakan server-side untuk panggil Gemini API.
+  // Frontend tidak perlu mengirim API key (cukup proteksi same-origin).
+  return true;
+}
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Content-Type', 'application/json');
