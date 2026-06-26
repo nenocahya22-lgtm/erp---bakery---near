@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CalculationResult, BahanBaku, Cabang, BranchTransaction } from '../types';
 import { TrendingUp, FolderTree, Package, DollarSign, AlertCircle, Sparkles, AlertTriangle, Lightbulb, RefreshCw, Copy, Check, FileDown, Rocket, ArrowRight, Bell, X, Trash2, MessageSquare, Send, Settings, CheckCircle2, Building2, ShoppingCart } from 'lucide-react';
 import { showToast } from '../lib/toast';
-import { safeGetLocalStorage } from '../lib/safe-json';
+import { safeGetLocalStorage, safeParseJSON } from '../lib/safe-json';
 
 
 const formatCurrency = (val: number) => {
@@ -137,12 +137,12 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList
 
   useEffect(() => {
     const saved = localStorage.getItem('pos_orders_data');
-    if (saved) setPosOrders(JSON.parse(saved));
+    if (saved) setPosOrders(safeParseJSON(saved, []));
   }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem('revenue_tracker_data');
-    if (saved) setRevenueTracker(JSON.parse(saved));
+    if (saved) setRevenueTracker(safeParseJSON(saved, { transactions: [], dailyTotals: {} }));
   }, []);
 
   // Compute per-cabang sales metrics
@@ -200,10 +200,10 @@ export default function DashboardTab({ calculatedProducts, bahanBaku, cabangList
   // Pick WA notifications from localStorage (POS orders queue)
   useEffect(() => {
     const saved = localStorage.getItem('wa_notification_queue');
-    if (saved) setWaNotifications(JSON.parse(saved));
+    if (saved) setWaNotifications(safeParseJSON(saved, []));
     const interval = setInterval(() => {
       const s = localStorage.getItem('wa_notification_queue');
-      if (s) setWaNotifications(JSON.parse(s));
+      if (s) setWaNotifications(safeParseJSON(s, []));
     }, 15000);
     return () => clearInterval(interval);
   }, []);

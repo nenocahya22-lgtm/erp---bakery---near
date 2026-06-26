@@ -17,7 +17,7 @@ interface StrategiDashboardProps {
   rdTotalCost: number;
   onWipeAllData?: () => void;
   onSyncToFirestore?: () => Promise<void>;
-  onUpdateProductPricing?: (productName: string, hargaJualPerPorsi: number, hargaJualVarian: Record<string, number>, isActive: boolean) => void;
+  onUpdateProductPricing?: (productName: string, hargaJual: number) => void;
   onDeleteProduct?: (name: string) => void;
   onEditMaterial?: (oldName: string, m: BahanBaku) => void;
   showConfirm: (opts: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; variant?: string; onConfirm: () => void; onCancel?: () => void }) => void;
