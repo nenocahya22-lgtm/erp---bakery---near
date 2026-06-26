@@ -148,6 +148,9 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
       // Biarkan kategori dari saved config (localStorage) sebagai sumber kebenaran.
       // 🔧 Restore gambar dari localStorage key terpisah (recipe_img_*, store_logo)
       //    untuk menghindari limit ~5MB localStorage — gambar tidak disimpan di config.
+      // 🔥 Pastikan madeToOrder tidak undefined — Firestore tolak undefined!
+      //    Error: "Function setDoc() called with invalid data. Unsupported field value: undefined"
+      saved.madeToOrder = saved.madeToOrder ?? true;
       saved.products = saved.products.map(p => ({
         ...p,
         displayImage: localStorage.getItem(`recipe_img_${p.productName.toLowerCase().trim()}`) || p.displayImage || '',
@@ -224,11 +227,14 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
           // 🔧 Jangan timpa madeToOrder dari remote — biarkan sesuai local/checkbox
           // Agar web store manager tidak tiba-tiba mengaktifkan mode stok
           // yang membuat produk jadi "Stok Habis" saat auto-sync berikutnya.
-          setConfig({ ...remoteConfig, madeToOrder: config.madeToOrder });
+          // 🔥 Tapi pastikan madeToOrder TIDAK undefined (Firestore tolak undefined!)
+          //    Error: "Function setDoc() called with invalid data. Unsupported field value: undefined"
+          setConfig({ ...remoteConfig, madeToOrder: config.madeToOrder ?? true });
           // 🔧 Simpan ke localStorage tanpa gambar (gambar sudah di products/{id} Firestore)
+          // 🔥 Pastikan madeToOrder tidak undefined saat simpan ke localStorage
           const remoteConfigWithoutImages = {
             ...remoteConfig,
-            madeToOrder: config.madeToOrder,
+            madeToOrder: config.madeToOrder ?? true,
             logo: '',
             products: remoteConfig.products.map(p => ({
               ...p,

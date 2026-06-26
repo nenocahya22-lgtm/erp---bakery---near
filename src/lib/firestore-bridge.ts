@@ -53,18 +53,46 @@ if (!auth.currentUser) {
 }
 
 // ============================================================================
+// 🧹 HELPER — Bersihkan undefined values dari object (Firestore tolak undefined!)
+// ============================================================================
+
+/**
+ * Hapus field top-level yang bernilai `undefined` atau `null` dari suatu object.
+ * Firestore (setDoc, updateDoc) TIDAK menerima field dengan nilai `undefined` —
+ * akan throw error: "Function setDoc() called with invalid data."
+ * 
+ * ⚠️ Hanya shallow clean (top-level). Tidak rekursif ke nested objects/arrays
+ *    karena nilai seperti serverTimestamp() (Firestore FieldValue sentinel)
+ *    tidak boleh direkursi — akan terhapus sebagai object kosong!
+ * 
+ * Ini cukup karena semua nested type (WebStoreProduct, PaymentMethod, dll)
+ * sudah memiliki required field dengan nilai default.
+ */
+function cleanUndefined(obj: Record<string, any>): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === undefined || value === null) continue;
+    result[key] = value;
+  }
+  return result;
+}
+
+// ============================================================================
 // WEB STORE CONFIG — simpan & baca konfigurasi web store dari Firestore
 // ============================================================================
 
 /** Simpan konfigurasi web store ke Firestore (per cabang) */
 export async function saveWebStoreConfig(cabangId: string, config: WebStoreConfig): Promise<void> {
   const docRef = doc(db, 'webstore_config', cabangId);
-  await setDoc(docRef, {
+  // 🔥 Bersihkan undefined values sebelum dikirim — Firestore tolak undefined!
+  // Error khas: "Function setDoc() called with invalid data. Unsupported field value: undefined"
+  const cleanedConfig = cleanUndefined({
     ...config,
     cabangId,
     lastUpdated: Timestamp.now(),
     updatedAt: serverTimestamp(),
   });
+  await setDoc(docRef, cleanedConfig);
 }
 
 /** Baca konfigurasi web store dari Firestore */
