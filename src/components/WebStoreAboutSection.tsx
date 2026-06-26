@@ -1,5 +1,5 @@
 import React from 'react';
-import { Info, MapPin, Clock, Users, Phone, Mail, Globe } from 'lucide-react';
+import { Info, Image } from 'lucide-react';
 import { WebStoreConfig } from '../types';
 import { cardClass, inputClass, labelClass } from '../lib/webstore-constants';
 
@@ -7,9 +7,11 @@ import { cardClass, inputClass, labelClass } from '../lib/webstore-constants';
 interface Props {
   config: WebStoreConfig;
   updateConfig: (updates: Partial<WebStoreConfig>) => void;
+  loadImageAsBase64?: (file: File) => Promise<string>;
+  showToast?: (msg: string, type: 'success' | 'error' | 'info') => void;
 }
 
-export default function WebStoreAboutSection({config, updateConfig}: Props) {
+export default function WebStoreAboutSection({config, updateConfig, loadImageAsBase64, showToast}: Props) {
   return (
     
             <div className={cardClass}>

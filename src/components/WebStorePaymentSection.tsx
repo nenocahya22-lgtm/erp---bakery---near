@@ -1,6 +1,6 @@
 import React from 'react';
-import { Plus, Trash2, Edit3, CreditCard, Wallet, Building2, Banknote, Smartphone } from 'lucide-react';
-import { WebStoreConfig } from '../types';
+import { Plus, Trash2, Edit3, CreditCard, Wallet, Building2, Banknote, Smartphone, ShoppingBag } from 'lucide-react';
+import { WebStoreConfig, createDefaultPaymentMethods } from '../types';
 import { cardClass, inputClass, labelClass } from '../lib/webstore-constants';
 
 
@@ -62,10 +62,9 @@ export default function WebStorePaymentSection({config, updateConfig, showPaymen
                         <p className="text-[9px] text-gray-400 mt-0.5">{pm.label}</p>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={() => setConfig(prev => ({
-                          ...prev,
-                          paymentMethods: (prev.paymentMethods || []).map(p => p.id === pm.id ? { ...p, active: !p.active } : p)
-                        }))}
+                        <button onClick={() => updateConfig({
+                          paymentMethods: (config.paymentMethods || []).map(p => p.id === pm.id ? { ...p, active: !p.active } : p)
+                        })}
                           className={`px-2 py-1 text-[9px] font-bold rounded-lg cursor-pointer ${pm.active ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-200 text-slate-500'}`}>
                           {pm.active ? 'Aktif' : 'Nonaktif'}
                         </button>

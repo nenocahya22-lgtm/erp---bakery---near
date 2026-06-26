@@ -7,9 +7,11 @@ import { cardClass, inputClass, labelClass } from '../lib/webstore-constants';
 interface Props {
   config: WebStoreConfig;
   updateConfig: (updates: Partial<WebStoreConfig>) => void;
+  loadImageAsBase64?: (file: File) => Promise<string>;
+  showToast?: (msg: string, type: 'success' | 'error' | 'info') => void;
 }
 
-export default function WebStoreLocationSection({config, updateConfig}: Props) {
+export default function WebStoreLocationSection({config, updateConfig, loadImageAsBase64, showToast}: Props) {
   return (
     
             <div className={cardClass}>

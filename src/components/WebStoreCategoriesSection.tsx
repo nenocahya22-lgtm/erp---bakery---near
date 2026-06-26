@@ -2,6 +2,8 @@ import React from 'react';
 import { Plus, Trash2, Wheat } from 'lucide-react';
 import { WebStoreConfig } from '../types';
 import { cardClass, inputClass, labelClass } from '../lib/webstore-constants';
+import { getSharedCategories, setSharedCategories } from '../lib/category-store';
+import { saveWebStoreConfig, saveCategoriesToFirestore } from '../lib/firestore-bridge';
 
 
 interface Props {

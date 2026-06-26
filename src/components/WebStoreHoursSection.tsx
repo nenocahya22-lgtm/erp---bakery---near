@@ -7,9 +7,10 @@ import { cardClass, inputClass, labelClass } from '../lib/webstore-constants';
 interface Props {
   config: WebStoreConfig;
   updateConfig: (updates: Partial<WebStoreConfig>) => void;
+  showToast?: (msg: string, type: 'success' | 'error' | 'info') => void;
 }
 
-export default function WebStoreHoursSection({config, updateConfig}: Props) {
+export default function WebStoreHoursSection({config, updateConfig, showToast}: Props) {
   return (
     
             <div className={cardClass}>

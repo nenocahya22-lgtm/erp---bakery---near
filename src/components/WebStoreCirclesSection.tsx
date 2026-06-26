@@ -1,5 +1,5 @@
 import React from 'react';
-import {  } from 'lucide-react';
+import { Palette } from 'lucide-react';
 import { WebStoreConfig } from '../types';
 import { cardClass, inputClass, labelClass } from '../lib/webstore-constants';
 

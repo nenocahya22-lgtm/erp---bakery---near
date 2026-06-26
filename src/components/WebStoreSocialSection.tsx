@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Trash2, Globe, Instagram, Youtube, Music2, MessageCircle } from 'lucide-react';
+import { Plus, Trash2, Globe, Instagram, Youtube, Music2, MessageCircle, Share2, Facebook } from 'lucide-react';
 import { WebStoreConfig } from '../types';
 import { cardClass, inputClass, labelClass } from '../lib/webstore-constants';
 

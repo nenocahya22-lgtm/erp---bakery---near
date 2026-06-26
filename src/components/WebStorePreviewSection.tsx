@@ -1,8 +1,11 @@
 import React from 'react';
-import { X, Smartphone, Monitor } from 'lucide-react';
+import { X, Smartphone, Monitor, ShoppingBag } from 'lucide-react';
 import { WebStoreConfig } from '../types';
 import { cardClass, inputClass, labelClass } from '../lib/webstore-constants';
 
+
+const formatCurrency = (val: number) =>
+  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
 interface Props {
   showPreview: boolean;
@@ -10,9 +13,10 @@ interface Props {
   config: WebStoreConfig;
   products: any[];
   cabangList: any[];
+  calculatedProducts?: any[];
 }
 
-export default function WebStorePreviewSection({showPreview, setShowPreview, config, products, cabangList}: Props) {
+export default function WebStorePreviewSection({showPreview, setShowPreview, config, products, cabangList, calculatedProducts}: Props) {
   return (
     
             <div className={cardClass}>

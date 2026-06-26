@@ -1,8 +1,12 @@
 import React from 'react';
-import { Plus, Trash2, Copy, Image, Star, Eye, EyeOff } from 'lucide-react';
+import { Plus, Trash2, Copy, Image, Star, Eye, EyeOff, ShoppingBag, RefreshCw } from 'lucide-react';
 import { WebStoreConfig } from '../types';
 import { cardClass, inputClass, labelClass } from '../lib/webstore-constants';
+import { db, hashProductName, saveWebStoreConfig } from '../lib/firestore-bridge';
+import { deleteDoc, doc } from 'firebase/firestore';
 
+const formatCurrency = (val: number) =>
+  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
 interface Props {
   config: WebStoreConfig;
@@ -14,6 +18,11 @@ interface Props {
   handleUploadProductImage: () => void;
   filteredProducts: any[];
   searchQuery: string;
+  handleSyncProducts?: () => void;
+  isSyncing?: boolean;
+  calculatedProducts?: any[];
+  setConfig?: (config: any) => void;
+  showToast?: (msg: string, type: string) => void;
 }
 
 export default function WebStoreProductsSection({config, updateConfig, updateProduct, products, setProducts, handleDuplicateProduct, handleUploadProductImage, filteredProducts, searchQuery}: Props) {

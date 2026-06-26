@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Trash2, Edit3, Image, Percent } from 'lucide-react';
+import { Plus, Trash2, Edit3, Image, Percent, Megaphone } from 'lucide-react';
 import { WebStoreConfig } from '../types';
 import { cardClass, inputClass, labelClass } from '../lib/webstore-constants';
 
@@ -44,7 +44,7 @@ export default function WebStorePromosSection({config, updateConfig, showPromoMo
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 mt-2 justify-end">
-                        <button onClick={() => setConfig(prev => ({ ...prev, promos: prev.promos.map(p => p.id === promo.id ? { ...p, active: !p.active } : p) }))}
+                        <button onClick={() => updateConfig({ promos: config.promos.map(p => p.id === promo.id ? { ...p, active: !p.active } : p) })}
                           className={`px-2 py-1 text-[9px] font-bold rounded-lg cursor-pointer ${promo.active ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-200 text-slate-500'}`}>
                           {promo.active ? 'Aktif' : 'Nonaktif'}
                         </button>

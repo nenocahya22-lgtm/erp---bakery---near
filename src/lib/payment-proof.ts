@@ -196,7 +196,7 @@ export async function compressImage(
 
 function createImageFromFile(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const img = new Image();
+    const img = new window.Image();
     const url = URL.createObjectURL(file);
 
     img.onload = () => {

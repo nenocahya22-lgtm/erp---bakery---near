@@ -823,7 +823,7 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
         <WebStoreCirclesSection config={config} updateConfig={updateConfig} />
       )}
 {activeSection === 'products' && (
-        <WebStoreProductsSection config={config} updateConfig={updateConfig} updateProduct={updateProduct} products={products} setProducts={setProducts} handleDuplicateProduct={handleDuplicateProduct} handleUploadProductImage={handleUploadProductImage} filteredProducts={filteredProducts} searchQuery={searchQuery} />
+        <WebStoreProductsSection config={config} updateConfig={updateConfig} updateProduct={updateProduct} products={products} setProducts={setProducts} handleDuplicateProduct={handleDuplicateProduct} handleUploadProductImage={handleUploadProductImage} filteredProducts={filteredProducts} searchQuery={searchQuery} handleSyncProducts={handleSyncProducts} isSyncing={isSyncing} calculatedProducts={calculatedProducts} setConfig={setConfig} showToast={showToast} />
       )}
 {activeSection === 'theme' && (
         <WebStoreThemeSection config={config} updateConfig={updateConfig} />
@@ -844,25 +844,25 @@ export default function WebStoreManagerTab({ productHpp, calculatedProducts, bah
         <WebStoreFeaturedSection config={config} updateConfig={updateConfig} featuredProducts={featuredProducts} productList={productList} cabangList={cabangList} />
       )}
 {activeSection === 'about' && (
-        <WebStoreAboutSection config={config} updateConfig={updateConfig} />
+        <WebStoreAboutSection config={config} updateConfig={updateConfig} loadImageAsBase64={loadImageAsBase64} showToast={showToast} />
       )}
 {activeSection === 'location' && (
-        <WebStoreLocationSection config={config} updateConfig={updateConfig} />
+        <WebStoreLocationSection config={config} updateConfig={updateConfig} loadImageAsBase64={loadImageAsBase64} showToast={showToast} />
       )}
 {activeSection === 'social' && (
         <WebStoreSocialSection config={config} updateConfig={updateConfig} />
       )}
 {activeSection === 'hours' && (
-        <WebStoreHoursSection config={config} updateConfig={updateConfig} />
+        <WebStoreHoursSection config={config} updateConfig={updateConfig} showToast={showToast} />
       )}
 {activeSection === 'branch' && (
-        <WebStoreBranchSection config={config} updateConfig={updateConfig} cabangList={cabangList} handleRegisterSubdomain={handleRegisterSubdomain} />
+        <WebStoreBranchSection config={config} updateConfig={updateConfig} cabangList={cabangList} handleRegisterSubdomain={handleRegisterSubdomain} showToast={showToast} />
       )}
 {activeSection === 'webdata' && (
-        <WebStoreWebdataSection config={config} updateConfig={updateConfig} fetchFirestoreProducts={fetchFirestoreProducts} fetchFirestoreCategories={fetchFirestoreCategories} handleImportCategory={handleImportCategory} cabangList={cabangList} handleExport={handleExport} handleImport={handleImport} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryIcon={newCategoryIcon} setNewCategoryIcon={setNewCategoryIcon} />
+        <WebStoreWebdataSection config={config} updateConfig={updateConfig} fetchFirestoreProducts={fetchFirestoreProducts} fetchFirestoreCategories={fetchFirestoreCategories} handleImportCategory={handleImportCategory} cabangList={cabangList} handleExport={handleExport} handleImport={handleImport} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryIcon={newCategoryIcon} setNewCategoryIcon={setNewCategoryIcon} isFetchingWebProducts={isFetchingWebProducts} isFetchingCategories={isFetchingCategories} firestoreProducts={firestoreProducts} firestoreCategories={firestoreCategories} productHpp={productHpp} onImportProduct={onImportProduct} showToast={showToast} />
       )}
 {activeSection === 'preview' && (
-        <WebStorePreviewSection showPreview={showPreview} setShowPreview={setShowPreview} config={config} products={products} cabangList={cabangList} />
+        <WebStorePreviewSection showPreview={showPreview} setShowPreview={setShowPreview} config={config} products={products} cabangList={cabangList} calculatedProducts={calculatedProducts} />
       )}
 
         </main>
